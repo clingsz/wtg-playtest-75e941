@@ -1,0 +1,65 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="屏幕测试">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest"><title>屏幕测试</title>
+<style>
+html,body{margin:0;padding:0;background:#000;overflow:hidden;-webkit-text-size-adjust:100%;font-family:system-ui,"PingFang SC",sans-serif}
+body.mb{position:fixed;inset:0;width:100%;height:100%;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;background:#1d1729 url(bg.png) center/cover}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.25) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.25) 1px,transparent 1px);background-size:120px 120px;pointer-events:none}
+.corner{position:absolute;width:60px;height:60px;border:6px solid #f44}.tl{left:0;top:0;border-right:0;border-bottom:0}.tr{right:0;top:0;border-left:0;border-bottom:0}.bl{left:0;bottom:0;border-right:0;border-top:0}.br{right:0;bottom:0;border-left:0;border-top:0}
+.panel{position:absolute;left:120px;top:120px;width:900px;padding:36px 44px;background:rgba(20,16,30,.82);border-radius:20px;color:#f2ead8}
+.panel h1{margin:0 0 18px;font-size:64px}.panel p{margin:10px 0;font-size:34px;line-height:1.5}.panel .s{font-size:24px;color:#cbbfa4}.panel .xs{font-size:18px;color:#cbbfa4}
+.btns{position:absolute;right:120px;bottom:120px;display:flex;gap:28px}
+.btn{font:40px system-ui;padding:26px 56px;border-radius:18px;border:0;background:#e0b04a;color:#1a1408}
+.btn.alt{background:#4a3d66;color:#fff}
+#taps{position:absolute;right:120px;top:120px;font-size:40px;color:#fff;background:rgba(0,0,0,.5);padding:14px 26px;border-radius:14px}
+@keyframes q{10%,90%{transform:translateX(-6px)}20%,80%{transform:translateX(10px)}30%,50%,70%{transform:translateX(-16px)}40%,60%{transform:translateX(16px)}}
+.quake{animation:q .8s both}
+#dbg{position:fixed;left:calc(6px + env(safe-area-inset-left));top:calc(6px + env(safe-area-inset-top));z-index:9;background:rgba(0,0,0,.72);color:#9f9;font:12px/1.4 ui-monospace,monospace;padding:6px 8px;border-radius:6px;white-space:pre;pointer-events:none;max-width:60vw}
+#bar{position:fixed;right:calc(6px + env(safe-area-inset-right));top:calc(6px + env(safe-area-inset-top));z-index:9;display:flex;gap:6px}
+#bar button{font:13px system-ui;padding:6px 10px;border-radius:6px;border:0;background:rgba(255,255,255,.85)}
+#rot{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:#000;color:#eee;font:20px system-ui;text-align:center;padding:20px}
+</style></head>
+<body>
+<div id="stage"><div class="grid"></div><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<div class="panel"><h1>欢迎加入冒险者公会！</h1><p>这是一张测试画面：1920×1080 的舞台按比例缩放。</p><p class="s">四个红角应该刚好贴在画面四角，不该被切掉。格子线应该清楚、不糊。</p><p class="xs">最小字号（18px）：叮铃～今天也有人来应聘吗？</p></div>
+<div id="taps">点击 0</div>
+<div class="btns"><button class="btn alt" id="shake">震屏</button><button class="btn" id="tap">点我</button></div></div>
+<div id="dbg"></div>
+<div id="bar"><button id="ma">方案A</button><button id="mb">方案B</button><button id="fs">全屏</button><button id="hd">隐藏</button></div>
+<div id="rot">请把手机横过来 🔄<br><small>（只有方案B会提示）</small></div>
+<script>
+var Q=new URLSearchParams(location.search), M=(Q.get('m')||'b').toLowerCase(), st=document.getElementById('stage'), dbg=document.getElementById('dbg');
+var W=1920,H=1080,n=0,last='',k0=0,jumps=0,taps=0;
+if(M==='b')document.body.classList.add('mb');
+function size(){ if(M==='a') return [innerWidth,innerHeight];
+  var vv=window.visualViewport; return [Math.round(vv?vv.width:innerWidth), Math.round(vv?vv.height:innerHeight)]; }
+function fit(){ var s=size(),w=s[0],h=s[1],k=Math.min(w/W,h/H);
+  if(M==='b'){ document.getElementById('rot').style.display = (h>w && matchMedia('(pointer:coarse)').matches)?'flex':'none'; }
+  if(k0 && Math.abs(k-k0)>0.001) jumps++; k0=k; n++;
+  st.style.transform='translate('+Math.round((w-W*k)/2)+'px,'+Math.round((h-H*k)/2)+'px) scale('+k+')'; info(w,h,k); }
+var raf=0; function sched(){ if(M==='a'){fit();return;} cancelAnimationFrame(raf); raf=requestAnimationFrame(function(){raf=requestAnimationFrame(fit);}); }
+function info(w,h,k){ var sa=navigator.standalone||matchMedia('(display-mode: fullscreen),(display-mode: standalone)').matches, vv=window.visualViewport;
+  dbg.textContent='方案 '+M.toUpperCase()+(sa?' · 桌面图标模式':' · 浏览器内')+'\ninner '+innerWidth+'×'+innerHeight+'  vv '+(vv?Math.round(vv.width)+'×'+Math.round(vv.height):'-')+
+  '\nscreen '+screen.width+'×'+screen.height+'  dpr '+devicePixelRatio+'\n缩放 '+k.toFixed(3)+'  舞台 '+Math.round(W*k)+'×'+Math.round(H*k)+'\nresize次数 '+n+'  缩放跳变 '+jumps+'\nscrollY '+Math.round(scrollY)+'  '+(screen.orientation?screen.orientation.type:(innerWidth>innerHeight?'横':'竖')); }
+addEventListener('resize',sched); addEventListener('orientationchange',function(){setTimeout(sched,300);});
+if(window.visualViewport&&M==='b'){visualViewport.addEventListener('resize',sched);visualViewport.addEventListener('scroll',function(){scrollTo(0,0);});}
+addEventListener('scroll',function(){info.apply(null,[innerWidth,innerHeight,k0]);});
+if(M==='b'){document.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
+  var lt=0;document.addEventListener('touchend',function(e){var t=Date.now();if(t-lt<350)e.preventDefault();lt=t;},{passive:false});
+  document.addEventListener('gesturestart',function(e){e.preventDefault();});}
+fit();
+document.getElementById('tap').onclick=function(){document.getElementById('taps').textContent='点击 '+(++taps);};
+document.getElementById('shake').onclick=function(){st.classList.remove('quake');void st.offsetWidth;st.classList.add('quake');};
+st.addEventListener('animationend',function(){st.classList.remove('quake');fit();});
+function go(m){location.search='?m='+m;}
+document.getElementById('ma').onclick=function(){go('a');};document.getElementById('mb').onclick=function(){go('b');};
+document.getElementById('hd').onclick=function(){dbg.style.display=dbg.style.display==='none'?'':'none';};
+document.getElementById('fs').onclick=function(){var e=document.documentElement,f=e.requestFullscreen||e.webkitRequestFullscreen;
+  if(!f){alert('iPhone Safari 不支持网页全屏。请用 分享 → 添加到主屏幕，再从桌面图标打开。');return;}
+  Promise.resolve(f.call(e)).then(function(){try{screen.orientation.lock('landscape').catch(function(){});}catch(x){}});};
+</script></body></html>
