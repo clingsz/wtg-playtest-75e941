@@ -136,8 +136,7 @@
       { transform: 'none' }], { duration: 340 + px * 3, easing: 'cubic-bezier(.2,.7,.3,1)' });
   }
   function center(card, fy) {
-    var r = card.getBoundingClientRect(), s = card.ownerDocument.getElementById('stage').getBoundingClientRect(), k = s.width / 1920 || 1;
-    return { x: (r.left - s.left + r.width / 2) / k, y: (r.top - s.top + r.height * (fy == null ? 0.4 : fy)) / k };
+    return window.CHOOSER_ASSETS.elStagePt(card, 0.5, fy == null ? 0.4 : fy); // stage px, also when the stage is turned (phone upright)
   }
   // which tier a landed hit is: ko (she drops) > heavy (≥ 6 or ≥ 40% of her max hp) > normal
   function tier(amount, maxHp, hpAfter) {

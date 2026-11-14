@@ -63,15 +63,55 @@
   function lazy(f) { var loc = null, v; return function () { var l = curLoc(); if (loc !== l || v === undefined) { loc = l; v = f(); } return v; }; }
   function bold(s) { return String(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); } // **…** in a text → <b> (texts carry no HTML)
   document.title = T('ui.page.title'); // index.html's <title> is filled here, in the chosen language
+  (function () { // 手机端: the home-screen name (iOS reads it when 添加到主屏幕 is tapped), in the chosen language
+    var m = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (!m) { m = document.createElement('meta'); m.name = 'apple-mobile-web-app-title'; document.head.appendChild(m); }
+    m.content = document.title;
+  })();
   if (curLoc() && curLoc() !== 'zh') document.documentElement.lang = curLoc();
   var stageEl = $('stage'), app = $('app'), vnEl = $('vn'), fxLayer = $('fx'), cineEl = $('cine'), tipEl = $('tip'), modalEl = $('modal');
   var bgA = $('bg'), bgB = $('bg2');
   var STAGE_W = 1920, STAGE_H = 1080;
-  function fitStage() {
-    var w = window.innerWidth || STAGE_W, h = window.innerHeight || STAGE_H, k = Math.min(w / STAGE_W, h / STAGE_H);
-    stageEl.style.transform = 'translate(' + Math.round((w - STAGE_W * k) / 2) + 'px,' + Math.round((h - STAGE_H * k) / 2) + 'px) scale(' + k + ')';
+  // 2026-11-14 手机端 (方案 B, docs/SPEC-2026-11-13-batch6.md): on a touch screen the page is pinned (body.mb: fixed, no
+  // overscroll / pan / pinch / double-tap zoom / text selection / long-press menu), the fit follows visualViewport (two rAFs,
+  // so the iOS toolbars have settled), and held upright the stage turns 90° (A.stageFit). Not touch (desktop): the old fit,
+  // nothing pinned, never turned. ?touch=1 / ?touch=0 forces either. Pure parts: A.stageFit / toStage / rectToStage.
+  var TOUCH = Q.get('touch') ? Q.get('touch') === '1' : !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  function viewSize() {
+    var vv = TOUCH && window.visualViewport;
+    return vv ? [Math.round(vv.width), Math.round(vv.height)] : [window.innerWidth || STAGE_W, window.innerHeight || STAGE_H];
   }
-  window.addEventListener('resize', fitStage); fitStage();
+  function fitStage() {
+    // touch: while a text field has the on-screen keyboard up, keep the fit (the keyboard shrinks visualViewport and would
+    // shrink / un-turn the stage under the player's thumbs); focusout refits
+    if (TOUCH && stageEl.style.transform && document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'range' && document.activeElement.type !== 'checkbox') return;
+    var s = viewSize(), f = A.stageFit(s[0], s[1], TOUCH, STAGE_W, STAGE_H);
+    stageEl.style.transform = f.transform;
+    if (TOUCH) { stageEl.classList.toggle('st-rot', f.rot); document.body.classList.toggle('st-rot', f.rot); }
+  }
+  if (!TOUCH) window.addEventListener('resize', fitStage);
+  else {
+    document.body.classList.add('mb');
+    var fitRaf = 0;
+    var fitSoon = function () { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(function () { fitRaf = requestAnimationFrame(fitStage); }); };
+    window.addEventListener('resize', fitSoon);
+    window.addEventListener('orientationchange', function () { setTimeout(fitSoon, 300); });
+    document.addEventListener('focusout', function () { setTimeout(fitSoon, 50); });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', fitSoon);
+      window.visualViewport.addEventListener('scroll', function () { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); fitSoon(); });
+    }
+    // no page scroll / rubber-band: a range slider and a textarea keep their own drag; pointer events (the title fairy) still fire
+    var keepTouch = function (t) { return !!(t && t.closest && t.closest('input, textarea, select')); };
+    document.addEventListener('touchmove', function (e) { if (!keepTouch(e.target)) e.preventDefault(); }, { passive: false });
+    // pinch zoom (iOS gesture events); double-tap zoom is off by CSS touch-action (body.mb), so no touchend handler eats a quick 2nd tap
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    document.addEventListener('contextmenu', function (e) { if (!keepTouch(e.target)) e.preventDefault(); }); // Android long-press menu
+  }
+  fitStage();
+  // every screen point (clientX / clientY) → stage px goes through toStage(); element positions through stagePt()
+  function liveFit() { return A.liveFit(stageEl); }
+  function toStage(x, y, f) { return A.toStage(x, y, f || liveFit()); }
   var run = null, view = null, screenKey = null, ui = {}, timers = [], replayed = {};
   var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var prefs = lsGet(PKEY, { speed: 1, auto: false });
@@ -327,11 +367,7 @@
   }
 
   // ---------- tooltip ----------
-  function stageK() { return stageEl.getBoundingClientRect().width / STAGE_W; }
-  function stagePt(el, ax, ay) {
-    var s = stageEl.getBoundingClientRect(), r = el.getBoundingClientRect(), k = s.width / STAGE_W;
-    return { x: (r.left - s.left + r.width * (ax == null ? 0.5 : ax)) / k, y: (r.top - s.top + r.height * (ay == null ? 0.5 : ay)) / k };
-  }
+  function stagePt(el, ax, ay) { return A.elStagePt(el, ax, ay, stageEl); } // also right when the stage is turned (A.rectToStage)
   // data-tip = plain text; data-rich = escaped HTML (ability rows etc.). A rich tip above a card never covers the card's face:
   // it sits above the card, or below it when there is no room.
   var hoverEl = null;
@@ -1510,18 +1546,18 @@
   function tfFast(btn, k) { btn.querySelectorAll('.fanim').forEach(function (n) { n._faSpeed = k; }); }
   document.addEventListener('pointerdown', function (e) {
     var hit = e.target.closest && e.target.closest('.title-fairy .tf-hit'); if (!hit || e.button > 0 || tfDrag) return;
-    var btn = hit.closest('.title-fairy'), a = stagePt(hit, 0, 0), b = stagePt(hit, 1, 1);
-    tfDrag = { btn: btn, hit: hit, id: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, ox: tfOff.x, oy: tfOff.y, k: stageK() || 1, moved: false, acc: 0,
+    var btn = hit.closest('.title-fairy'), a = stagePt(hit, 0, 0), b = stagePt(hit, 1, 1), fit = liveFit(), p0 = toStage(e.clientX, e.clientY, fit);
+    tfDrag = { btn: btn, hit: hit, id: e.pointerId, sx: p0.x, sy: p0.y, lx: p0.x, ox: tfOff.x, oy: tfOff.y, fit: fit, moved: false, acc: 0,
       box: { l: a.x - tfOff.x, t: a.y - tfOff.y, r: b.x - tfOff.x, b: b.y - tfOff.y } };
     try { hit.setPointerCapture(e.pointerId); } catch (x) { /* */ }
   });
   document.addEventListener('pointermove', function (e) {
     var g = tfDrag; if (!g || e.pointerId !== g.id) return;
-    var dx = (e.clientX - g.sx) / g.k, dy = (e.clientY - g.sy) / g.k;
+    var p = toStage(e.clientX, e.clientY, g.fit), dx = p.x - g.sx, dy = p.y - g.sy; // stage px (the stage may be turned)
     if (!g.moved) { if (!A.tfIsDrag(dx, dy, 6)) return; g.moved = true; g.btn.classList.add('tf-dragging'); tfFast(g.btn, 2.2); }
     var prev = tfOff; tfOff = A.tfClamp({ x: g.ox + dx, y: g.oy + dy }, g.box, STAGE_W, STAGE_H);
     g.btn.style.transform = 'translate(' + tfOff.x.toFixed(1) + 'px,' + tfOff.y.toFixed(1) + 'px)';
-    var vx = (e.clientX - g.lx) / g.k; g.lx = e.clientX;
+    var vx = p.x - g.lx; g.lx = p.x;
     g.btn.style.setProperty('--tf-tilt', Math.max(-14, Math.min(14, vx * 0.8)).toFixed(1) + 'deg');
     g.acc += Math.hypot(tfOff.x - prev.x, tfOff.y - prev.y);
     var n = Math.min(4, Math.floor(g.acc / 16)); if (n > 0) { g.acc -= n * 16; tfDust(g.btn, n, g.btn.classList.contains('tf-demon')); }
@@ -1545,7 +1581,7 @@
     var now = performance.now(), st = { last: tfLast, idle: TF_IDLE, cool: tfIdleCool, onTitle: true, dragging: !!tfDrag, demon: btn.classList.contains('tf-demon'),
       busy: tfBusy || !!tfFly, hidden: document.hidden, modal: !!(modalEl && !modalEl.hidden) };
     if (!A.tfIdleReady(now, st)) { tfArm(Math.max(500, Math.max(tfLast + TF_IDLE, tfIdleCool) - now)); return; }
-    var cur = null; if (tfPtr) { var s = stageEl.getBoundingClientRect(), k = s.width / STAGE_W || 1; cur = { x: (tfPtr.x - s.left) / k, y: (tfPtr.y - s.top) / k }; }
+    var cur = tfPtr ? toStage(tfPtr.x, tfPtr.y) : null; // the cursor (screen px, kept raw) → stage px
     var act = A.tfPickIdle(Math.random, cur, STAGE_W, STAGE_H);
     tfIdleCool = now + TF_COOL;
     if (REDUCED) { pulse(btn, 'tf-wiggle', 1000); if (act === 'poke') tfSay(btn, tfLine('idlePoke', [T('ui.titleFairy.idlePoke')])); tfArm(TF_COOL); return; }
@@ -2482,7 +2518,7 @@
     };
     app.style.setProperty('--sac-fade', plan.fadeMs + 'ms'); app.classList.add('sac-breaking');
     if (b && !REDUCED) { // the button alone, drifting to the centre of the dark
-      var sh = A.sacCenterShift(b.getBoundingClientRect(), stageEl.getBoundingClientRect());
+      var sh = A.sacCenterShift(A.rectToStage(b.getBoundingClientRect(), liveFit()), { left: 0, top: 0, width: STAGE_W }); // stage px (turned-safe)
       b.style.transition = 'transform ' + plan.fadeMs + 'ms ease-in-out'; b.style.transform = 'translate(' + sh.dx + 'px, ' + sh.dy + 'px) scale(' + A.SAC_CONFIRM.scaleMax + ')';
     }
     setTimeout(function () { app.classList.add('sac-shatter'); if (b && !REDUCED && b.isConnected) sacShatter(b, plan); }, plan.at.shatter);

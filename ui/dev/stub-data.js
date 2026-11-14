@@ -98,9 +98,9 @@
     turncoat: {},
     farewellHighBond: { eve: [{ speaker: 'eve', text: '第十二个名字……就刻我自己吧。', expr: 'sad' }] },
     advisorGuide: {
-      audrey: { beforeFight: [{ speaker: 'audrey', text: '站稳。最左边的人先挨打。', expr: 'calm' }], afterWin: [{ speaker: 'audrey', text: '不错。来，一人一颗栗子。', expr: 'happy' }], firstPause: [{ speaker: 'audrey', text: '每打完一轮，你可以做一件事。只能一件。', expr: 'calm' }] },
-      lucienne: { firstPause: [{ speaker: 'lucienne', text: '每一轮之后，条款允许你做一件事。', expr: 'calm' }] },
-      nicota: { firstPause: [{ speaker: 'nicota', text: '一轮结束啦～现在可以做一件事哦！', expr: 'happy' }] }
+      audrey: { beforeFight: [{ speaker: 'audrey', text: '站稳。最左边的人先挨打。', expr: 'calm' }], afterWin: [{ speaker: 'audrey', text: '不错。来，一人一颗栗子。', expr: 'happy' }], firstPause: [{ speaker: 'audrey', text: '每打完一回合，你可以做一件事。只能一件。', expr: 'calm' }] },
+      lucienne: { firstPause: [{ speaker: 'lucienne', text: '每一回合之后，条款允许你做一件事。', expr: 'calm' }] },
+      nicota: { firstPause: [{ speaker: 'nicota', text: '一回合结束啦～现在可以做一件事哦！', expr: 'happy' }] }
     }
   };
 
@@ -108,9 +108,9 @@
   root.CHOOSER_STUB_DATA = {
     candidates: candidates,
     advisors: [
-      { id: 'audrey', name: '奥德丽', look: '退役佣兵教官', intro: '我带过的新兵，九成活着退役了。选我，打完了还有烤栗子。', flow: { kind: 'chestnut', name: '烤栗子', text: '每场胜利后，心情最低的队员心情 +1' }, combat: { kind: 'formation', name: '列阵', text: '下一轮我方受到的伤害 −1' }, boss: { name: '墓穴军团总督·奥德丽' } },
-      { id: 'lucienne', name: '露西安', look: '公会书记官', intro: '每晚歇脚的时候，我给大家泡一壶热茶。', flow: { kind: 'tea', name: '热茶', text: '篝火边选「休息」时，全员额外回复 1 点生命' }, combat: { kind: 'clause', name: '附加条款', text: '下一轮敌人的第一次行动被取消' }, boss: { name: '契约执事·露西安' } },
-      { id: 'nicota', name: '妮可塔', look: '流浪占星师', intro: '每打赢一仗，我都替你们多翻一张牌～', flow: { kind: 'fortune', name: '幸运星', text: '每场胜利后挑奖励时，四件里挑一件' }, combat: { kind: 'luck', name: '好运', text: '下一轮所有加成必定成功' }, boss: { name: '高台庄家·妮可塔' } }
+      { id: 'audrey', name: '奥德丽', look: '退役佣兵教官', intro: '我带过的新兵，九成活着退役了。选我，打完了还有烤栗子。', flow: { kind: 'chestnut', name: '烤栗子', text: '每场胜利后，心情最低的队员心情 +1' }, combat: { kind: 'formation', name: '列阵', text: '下一回合我方受到的伤害 −1' }, boss: { name: '墓穴军团总督·奥德丽' } },
+      { id: 'lucienne', name: '露西安', look: '公会书记官', intro: '每晚歇脚的时候，我给大家泡一壶热茶。', flow: { kind: 'tea', name: '热茶', text: '篝火边选「休息」时，全员额外回复 1 点生命' }, combat: { kind: 'clause', name: '附加条款', text: '下一回合敌人的第一次行动被取消' }, boss: { name: '契约执事·露西安' } },
+      { id: 'nicota', name: '妮可塔', look: '流浪占星师', intro: '每打赢一仗，我都替你们多翻一张牌～', flow: { kind: 'fortune', name: '幸运星', text: '每场胜利后挑奖励时，四件里挑一件' }, combat: { kind: 'luck', name: '好运', text: '下一回合所有加成必定成功' }, boss: { name: '高台庄家·妮可塔' } }
     ],
     leader: {
       identities: [{ id: 'fallen-noble', name: '没落贵族', text: '讨债人面前也能端着茶杯微笑。', effect: 'steady' }, { id: 'veteran', name: '退伍老兵', text: '见过太多人被留在战场上。', effect: 'soft-heart' }, { id: 'outlander', name: '外乡人', text: '进门前先数清屋里几个人。', effect: 'scout' }],
@@ -131,8 +131,8 @@
       { id: 'fairy-demon', name: '小铃', faction: 'noble', hp: 20, atk: 3, boss: true }
     ],
     items: [
-      { id: 'potion', name: '回血药', text: '一名队员回满生命', needsTarget: true }, { id: 'smoke', name: '烟雾弹', text: '下一轮敌人的攻击全部落空', needsTarget: false },
-      { id: 'drum', name: '战鼓', text: '下一轮加成概率翻倍', needsTarget: false }, { id: 'holywater', name: '圣水', text: '清除一名队员的坏效果', needsTarget: true }
+      { id: 'potion', name: '回血药', text: '一名队员回满生命', needsTarget: true }, { id: 'smoke', name: '烟雾弹', text: '下一回合敌人的攻击全部落空', needsTarget: false },
+      { id: 'drum', name: '战鼓', text: '下一回合加成概率翻倍', needsTarget: false }, { id: 'holywater', name: '圣水', text: '清除一名队员的坏效果', needsTarget: true }
     ],
     cards: {
       rewards: [{ id: 'sharpen', name: '磨利的刃', text: '攻击 +1', effect: { type: 'stat', stat: 'atk', delta: 1 } }, { id: 'vest', name: '厚皮背心', text: '生命上限 +2', effect: { type: 'stat', stat: 'maxHp', delta: 2 } },

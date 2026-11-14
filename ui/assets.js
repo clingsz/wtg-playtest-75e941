@@ -552,6 +552,45 @@
     p.overall = p.total + p.fadeInMs;
     return p;
   };
+  // ---------- 2026-11-14 手机端 (方案 B): stage fit + screen → stage coordinates ----------
+  // stageFit(w, h, touch): the window (visualViewport on touch) → scale k, offset x/y (screen px) and rot. On a touch screen held
+  // upright (h > w) the stage turns 90° clockwise and fills the portrait screen, so a phone with rotation lock on, held sideways,
+  // shows the landscape game the right way up. Not touch: exactly the old fit (never turns). transform = the #stage style.
+  A.stageFit = function (w, h, touch, W, H) {
+    W = W || 1920; H = H || 1080; w = w || W; h = h || H;
+    var rot = !!touch && h > w, k, x, y;
+    if (rot) { k = Math.min(w / H, h / W); x = Math.round((w + H * k) / 2); y = Math.round((h - W * k) / 2); }
+    else { k = Math.min(w / W, h / H); x = Math.round((w - W * k) / 2); y = Math.round((h - H * k) / 2); }
+    return { k: k, x: x, y: y, rot: rot, transform: 'translate(' + x + 'px,' + y + 'px) ' + (rot ? 'rotate(90deg) ' : '') + 'scale(' + k + ')' };
+  };
+  // the fit read back from the stage's live bounding box (so a quake / tv-roll `translate` is included): turned, the box is
+  // H·k wide and W·k tall, and the stage's own top-left corner sits at the box's top-RIGHT corner
+  A.fitFromRect = function (s, rot, W) {
+    W = W || 1920; s = s || {};
+    var wd = s.width || 0, ht = s.height || 0, l = s.left || 0, t = s.top || 0;
+    return rot ? { k: ht / W || 1, x: l + wd, y: t, rot: true } : { k: wd / W || 1, x: l, y: t, rot: false };
+  };
+  // a screen point (clientX / clientY) → stage px. Every pointer coordinate in the UI goes through this.
+  A.toStage = function (px, py, f) {
+    var k = f.k || 1;
+    return f.rot ? { x: (py - f.y) / k, y: (f.x - px) / k } : { x: (px - f.x) / k, y: (py - f.y) / k };
+  };
+  // a screen rect (getBoundingClientRect) → the stage-px rect it covers (a 90° turn keeps boxes axis-aligned)
+  A.rectToStage = function (r, f) {
+    var l = r.left || 0, t = r.top || 0, rr = r.right != null ? r.right : l + (r.width || 0), b = r.bottom != null ? r.bottom : t + (r.height || 0);
+    var p = A.toStage(l, t, f), q = A.toStage(rr, b, f), x0 = Math.min(p.x, q.x), y0 = Math.min(p.y, q.y), x1 = Math.max(p.x, q.x), y1 = Math.max(p.y, q.y);
+    return { left: x0, top: y0, right: x1, bottom: y1, width: x1 - x0, height: y1 - y0 };
+  };
+  // browser helper: the live fit of #stage (turned when it has the st-rot class), and a point of an element in stage px
+  A.liveFit = function (stage) {
+    stage = stage || (typeof document !== 'undefined' && document.getElementById('stage'));
+    if (!stage) return { k: 1, x: 0, y: 0, rot: false };
+    return A.fitFromRect(stage.getBoundingClientRect(), stage.classList.contains('st-rot'));
+  };
+  A.elStagePt = function (el, ax, ay, stage) {
+    var r = A.rectToStage(el.getBoundingClientRect(), A.liveFit(stage || el.ownerDocument.getElementById('stage')));
+    return { x: r.left + r.width * (ax == null ? 0.5 : ax), y: r.top + r.height * (ay == null ? 0.5 : ay) };
+  };
   // the confirm button's centre → the stage centre (rects from getBoundingClientRect; the stage may be scaled)
   A.sacCenterShift = function (b, st) {
     var k = st && st.width ? st.width / 1920 : 1;

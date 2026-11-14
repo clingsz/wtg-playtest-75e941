@@ -1,7 +1,10 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta name="robots" content="noindex,nofollow"><script src="gate-check.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="zh-CN"><head><meta name="robots" content="noindex,nofollow"><script src="gate-check.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' data: file:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'">
-<link rel="icon" href="data:,"><link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin><title></title><link rel="stylesheet" href="style.css?v=v28a-1114"></head>
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000"><link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:,"><link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin><title></title><link rel="stylesheet" href="style.css?v=v28c-1114"></head>
 <body class="act-1">
 <!-- Everything renders into one fixed 1920×1080 stage; app.js scales it to fit the window (letterboxed). -->
 <div id="stage" class="stage1080">
@@ -18,17 +21,17 @@
 </div>
 <!-- Asset depot: every image slot is an ordered candidate list (docs/ASSET-DEPOT.md). -->
 <!-- 游玩记录 (local only, export from the 音 popover): first, so it also catches load-time errors. ?log=0 turns it off. -->
-<script src="playlog.js?v=v28a-1114"></script>
-<script src="assets.js?v=v28a-1114"></script>
+<script src="playlog.js?v=v28c-1114"></script>
+<script src="assets.js?v=v28c-1114"></script>
 <!-- Real engine + content (v2). If missing or still v1, app.js falls back to the dev/ stubs. -->
-<script src="../engine/engine.js?v=v28a-1114"></script>
-<script src="generated/data.js?v=v28a-1114"></script>
+<script src="../engine/engine.js?v=v28c-1114"></script>
+<script src="generated/data.js?v=v28c-1114"></script>
 <!-- DEV stubs: define ChooserStubEngine / CHOOSER_STUB_DATA only; remove these two lines with ui/dev/. -->
-<script src="dev/stub-data.js?v=v28a-1114"></script>
-<script src="dev/stub-engine.js?v=v28a-1114"></script>
-<script src="audio.js?v=v28a-1114"></script>
-<script src="hitfx.js?v=v28a-1114"></script>
-<script src="round-plan.js?v=v28a-1114"></script>
-<script src="credits.js?v=v28a-1114"></script>
-<script src="app.js?v=v28a-1114"></script>
+<script src="dev/stub-data.js?v=v28c-1114"></script>
+<script src="dev/stub-engine.js?v=v28c-1114"></script>
+<script src="audio.js?v=v28c-1114"></script>
+<script src="hitfx.js?v=v28c-1114"></script>
+<script src="round-plan.js?v=v28c-1114"></script>
+<script src="credits.js?v=v28c-1114"></script>
+<script src="app.js?v=v28c-1114"></script>
 </body></html>
