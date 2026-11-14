@@ -1,4 +1,19 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Pages test</title>
-<style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0a10;color:#eee;font:20px system-ui;text-align:center}</style></head>
-<body><div>🔔 GitHub Pages 能打开了！<br><small id="t" style="color:#999"></small></div>
-<script>document.getElementById('t').textContent=innerWidth+'×'+innerHeight+' · '+(matchMedia('(pointer:coarse)').matches?'触屏':'鼠标');</script></body></html>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Guild">
+<link rel="manifest" href="manifest.webmanifest"><title>Pages test</title>
+<style>body{margin:0;height:100vh;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;background:#0b0a10;color:#eee;font:20px system-ui;text-align:center;padding:0 16px}
+button{font:18px system-ui;padding:12px 28px;border-radius:10px;border:0;background:#e0b04a;color:#1a1408}small{color:#999}</style></head>
+<body><div>🔔 GitHub Pages 能打开了！</div><small id="t"></small>
+<button id="fs">点我全屏</button><small id="r"></small>
+<small>iPhone：Safari 底部「分享」→「添加到主屏幕」，再从桌面图标打开就没有地址栏</small>
+<script>
+function info(){var s=matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches||navigator.standalone;
+document.getElementById('t').textContent=innerWidth+'×'+innerHeight+' · '+(matchMedia('(pointer:coarse)').matches?'触屏':'鼠标')+(s?' · 桌面图标模式':'');}
+info();addEventListener('resize',info);
+document.getElementById('fs').onclick=function(){var e=document.documentElement,f=e.requestFullscreen||e.webkitRequestFullscreen,r=document.getElementById('r');
+if(!f){r.textContent='这个浏览器不支持网页全屏（iPhone 的 Safari 就不支持），请用「添加到主屏幕」';return;}
+Promise.resolve(f.call(e)).then(function(){try{screen.orientation.lock('landscape').catch(function(){});}catch(x){}r.textContent='已全屏';}).catch(function(x){r.textContent='全屏失败：'+x.message;});};
+</script></body></html>
