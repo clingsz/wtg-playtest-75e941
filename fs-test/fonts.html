@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest"><title>Font test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@400;700&family=Alegreya+Sans:wght@400;700&family=Cinzel+Decorative:wght@400;700&family=Nunito:wght@400;700&family=IM+Fell+English+SC&family=Lora:wght@400;700&family=Almendra:wght@400;700&family=Quicksand:wght@400;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#000;overflow:hidden}
+body{position:fixed;inset:0;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;background:#1d1729 url(bg.png) center/cover;color:#f2ead8}
+#stage::after{content:'';position:absolute;inset:0;background:linear-gradient(rgba(10,8,16,.35),rgba(10,8,16,.6));pointer-events:none}
+.L{position:absolute;z-index:1}
+#title{left:0;right:0;top:56px;text-align:center;font-size:84px;text-shadow:0 4px 16px #000}
+#tag{left:0;right:0;top:170px;text-align:center;font-size:30px;color:#e7c98a}
+#card{left:110px;top:270px;width:560px;padding:30px 34px;background:rgba(28,22,40,.92);border:2px solid #b8955a;border-radius:18px}
+#card h3{margin:0 0 6px;font-size:44px;color:#ffd98a}#card .role{font-size:24px;color:#cbbfa4;margin-bottom:16px}
+#card p{margin:0;font-size:28px;line-height:1.45}
+#stats{left:110px;top:690px;width:560px;font-size:26px;line-height:1.7;background:rgba(0,0,0,.45);padding:16px 26px;border-radius:14px}
+#stats b{color:#ffd98a}
+#vn{left:760px;right:110px;bottom:230px;padding:30px 40px 34px;background:rgba(14,11,22,.9);border-radius:20px;border:2px solid #6c5a8e}
+#vn .who{font-size:34px;color:#ffb3d1;margin-bottom:8px}#vn p{margin:0;font-size:34px;line-height:1.5}
+#narr{left:760px;right:110px;top:300px;font-size:30px;line-height:1.6;font-style:italic;color:#e8e0cc;background:rgba(0,0,0,.4);padding:20px 30px;border-radius:14px}
+#btns{left:760px;right:110px;bottom:90px;display:flex;gap:28px}
+.btn{flex:1;font-size:36px;padding:24px 10px;border-radius:16px;border:0;background:#e0b04a;color:#1a1408;text-align:center}
+.btn.alt{background:#4a3d66;color:#fff}.btn svg{vertical-align:-4px;margin-right:8px}
+#banner{left:760px;right:110px;top:430px;text-align:center;font-size:64px;letter-spacing:.04em;color:#fff;text-shadow:0 0 18px #f80,0 3px 0 #000}
+#tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom));z-index:9;display:flex;gap:6px}
+#tabs button{font:15px system-ui;padding:8px 14px;border-radius:8px;border:0;background:rgba(255,255,255,.8)}
+#tabs button.on{background:#e0b04a;font-weight:700}
+#back{position:fixed;left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));z-index:9;font:14px system-ui;padding:6px 10px;border-radius:6px;background:rgba(255,255,255,.8);color:#000;text-decoration:none}
+</style></head><body>
+<div id="stage">
+<div class="L" id="title">Welcome to the Adventurers' Guild!</div>
+<div class="L" id="tag"></div>
+<div class="L" id="card"><h3>Marta</h3><div class="role">Warrior · Lv 2</div><p><b>Shield Bash</b> — Strike the leftmost enemy for damage equal to ATK. Until your next action, take <b>1</b> less damage from each hit.</p></div>
+<div class="L" id="stats">HP <b>12/12</b> · ATK <b>3</b> · Mood: <b>Cheerful</b><br>Round <b>3</b> · Wave <b>2</b> · Level <b>5</b><br>Chain 40% · Multi-hit ×2 · Crit!</div>
+<div class="L" id="narr">The guild door creaks open. The board is still covered in requests no one has taken. Somewhere above, a small bell is ringing.</div>
+<div class="L" id="banner">Wave 2 — Fight!</div>
+<div class="L" id="vn"><div class="who">Bella</div><p>Ding-a-ling~ Is someone here to apply today? Bella loves it when the guild is busy. The more, the merrier~</p></div>
+<div class="L" id="btns"><div class="btn alt">Write her name</div><div class="btn"><svg width="30" height="30" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a1.5 1.5 0 0 1 1.5 1.5v.6A6.5 6.5 0 0 1 18.5 10.5v4l2 3H3.5l2-3v-4A6.5 6.5 0 0 1 10.5 4.1v-.6A1.5 1.5 0 0 1 12 2zm-2.5 17h5a2.5 2.5 0 0 1-5 0z"/></svg>Leave it to the rules</div></div>
+</div>
+<a id="back" href="./">← 返回</a>
+<div id="tabs"></div>
+<script>
+var SETS={A:['Alegreya SC','Alegreya Sans','故事书 · 西幻（推荐）'],B:['Cinzel Decorative','Nunito','典雅标题 + 圆润正文'],C:['IM Fell English SC','Lora','老账本 · 羊皮纸'],D:['Almendra','Quicksand','童话 · 轻快']};
+var st=document.getElementById('stage'),tabs=document.getElementById('tabs');
+function apply(k){var s=SETS[k];
+ document.querySelectorAll('#title,#card h3,#banner,#vn .who,.btn').forEach(function(e){e.style.fontFamily="'"+s[0]+"',serif";});
+ document.querySelectorAll('#tag,#card p,#card .role,#stats,#narr,#vn p').forEach(function(e){e.style.fontFamily="'"+s[1]+"',sans-serif";});
+ document.getElementById('tag').textContent=k+' · '+s[0]+' + '+s[1]+' · '+s[2];
+ tabs.querySelectorAll('button').forEach(function(b){b.className=b.textContent===k?'on':'';});
+ history.replaceState(null,'','?f='+k);}
+Object.keys(SETS).forEach(function(k){var b=document.createElement('button');b.textContent=k;b.onclick=function(){apply(k);};tabs.appendChild(b);});
+function fit(){var vv=window.visualViewport,w=vv?vv.width:innerWidth,h=vv?vv.height:innerHeight,k=Math.min(w/1920,h/1080);
+ st.style.transform='translate('+Math.round((w-1920*k)/2)+'px,'+Math.round((h-1080*k)/2)+'px) scale('+k+')';}
+var raf=0;function sched(){cancelAnimationFrame(raf);raf=requestAnimationFrame(function(){raf=requestAnimationFrame(fit);});}
+addEventListener('resize',sched);if(window.visualViewport)visualViewport.addEventListener('resize',sched);
+document.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
+fit();apply((new URLSearchParams(location.search).get('f')||'A').toUpperCase());
+</script></body></html>
