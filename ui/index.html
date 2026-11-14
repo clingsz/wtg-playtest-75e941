@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta name="robots" content="noindex,nofollow"><script src="gate-check.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' data: file:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'">
+<link rel="icon" href="data:,"><link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin><title></title><link rel="stylesheet" href="style.css?v=v28a-1114"></head>
+<body class="act-1">
+<!-- Everything renders into one fixed 1920×1080 stage; app.js scales it to fit the window (letterboxed). -->
+<div id="stage" class="stage1080">
+<div id="bg" class="bg" aria-hidden="true"></div>
+<div id="bg2" class="bg" aria-hidden="true"></div>
+<div id="app" aria-live="polite"></div>
+<canvas id="rain" width="1920" height="1080" aria-hidden="true"></canvas>
+<div id="fx" class="fx" aria-hidden="true"></div>
+<div id="vn" class="vn" hidden aria-live="polite"></div>
+<div id="cine" class="cine" aria-hidden="true"></div>
+<div id="notice" class="notice" role="status" hidden></div>
+<div id="modal" class="modal" hidden></div>
+<div id="tip" class="tip" hidden></div>
+</div>
+<!-- Asset depot: every image slot is an ordered candidate list (docs/ASSET-DEPOT.md). -->
+<!-- 游玩记录 (local only, export from the 音 popover): first, so it also catches load-time errors. ?log=0 turns it off. -->
+<script src="playlog.js?v=v28a-1114"></script>
+<script src="assets.js?v=v28a-1114"></script>
+<!-- Real engine + content (v2). If missing or still v1, app.js falls back to the dev/ stubs. -->
+<script src="../engine/engine.js?v=v28a-1114"></script>
+<script src="generated/data.js?v=v28a-1114"></script>
+<!-- DEV stubs: define ChooserStubEngine / CHOOSER_STUB_DATA only; remove these two lines with ui/dev/. -->
+<script src="dev/stub-data.js?v=v28a-1114"></script>
+<script src="dev/stub-engine.js?v=v28a-1114"></script>
+<script src="audio.js?v=v28a-1114"></script>
+<script src="hitfx.js?v=v28a-1114"></script>
+<script src="round-plan.js?v=v28a-1114"></script>
+<script src="credits.js?v=v28a-1114"></script>
+<script src="app.js?v=v28a-1114"></script>
+</body></html>
