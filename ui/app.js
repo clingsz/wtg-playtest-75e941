@@ -952,6 +952,48 @@
     return '<h2 class="tm-title">' + T('ui.team.title') + '</h2><div class="lane team-lane">' + ps.map(function (m, i) { return memberCard(m, i, n, {}); }).join('') + '</div>' +
       '<div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.close') + '</button></div>';
   }
+  // ===== v36 (试玩者 1) 角色面板: one unit's sheet — face, name, role, 生命 / 威力 / 护甲, skill + level + text, mood, keepsakes,
+  // statuses, 加成 (连携). Opened by the ⓘ on any unit card (formation, campfire, battle, 查看队伍), by a plain click on a card where a
+  // click means nothing else (formation, battle outside 道具 / 换位, 查看队伍), or a right-click on any card. Esc / a click outside closes.
+  function infoBtn(uid, id) { return '<button class="uc-info" data-act="unitInfo"' + (uid != null ? ' data-u="' + esc(uid) + '"' : '') + ' data-id="' + esc(id) + '" aria-label="' + esc(T('ui.unit.info')) + '" data-tip="' + esc(T('ui.unit.infoTip')) + '">i</button>'; }
+  function panelUnit(uid, id) { // the battle unit (uid) when in a fight, else the party member (id)
+    var bu = uid != null ? bUnits().filter(function (u) { return u.uid === uid; })[0] : null;
+    if (!bu && view && view.phase === 'battle') bu = bUnits().filter(function (u) { return u.id === id; })[0];
+    if (bu) return { u: bu, side: bu.side === 'enemy' ? 'enemy' : 'ally', member: bu.side === 'enemy' ? null : member(bu.id), field: ui.field && ui.field[bu.uid] };
+    var m = member(id); return m ? { u: m, side: 'ally', member: m, field: null } : null;
+  }
+  function unitPanelHtml(p) {
+    var M = A.unitPanelModel(p.u, p.side, { member: p.member, field: p.field, cards: (DATA.cards && DATA.cards.rewards) || [] });
+    var ally = M.side === 'ally', art = unitArt(p.u), lead = isLeader(p.u), name = lead ? (M.name && M.name !== T('ui.name.leader') ? M.name : T('ui.name.you')) : M.name || T('ui.name.you');
+    var stat = function (g, k, v, cls) { return '<span class="up-stat' + (cls ? ' ' + cls : '') + '">' + g + '<span class="up-k">' + T(k) + '</span><b>' + esc(v) + '</b></span>'; };
+    var stats = stat(A.glyph('hp'), 'ui.unit.hp', M.hp != null && M.maxHp != null ? M.hp + ' / ' + M.maxHp : M.maxHp != null ? M.maxHp : '?') + stat(IC.atk, 'ui.unit.power', M.atk != null ? M.atk : '?') +
+      (M.block > 0 ? stat(A.glyph('block'), 'ui.unit.block', M.block) : '') + (M.openBlock > 0 ? stat(A.glyph('block'), 'ui.unit.openBlock', M.openBlock) : '') +
+      (ally && M.mood != null && !lead ? '<span class="up-stat" data-tip="' + esc(MOOD_TIP(M.mood)) + '"><img class="up-mood" src="' + esc(A.moodIcon(M.mood)) + '" alt=""><span class="up-k">' + T('ui.unit.mood') + '</span><b>' + esc(M.moodLabel || moodWord(M.mood)) + '</b></span>' : '');
+    var sec = function (k, body, cls) { return '<div class="up-sec' + (cls ? ' ' + cls : '') + '"><h3>' + T(k) + '</h3>' + body + '</div>'; };
+    var skill = sec(ally ? 'ui.unit.skill' : 'ui.unit.pattern', '<p class="up-line"><b class="up-sk">' + esc(M.skillName || '—') + '</b>' + (M.skillLv ? '<span class="up-lv">' + A.glyph('level') + 'Lv' + esc(M.skillLv) + '</span>' : '') + '</p>' +
+      (M.skillText ? '<p class="up-txt">' + richText(M.skillText) + '</p>' : '') + (M.perkText ? '<p class="up-txt up-perk">' + richText(M.perkText) + '</p>' : ''));
+    var combo = ally || M.comboText ? sec('ui.unit.combo', M.comboText ? '<p class="up-line">' + (M.comboName ? '<b class="up-sk">' + esc(M.comboName) + '</b>' : '') + '</p><p class="up-txt">' + richText(M.comboText) + '</p>' : '<p class="up-txt dim">' + T('ui.common.none') + '</p>') : '';
+    var keeps = ally ? sec('ui.unit.keepsakes', M.keepsakes.length ? M.keepsakes.map(function (k) { return '<p class="up-txt"><b class="up-sk">' + esc(k.name) + '</b>' + (k.text ? '：' + richText(k.text) : '') + '</p>'; }).join('') : '<p class="up-txt dim">' + T('ui.common.none') + '</p>') : '';
+    var st = statusChips(M.statuses, M.side); // an enemy's hidden debuffs stay hidden (same filter as her card)
+    var sts = sec('ui.unit.statuses', st ? '<div class="chips">' + st + '</div>' : '<p class="up-txt dim">' + T('ui.common.none') + '</p>');
+    return '<div class="up-head"><div class="up-face">' + pic(art.list, 'up-img', name, art.fb) + '</div><div class="up-id"><h2>' + esc(name) + '</h2>' +
+      '<div class="up-role">' + (M.role ? roleBadge(M.role, 'up-rb') + '<span>' + esc(ROLE_NAME()[M.role] || M.role) + '</span>' : '<span>' + T(M.boss ? 'ui.unit.boss' : 'ui.unit.foe') + '</span>') + '</div>' +
+      '<div class="up-stats">' + stats + '</div></div></div>' +
+      '<div class="up-body">' + skill + combo + keeps + sts + '</div>' +
+      '<div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.close') + '</button></div>';
+  }
+  function openUnitPanel(uid, id) {
+    var p = panelUnit(uid, id); if (!p) return false;
+    hideTip(); modal(unitPanelHtml(p)); modalEl.classList.add('unit-open', 'vn-pass');
+    var pn = modalEl.querySelector('.panel'); if (pn) pn.classList.add('unit-panel', p.side === 'enemy' ? 'is-foe' : 'is-ally');
+    return true;
+  }
+  // a plain click on a card opens her panel only where a click on the card means nothing else
+  function cardOpensPanel(card) {
+    if (!card || card.dataset.act) return false;
+    if (card.classList.contains('bcard')) return !!(view && view.phase === 'battle' && !(ui.mode && card.classList.contains('ally')));
+    return !!card.closest('#formation, .team-lane');
+  }
   // v2.2 §4: the three keys, small glyphs in the top bar, only once obtained; the tip is cryptic on purpose
   var KEY_GLYPH = [['refuse', 'quill', 'ui.keys.refuseTip'], ['rules', 'die', 'ui.keys.rulesTip'], ['bell', 'bell', 'ui.keys.bellTip']]; // [key, glyph, tip text key] // 2026-11-13: the three keys of the true route (self is no longer one)
   function keysChip(k) {
@@ -1375,7 +1417,7 @@
     var o = opts || {}, art = unitArt({ id: m.id, side: 'ally', mood: m.mood, isLeader: m.isLeader });
     return '<div class="ucard ally p-slot' + (isLeader(m) ? ' is-leader' : '') + (o.sel ? ' sel' : '') + (hasBad(m.statuses) ? ' cursed' : '') + '" data-id="' + esc(m.id) + '"' + (o.drag ? ' draggable="true"' : '') + (o.act ? ' data-act="' + o.act + '"' : '') +
       ' data-opt="o:' + esc(m.id) + '" data-rich="' + esc(unitTip(m, 'ally')) + '">' +
-      '<div class="uc-art">' + pic(art.list, 'uc-img', m.name, art.fb) + roleBadge(m.role, 'uc-role') + '<span class="uc-slot" data-tip="' + T('ui.card.slotTip', { n: i + 1 }) + '"><b>' + (i + 1) + '</b></span>' + moodFace(m) + bondMark(m) + '</div>' +
+      '<div class="uc-art">' + pic(art.list, 'uc-img', m.name, art.fb) + roleBadge(m.role, 'uc-role') + infoBtn(null, m.id) + '<span class="uc-slot" data-tip="' + T('ui.card.slotTip', { n: i + 1 }) + '"><b>' + (i + 1) + '</b></span>' + moodFace(m) + bondMark(m) + '</div>' +
       '<div class="uc-body"><div class="uc-name">' + esc(isLeader(m) ? (m.name && m.name !== T('ui.name.leader') ? m.name : T('ui.name.you')) : m.name) + '</div><div class="uc-stats"><span data-tip="' + T('ui.card.hpTip') + '">' + IC.hp + ' ' + esc(m.hp != null && m.hp !== m.maxHp ? m.hp + '/' + m.maxHp : m.maxHp) + '</span><span>' + IC.atk + ' ' + esc(m.atk) + '</span></div>' +
       '<div class="uc-chips">' + (o.wounded ? '<span class="chip bad wound" data-tip="' + T('ui.card.woundTip') + '">' + T('ui.card.wound') + '</span>' : '') + statusChips(m.statuses) + '</div></div>' +
       (o.orderNo ? '<span class="order-no" aria-hidden="true" data-tip="' + T('ui.card.slotTip', { n: i + 1 }) + '">' + (i + 1) + '</span>' : '') +
@@ -1603,7 +1645,7 @@
     var cls = 'ucard bcard ' + (u.side === 'ally' ? 'ally' : 'foe') + (isLeader(u) ? ' is-leader' : '') + (u.boss ? ' is-boss' : '') + (A.isFairy(u.id) ? ' is-fairy' : '') + (turned ? ' turned' : u.corruption ? ' corrupt-' + u.corruption : '') +
       (hp <= 0 ? ' down' : '') + (hidden ? ' pre-enter' : '') + (u.side === 'ally' && hasBad(u.statuses) ? ' cursed' : '');
     return '<div class="' + cls + '" data-u="' + esc(u.uid) + '" data-id="' + esc(u.id) + '" data-rich="' + esc(unitTip(u, u.side)) + '">' +
-      '<div class="uc-art">' + pic(art.list, 'uc-img', u.name, art.fb) + (u.role ? roleBadge(u.role, 'uc-role') : '') + (m ? moodFace(m) + bondMark(m) : '') + (u.corruption && !turned ? '<span class="corrupt-mark"></span>' : '') + (u.side === 'ally' ? debtDots(u.id) : '') + '</div>' +
+      '<div class="uc-art">' + pic(art.list, 'uc-img', u.name, art.fb) + (u.role ? roleBadge(u.role, 'uc-role') : '') + (m ? moodFace(m) + bondMark(m) : '') + (u.corruption && !turned ? '<span class="corrupt-mark"></span>' : '') + (u.side === 'ally' ? debtDots(u.id) : '') + infoBtn(u.uid, u.id) + '</div>' +
       '<div class="uc-body"><div class="uc-name">' + esc(u.name || T('ui.name.you')) + '</div><div class="hpn">' + Math.max(0, hp) + ' / ' + esc(u.maxHp) + '</div>' +
       '<div class="hpwrap"><div class="hpbar' + (blk > 0 ? ' has-block' : '') + '"><div class="lag" style="width:' + pct + '%"></div><div class="fill" style="width:' + pct + '%"></div></div>' + blockBadge(blk) + '</div>' +
       '<div class="uc-chips st-row">' + statusIcons(u.statuses, u.side) + '</div></div>' + comboTab(u) + '</div>';
@@ -1861,45 +1903,8 @@
     if (anim.skip || REDUCED) swap(); else setTimeout(swap, dur(150));
     setTimeout(function () { d.remove(); }, 1800 / Math.min(1, spd()));
   }
-  // DESIGN-skill-level §5: a 连击 series (one blow, many hits) flies one number per hit (a little apart, a beat between them); a crit is the
-  // big gold-and-red number with 「暴击！」 over it (ui/dev/research/hit-feel-demo.html)
-  function flyHits(from, el, hits, cls) {
-    var n = hits.length;
-    return Promise.all(hits.map(function (h, i) {
-      return new Promise(function (r) { setTimeout(r, anim.skip ? 0 : dur(i * 190)); }).then(function () {
-        if (h.crit) cue('crit', null, 0); // 收尾: its own crisp cue, outside the per-second budget (audio.js BUDGET_FREE)
-        var ox = n > 1 ? Math.round((i - (n - 1) / 2) * 62) : 0, tag = h.crit ? T('ui.battle.crit') : n > 1 && i === 0 ? T('ui.battle.multiHit', { n: n }) : ''; // 连击: one number per hit, side by side; the first carries the word
-        return flyNum(from, el, '−' + h.amount, cls + (h.crit ? ' crit' : '') + (n > 1 ? ' multi' : ''), tag, ox);
-      });
-    }));
-  }
-  // G1 #5 刺客连击: a 连击 ×N plays as N separate beats, one after another (A.comboGap: 250 / 220 / 180 ms apart): the attacker
-  // lunges at the target, the hit lands (white flash + slash mark + a short hit-stop), the target is knocked back and the battle
-  // shakes a little, a hit / crit cue, one number 「−a」 over the card (「第 k 下」 / 「暴击！」), and the hp bar steps down.
-  // Before, all N numbers flew out together and the card took one impact. Returns when the last beat has landed; the shared
-  // impacts() then skips this target (t.seqDone) except for the final hp.
-  async function comboHits(el, uid, t, tok) {
-    var hits = t.hits, n = hits.length, gap = A.comboGap(n), sh = app.querySelector('.battle') || app, fx = window.HitFX && !anim.skip;
-    var u0 = ui.field && ui.field[uid], hp = u0 && u0.hp != null ? u0.hp : t.hpAfter + hits.reduce(function (s, h) { return s + (h.amount || 0); }, 0);
-    for (var i = 0; i < n; i++) {
-      var h = hits[i], last = i === n - 1, actor = (h.from || t.from), ap, tp = stagePt(el, 0.5, 0.5), dir;
-      actor = actor && actor.isConnected ? actor : null; ap = actor ? stagePt(actor, 0.5, 0.5) : null; dir = ap && tp.x < ap.x ? -1 : 1;
-      if (actor && actor.animate && !REDUCED && !anim.skip) { // the lunge: a quick dash toward the target and back
-        var dx = ap ? Math.max(-60, Math.min(60, (tp.x - ap.x) * 0.12)) : 0, dy = ap ? Math.max(-60, Math.min(60, (tp.y - ap.y) * 0.12)) : -30;
-        actor.animate([{ transform: 'none' }, { transform: 'translate(' + dx.toFixed(0) + 'px,' + dy.toFixed(0) + 'px) scale(1.06)', offset: 0.45 }, { transform: 'none' }], { duration: dur(170), easing: 'cubic-bezier(.3,0,.3,1)' });
-        await wait(70, tok);
-      }
-      var tier = h.crit ? 'crit' : last && t.hpAfter <= 0 ? 'ko' : 'normal';
-      if (h.crit) cue('crit', null, 0); else cue(h.amount >= 6 ? 'bigHit' : 'hit', null, 0);
-      var stop = fx ? HitFX.contact(el, { tier: tier, kind: t.skill || 'strike', dir: dir, scale: h.crit ? 1 : 0.8, from: actor ? stagePt(actor, 0.5, 0.4) : null }) : 0;
-      floatAt(el, '−' + h.amount, 'dmg multi' + (h.crit ? ' crit' : ''), h.crit ? T('ui.battle.crit') : T('ui.battle.hitNo', { n: i + 1 }), n > 1 ? Math.round((i - (n - 1) / 2) * 62) : 0);
-      if (stop) await wait(Math.min(stop, 90), tok); // a shorter hit-stop than a single blow: the beats must keep moving
-      if (fx) HitFX.after(el, { tier: tier, kind: t.skill || 'strike', dir: dir, scale: h.crit ? 1 : 0.7 }, sh); else pulse(el, 'hit', 300);
-      hp = last ? t.hpAfter : Math.max(t.hpAfter, hp - (h.amount || 0)); setHp(uid, hp); if (last) hitBlock(t, el);
-      if (!last) await wait(gap, tok);
-    }
-    t.seqDone = true;
-  }
+  // v36: the old per-card 连击 (comboHits) and crit-series (flyHits) paths are gone — every action is its own beat now
+  // (playChain → playBeat) and a 连击 always plays through comboSeq, one beat per hit, whichever card it lands on.
   // batch6 H2-7: a 连击 is played hit by hit in the engine's order, whatever card each hit lands on. Before, comboHits only ran
   // when one card took 2+ hits of an ally's blow: a ×2 split over two foes (the usual 刺客 case, the pair alternates) was merged
   // into one simultaneous impact, and an enemy 连击 flew its numbers apart but landed them in one shared impact.
@@ -1975,7 +1980,7 @@
     list = list.filter(function (x) { return x.el; });
     var fx = window.HitFX && !anim.skip, stop = 0, sh = app.querySelector('.battle') || app;
     list.forEach(function (x) {
-      var t = x.t; if (t.seqDone) { x.seq = true; return; } // G1 #5: comboHits already played every beat of this 连击
+      var t = x.t; if (t.seqDone) { x.seq = true; return; } // G1 #5: comboSeq already played every beat of this 连击
       hitCue(t);
       if (t.capped) { floatAt(x.el, T('ui.battle.capped'), 'miss'); x.skip = true; return; }
       x.tier = t.kind === 'heal' ? 'normal' : t.crit && !(t.hpAfter <= 0) ? 'crit' : hitTier(x.uid, t); // DESIGN-skill-level: the crit tier (a KO still wins)
@@ -1992,75 +1997,75 @@
       setHp(x.uid, x.t.hpAfter); hitBlock(x.t, x.el);
     });
   }
-  function hitCue(t) { if (t.miss) cue('miss'); else if (t.kind === 'heal') cue('heal'); else if (t.capped || t.crit) return; /* 收尾: a crit sounds 'crit' (flyHits), not 'bigHit' on top */ else cue(t.amount >= 6 ? 'bigHit' : 'hit'); }
+  function hitCue(t) { if (t.miss) cue('miss'); else if (t.kind === 'heal') cue('heal'); else if (t.capped || t.crit) return; /* 收尾: a crit sounds 'crit' (playBeat), not 'bigHit' on top */ else cue(t.amount >= 6 ? 'bigHit' : 'hit'); }
   function softMark(actorEl, targetEl) { if (actorEl) { pulse(actorEl, 'soft', 1600); floatAt(actorEl, T('ui.battle.softHeart'), 'soft'); } if (targetEl) floatAt(targetEl, T('ui.battle.miss'), 'miss'); cue('miss'); }
+  // v36 (试玩者 1)「连携数字分开、卡片轮流上移」: one beat per actor (RoundPlan.actionBeats). Her card rises, her own charge is built
+  // over HER card (base, then each bonus flies in — the chain's 「加成」 from the girl who brought her in), the charge bursts and her
+  // numbers fly to every target of her action (splash targets too, with a small 「波及」 tag), resolve there (先飞后结算), the hits
+  // land, she settles, then the next chained girl rises. ×2 / ×3 shorten every wait; skip / reduced motion = instant results.
+  async function settleCard(el, tok) { await wait(RoundPlan.RISE.hold, tok); if (el) el.classList.remove('acting'); await wait(RoundPlan.RISE.down, tok); } // v36: the actor settles back
   async function playChain(group, tok) {
-    var acts = group.filter(function (e) { return e.kind === 'action'; }), first = acts[0], starter = aEl(first);
-    if (!starter) return;
+    var beats = RoundPlan.actionBeats(group), acts = beats.map(function (b) { return b.act; }), first = acts[0];
+    if (!first || !aEl(first)) return;
     cue('allyAttack');
-    var heal = acts.every(function (a) { return (a.targets || []).every(function (t) { return t.kind === 'heal'; }); });
-    var at = stagePt(starter, 0.5, 0), bubble = fxDiv('charge' + (heal ? ' heal' : ''), '<b>0</b>', at.x, at.y - 46), val = 0, ticks = 0, step = 0, inStep = 0;
-    var ctag = null; // F round 2: the 加成 word rides above the charge while it grows
-    function chargeTag(depth) {
-      if (!ctag) ctag = fxDiv('charge-tag', '', at.x - 175, at.y - 46); // left of the orb (the ×N plate sits on its right)
-      ctag.innerHTML = '<b>' + T(depth >= 3 ? 'ui.battle.chainUnstoppable' : 'ui.battle.chain') + '</b><small>' + T('ui.battle.chainDepth', { n: depth }) + '</small>';
-      ctag.className = 'charge-tag lv-' + Math.min(depth, 4); void ctag.offsetWidth; ctag.classList.add('pop');
-      ctag.style.left = A.chargeTagX(at.x, ctag.offsetWidth || 340, STAGE_W) + 'px'; // G1 #2: the leftmost card's tag flips to the orb's right, never off the stage
-      cue('combo', { depth: depth }, 200);
-    }
-    // v2.6: the charge grows with the chain (step = chain depth) and a little with each bonus; each growth wobbles it gently
-    function setVal(n, big) {
-      val = n; var b = bubble.querySelector('b'); b.textContent = val;
-      var fs = CHARGE_FS[Math.min(step, CHARGE_FS.length - 1)] + Math.min(8, inStep * 3), dm = Math.min(192, 92 + step * 20 + Math.min(8, inStep * 3));
-      bubble.style.setProperty('--cfs', fs + 'px'); bubble.style.setProperty('--cd', dm + 'px'); bubble.style.setProperty('--trem', (0.6 + step * 0.7).toFixed(1) + 'px');
-      if (step > 0) bubble.classList.add('trem');
-      if (b.animate && !REDUCED && !anim.skip) b.animate([{ transform: 'scale(' + (big ? 1.35 : 1.18) + ') rotate(-6deg)' }, { transform: 'scale(.94) rotate(4deg)', offset: 0.35 }, { transform: 'scale(1.03) rotate(-2deg)', offset: 0.65 }, { transform: 'none' }], { duration: dur(big ? 460 : 340), easing: 'ease-out' });
-      cue('chargeTick', { n: ++ticks }, 80);
-    }
-    for (var k = 0; k < acts.length; k++) {
-      var a = acts[k], el = aEl(a); if (el) el.classList.add('acting'); step = k; inStep = 0;
-      if (k > 0) { var ch = group.filter(function (c) { return c.kind === 'chain' && !c.missed && c.to === a.actor; })[0]; if (ch) comboFire(cardEl(ch.from), el); }
-      if (k > 0 && a.chainDepth) chargeTag(a.chainDepth); // F round 2: 「加成 ×N」 over the orb, while the bonus is being added
+    var ctag = null, RS = RoundPlan.RISE;
+    for (var k = 0; k < beats.length; k++) await playBeat(beats[k], k, tok);
+    if (ctag) { var ct = ctag; ct.classList.add('out'); setTimeout(function () { ct.remove(); }, 400); }
+    await wait(200, tok);
+    async function playBeat(bt, k, tok) {
+      var a = bt.act, el = aEl(a); if (!el) return;
+      el.classList.add('acting'); // the rise (.bcard.acting: up, gold glow); she stays up until her hits have landed
+      await wait(RS.up, tok);
+      if (bt.from) comboFire(cardEl(bt.from), el);
+      var at = stagePt(el, 0.5, 0), step = bt.depth, inStep = 0, val = 0, ticks = 0;
+      if (k > 0 && bt.depth) chargeTag(at, bt.depth); // F round 2: 「加成 ×N」 beside her orb, while the bonus is being added
       skillTag(el, a.skill || a.skillName);
-      var xh = bubble.querySelector('i.xh'); if (!xh) { xh = document.createElement('i'); xh.className = 'xh'; bubble.appendChild(xh); }
-      xh.textContent = a.hits > 1 ? '×' + a.hits : ''; // DESIGN-skill-level: 连击 — the charge is per hit
-      if (a.hits > 1) { xh.dataset.tip = T('ui.battle.multiHitTip', { n: a.hits }); var hc = fxDiv('banner hitcall', '<span class="fx-word">' + T('ui.battle.multiHit', { n: a.hits }) + '</span>', at.x, at.y - 150); hc.style.left = A.clampX(at.x, hc.offsetWidth || 220, STAGE_W) + 'px'; setTimeout(function (x) { return function () { x.remove(); }; }(hc), REDUCED ? 600 : 1000); }
-      else delete xh.dataset.tip;
-      if (k === 0) { setVal(a.base || 0, true); await wait(360, tok); }
-      else if (el) { var p = stagePt(el, 0.5, 0.2), d = fxDiv('flynum', '+' + (a.base || 0), p.x, p.y); await flyTo(d, p, { x: at.x, y: at.y - 46 }, 420, -120); chk(tok); setVal(val + (a.base || 0), true); }
+      var bubble = fxDiv('charge' + (bt.heal ? ' heal' : ''), '<b>0</b>', at.x, at.y - 46);
+      function setVal(n, big) {
+        val = n; var b = bubble.querySelector('b'); b.textContent = val;
+        var fs = CHARGE_FS[Math.min(step, CHARGE_FS.length - 1)] + Math.min(8, inStep * 3), dm = Math.min(192, 92 + step * 20 + Math.min(8, inStep * 3));
+        bubble.style.setProperty('--cfs', fs + 'px'); bubble.style.setProperty('--cd', dm + 'px'); bubble.style.setProperty('--trem', (0.6 + step * 0.7).toFixed(1) + 'px');
+        if (step > 0) bubble.classList.add('trem');
+        if (b.animate && !REDUCED && !anim.skip) b.animate([{ transform: 'scale(' + (big ? 1.35 : 1.18) + ') rotate(-6deg)' }, { transform: 'scale(.94) rotate(4deg)', offset: 0.35 }, { transform: 'scale(1.03) rotate(-2deg)', offset: 0.65 }, { transform: 'none' }], { duration: dur(big ? 460 : 340), easing: 'ease-out' });
+        cue('chargeTick', { n: ++ticks }, 80);
+      }
+      if (a.hits > 1) { // DESIGN-skill-level: 连击 — the charge is per hit
+        var xh = document.createElement('i'); xh.className = 'xh'; xh.textContent = '×' + a.hits; xh.dataset.tip = T('ui.battle.multiHitTip', { n: a.hits }); bubble.appendChild(xh);
+        var hc = fxDiv('banner hitcall', '<span class="fx-word">' + T('ui.battle.multiHit', { n: a.hits }) + '</span>', at.x, at.y - 150); hc.style.left = A.clampX(at.x, hc.offsetWidth || 220, STAGE_W) + 'px'; setTimeout(function () { hc.remove(); }, REDUCED ? 600 : 1000);
+      }
+      setVal(a.base || 0, true); await wait(320, tok);
       for (var j = 0; j < (a.bonuses || []).length; j++) {
         var b = a.bonuses[j], src = bonusSource(b, el), sp = src ? stagePt(src, 0.5, 0.3) : { x: at.x, y: at.y };
         var bd = fxDiv('flynum bonus', (b.noEffect ? '' : (b.amount >= 0 ? '+' : '') + b.amount) + '<small>' + esc(b.label || '') + '</small>', sp.x, sp.y); // 虚弱 that did nothing: no 「+0」, just the words
         await flyTo(bd, sp, { x: at.x, y: at.y - 46 }, 380, 80); chk(tok); inStep++; setVal(val + b.amount);
       }
-      await wait(140, tok);
-      if (el) el.classList.remove('acting');
+      await wait(bt.depth ? 260 : 140, tok);
+      // release: her charge bursts; sparks and one number per target fly together (the mage's splash: every target its own number)
+      bubble.classList.add('release'); setTimeout(function () { bubble.remove(); }, 300); cue('chargeRelease');
+      var src0 = { x: at.x, y: at.y - 46 }, live = bt.targets.filter(function (x) { return !x.miss && tEl(x.t); });
+      var seq = bt.series ? A.comboBeats(a.targets, function (t) { var x = tEl(t); return x ? x.dataset.u : null; }) : [];
+      seq.forEach(function (sb) { sb.t.seqDone = true; }); // batch6 H2-7: one beat per hit; impacts() leaves them alone
+      var tEls = live.map(function (x) { return tEl(x.t); }).filter(function (x, i, arr) { return arr.indexOf(x) === i; });
+      var nums = (seq.length ? [wait(260, tok).then(function () { return comboSeq(seq, el, a.skillKind, tok); })] : []).concat(live.map(function (x) {
+        var t = x.t, te = tEl(t), uid = te.dataset.u; if (t.capped || t.seqDone) return null;
+        var tag = x.splash ? T('ui.battle.splashTag') : t.crit ? T('ui.battle.crit') : '';
+        if (t.kind !== 'heal' && t.crit) cue('crit', null, 0);
+        return flyNum(src0, te, '', t.kind === 'heal' ? 'heal' : 'dmg' + (t.crit ? ' crit' : hitTier(uid, t) !== 'normal' ? ' huge' : '') + (x.splash ? ' splash' : ''), tag, 0, t); // 先飞后结算, per target
+      })).filter(Boolean);
+      if (tEls.length) await Promise.all([burst(src0, tEls, bt.heal ? 'heal' : 'gold', Math.min(18, 6 + Math.max(0, bt.total)))].concat(nums));
+      chk(tok);
+      bt.targets.forEach(function (x) { if (!x.miss) return; if (x.soft) softMark(el, tEl(x.t)); else { floatAt(tEl(x.t), T('ui.battle.miss'), 'miss'); cue('miss'); } });
+      await impacts(live.filter(function (x) { return !x.t.seqDone; }).map(function (x) { var te = tEl(x.t); return { el: te, uid: te.dataset.u, t: x.t, kind: x.heal ? 'heal' : x.t.refund ? 'strike' : a.skillKind, from: el, dir: 1, scale: x.splash ? 0.75 : undefined }; }), tok);
+      await settleCard(el, tok); // she settles back; the next girl in the chain rises
     }
-    // release: the charge bursts into sparks that fly to every target (a soft-hearted miss goes nowhere)
-    var agg = {}, order = [], soft = [];
-    acts.forEach(function (a) { (a.targets || []).forEach(function (t) {
-      if (t.miss) { soft.push({ a: a, t: t }); return; }
-      var el = tEl(t), k = el ? el.dataset.u : t.uid; if (!agg[k]) { agg[k] = { amount: 0, hpAfter: t.hpAfter, kind: t.kind, capped: t.capped, hits: [] }; order.push(k); } agg[k].amount += t.amount || 0; agg[k].hpAfter = t.hpAfter; if (t.blocked) { agg[k].blocked = (agg[k].blocked || 0) + t.blocked; agg[k].blockAfter = t.blockAfter; } if (t.shieldBy) { agg[k].shieldBy = t.shieldBy; agg[k].shieldAmt = (agg[k].shieldAmt || 0) + (t.shieldAmt || 0); } agg[k].skill = t.refund ? 'strike' : a.skillKind; agg[k].from = aEl(a);
-      if (t.kind !== 'heal') { agg[k].hits.push({ amount: t.amount || 0, crit: !!t.crit, from: aEl(a) }); if (t.crit) agg[k].crit = true; } }); });
-    var tEls = order.map(cardEl).filter(Boolean);
-    if (acts.length > 1 && !heal) { bubble.classList.add('hold'); await wait(Math.min(520, 220 + 60 * (acts.length - 1)), tok); } // v2.6: hold the breath, then let it all out
-    bubble.classList.add('release'); setTimeout(function () { bubble.remove(); }, 300); cue('chargeRelease');
-    if (ctag) { var ct = ctag; ct.classList.add('out'); setTimeout(function () { ct.remove(); }, 400); }
-    // v2.3 [28]: the sparks and each target's number fly together; the number lands above the card and fades
-    var src0 = { x: at.x, y: at.y - 46 }, combos = acts.map(function (a) { return { a: a, beats: A.comboBeats(a.targets, function (t) { var x = tEl(t); return x ? x.dataset.u : null; }) }; }).filter(function (c) { return c.beats.length > 1; });
-    combos.forEach(function (c) { c.beats.forEach(function (b) { if (agg[b.uid]) agg[b.uid].seqDone = true; }); }); // batch6 H2-7: impacts() only snaps their final hp
-    var nums = (combos.length ? [wait(260, tok).then(async function () { for (var ci = 0; ci < combos.length; ci++) await comboSeq(combos[ci].beats, aEl(combos[ci].a), combos[ci].a.skillKind, tok); })] : []).concat(order.map(function (uid) {
-      var t = agg[uid], el = cardEl(uid); if (!el || t.capped || t.seqDone) return null;
-      if (t.kind !== 'heal' && t.hits.length > 1) return wait(260, tok).then(function () { return comboHits(el, uid, t, tok); }); // G1 #5: one beat per hit, once the sparks get there
-      if (t.kind !== 'heal' && t.crit && t.hits.length > 1) return flyHits(src0, el, t.hits, 'dmg'); // DESIGN-skill-level: 暴击
-      if (t.kind !== 'heal' && t.crit) { cue('crit', null, 0); return flyNum(src0, el, '', 'dmg crit', T('ui.battle.crit'), 0, t); } // one crit: same 先飞后结算
-      return flyNum(src0, el, '', t.kind === 'heal' ? 'heal' : 'dmg' + (hitTier(uid, t) !== 'normal' ? ' huge' : ''), '', 0, t);
-    })).filter(Boolean);
-    if (tEls.length) await Promise.all([burst(src0, tEls, heal ? 'heal' : 'gold', Math.min(18, 6 + val))].concat(nums));
-    chk(tok);
-    soft.forEach(function (s) { if (s.t.soft) softMark(aEl(s.a), tEl(s.t)); else { floatAt(tEl(s.t), T('ui.battle.miss'), 'miss'); cue('miss'); } });
-    await impacts(order.map(function (uid) { var t = agg[uid]; return { el: cardEl(uid), uid: uid, t: t, kind: t.kind === 'heal' ? 'heal' : t.skill, from: t.from, dir: 1 }; }), tok);
-    await wait(420, tok);
+    function chargeTag(at, depth) {
+      if (!ctag) ctag = fxDiv('charge-tag', '', at.x - 175, at.y - 46);
+      ctag.style.top = (at.y - 46) + 'px';
+      ctag.innerHTML = '<b>' + T(depth >= 3 ? 'ui.battle.chainUnstoppable' : 'ui.battle.chain') + '</b><small>' + T('ui.battle.chainDepth', { n: depth }) + '</small>';
+      ctag.className = 'charge-tag lv-' + Math.min(depth, 4); void ctag.offsetWidth; ctag.classList.add('pop');
+      ctag.style.left = A.chargeTagX(at.x, ctag.offsetWidth || 340, STAGE_W) + 'px'; // G1 #2: the leftmost card's tag flips to the orb's right, never off the stage
+      cue('combo', { depth: depth }, 200);
+    }
     var end = group.filter(function (e) { return e.kind === 'chainEnd'; })[0], depth = end ? end.depth : acts.length > 1 ? acts[acts.length - 1].chainDepth : 0;
     var mkLines = group.filter(function (e) { return e.kind === 'line' && e.bark === 'multiKill'; });
     for (var g = 0; g < group.length; g++) { if (group[g].kind !== 'action' && group[g].kind !== 'chainEnd' && mkLines.indexOf(group[g]) < 0) await playOne(group[g], tok); }
@@ -2242,6 +2247,7 @@
       case 'action': {
         if (e.side === 'ally') { await playChain([e], tok); break; }
         el = aEl(e); cue('enemyAttack');
+        if (el) { el.classList.add('acting'); await wait(RoundPlan.RISE.up, tok); } // v36: every actor rises before acting (same as ours)
         if ((e.bonuses || []).some(function (b) { return b.amount < 0; })) cue('guard');
         skillTag(el, e.skill || e.skillName);
         // feedback-1112 [5]: the card lunges toward its target; the number leaves at the top of the lunge (40%), then lands
@@ -2260,7 +2266,7 @@
         if (eBeats.length > 1) { // batch6 H2-7: an enemy 连击 — every hit its own beat (flash, shake, cue, number, hp step)
           await comboSeq(eBeats, el, e.skillKind, tok); chk(tok);
           (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
-          await wait(560, tok); break;
+          await wait(160, tok); await settleCard(el, tok); break;
         }
         var seen = {};
         await Promise.all((e.targets || []).map(function (t, i) {
@@ -2272,7 +2278,7 @@
         }).filter(Boolean)); chk(tok);
         (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
         await impacts((e.targets || []).filter(function (t) { return !t.miss && tEl(t); }).map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
-        await wait(560, tok); break;
+        await wait(160, tok); await settleCard(el, tok); break;
       }
       case 'down': {
         el = cardEl(e.uid) || cardById(e.id); var mine = e.side === 'ally' || (el && el.classList.contains('ally'));
@@ -3054,7 +3060,7 @@
 
   // ---------- modal ----------
   function modal(html) { modalEl.innerHTML = '<div class="panel">' + html + '</div>'; modalEl.hidden = false; var b = modalEl.querySelector('[data-act="modalCancel"]'); if (b) b.focus(); }
-  function closeModal() { modalEl.hidden = true; modalEl.innerHTML = ''; modalEl.classList.remove('vn-pass', 'menu-open'); }
+  function closeModal() { modalEl.hidden = true; modalEl.innerHTML = ''; modalEl.classList.remove('vn-pass', 'menu-open', 'unit-open'); }
   // batch6 H2-1: the game never uses alert/confirm/prompt — overwriting a save asks in a game-styled panel
   function askOverwrite(act) {
     modal('<h2>' + T('ui.newRun.confirmTitle') + '</h2><p>' + bold(T(run ? 'ui.newRun.confirmCurrent' : 'ui.newRun.confirmExisting')) + '</p><p class="small dim">' + T('ui.newRun.noUndo') + '</p>' +
@@ -3233,6 +3239,7 @@
     sacWrite: function () { // batch6 H2-10 ②: now she speaks, then asks
       var nx = A.sacFlow(ui.sac, 'write'); if (nx.step !== 'speaking') return; ui.sac = nx; render(); playFarewell(nx.id);
     },
+    unitInfo: function (d) { openUnitPanel(d.u != null ? d.u : null, d.id); }, // v36 角色面板
     viewTeam: function () { modal(teamModalHtml()); var p = modalEl.querySelector('.panel'); if (p) p.classList.add('team-modal'); },
     viewHer: function (d) { modal(herPanel(d.id)); var p = modalEl.querySelector('.panel'); if (p) p.classList.add('her-modal'); },
     fwBack: function () { ui.sac = A.sacFlow(ui.sac, 'cancel'); ui.pending = null; ui.fwDone = null; app.classList.remove('sac-hesitate'); vnClear(); render(); }, // batch6 H2-10: 取消 → back to picking
@@ -3272,7 +3279,7 @@
   };
   var CLICK_CUE = { fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
     pCancel: 'cancel', fwBack: 'cancel', unpickCard: 'cancel', modalCancel: 'cancel', cheatNo: 'cancel', home: 'cancel',
-    campChoose: 'none', campExplore: 'pick', campTrainPick: 'pick', campTrainBonus: 'confirm', viewHer: 'click', viewHerClose: 'cancel',
+    campChoose: 'none', unitInfo: 'click', campExplore: 'pick', campTrainPick: 'pick', campTrainBonus: 'confirm', viewHer: 'click', viewHerClose: 'cancel',
     pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', whoSel: 'click', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click', epiSkip: 'cancel' };
   // battle cards during a pause: pick-then-place, or the item's target
   function battleCardClick(card) {
@@ -3304,10 +3311,17 @@
     if (k === 'sfx') cue('click', null, 120);
   });
   // ☰ menu: a click on the dark backdrop (outside the panel) closes it
-  modalEl.addEventListener('click', function (e) { if (e.target === modalEl && modalEl.classList.contains('menu-open')) closeModal(); });
+  modalEl.addEventListener('click', function (e) { if (e.target === modalEl && (modalEl.classList.contains('menu-open') || modalEl.classList.contains('unit-open'))) closeModal(); }); // v36: the 角色面板 too
+  // v36 角色面板: a right-click on any unit card opens her panel (touch: the ⓘ on the card)
+  document.addEventListener('contextmenu', function (e) {
+    var uc = e.target.closest && e.target.closest('.ucard[data-id]'); if (!uc || vnActive() || !(app.contains(uc) || modalEl.contains(uc))) return;
+    e.preventDefault(); if (openUnitPanel(uc.dataset.u != null ? uc.dataset.u : null, uc.dataset.id)) cue('click', null, 0);
+  });
   document.addEventListener('click', function (e) {
-    var card = e.target.closest && e.target.closest('.bcard'); if (card && battleCardClick(card)) return;
-    var t = e.target.closest && e.target.closest('[data-act]'); if (!t || t.disabled || !H[t.dataset.act]) return;
+    var card = e.target.closest && !e.target.closest('.uc-info') && e.target.closest('.bcard'); if (card && battleCardClick(card)) return; // v36: the ⓘ never targets an item
+    var t = e.target.closest && e.target.closest('[data-act]');
+    if (!t && !vnActive() && modalEl.hidden && !app.classList.contains('stale')) { var uc = e.target.closest && e.target.closest('.ucard'); if (uc && app.contains(uc)) { if (cardOpensPanel(uc)) { cue('click', null, 0); openUnitPanel(uc.dataset.u != null ? uc.dataset.u : null, uc.dataset.id); } return; } } // v36 角色面板: a plain click on a card
+    if (!t || t.disabled || !H[t.dataset.act]) return;
     if (app.classList.contains('stale') && !t.closest('.topbar')) return;
     if (stageEl.querySelector('.nj-white:not(.out)')) return; // v2.4 [2] nothing fires under the new-journey whiteout
     if (t.dataset.opt) tracker.touch(t.dataset.opt);

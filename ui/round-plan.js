@@ -100,7 +100,33 @@
     var absorbed = Math.max(0, t.blocked || 0), full = dealt + absorbed;
     return { heal: false, full: full, dealt: dealt, absorbed: absorbed, from: '−' + full, to: dealt > 0 ? '−' + dealt : '0', changes: absorbed > 0, clank: absorbed > 0 && dealt === 0 };
   }
-  var api = { hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
+  // v36 (试玩者 1)「连携数字分开、卡片轮流上移」: a chain is played actor by actor. Each beat = one action: her card rises, her own
+  // charge (base + bonuses) is built over her card, her own numbers fly to EVERY target of that action (the mage's splash
+  // targets included — they used to be merged into one orb over the initiator and only the main target showed), resolve
+  // there (hitNum), then she settles and the next chained actor rises. A plain (non-chain) action is a one-beat chain.
+  // actionBeats(group) → [{ k, act, actor, depth, from (who brought her in, or null), heal, total, targets: [{ uid, t, splash,
+  // miss, soft, capped, heal, num }], series (true = a 连击: one beat per hit, A.comboBeats) }]
+  function actionBeats(group) {
+    var g = group || [], acts = g.filter(function (e) { return e && e.kind === 'action'; });
+    return acts.map(function (a, k) {
+      var ch = k > 0 ? g.filter(function (c) { return c && c.kind === 'chain' && !c.missed && c.to === a.actor; })[0] : null;
+      var ts = (a.targets || []).map(function (t) {
+        return { uid: t.uid, t: t, splash: !!t.splash, miss: !!t.miss, soft: !!t.soft, capped: !!t.capped, heal: t.kind === 'heal', num: hitNum(t) };
+      });
+      var series = ts.filter(function (x) { return x.t.of > 1 && !x.miss && !x.capped && !x.heal; }).length > 1;
+      var total = (a.base || 0) + (a.bonuses || []).reduce(function (s, b) { return s + (b.noEffect ? 0 : b.amount || 0); }, 0);
+      return { k: k, act: a, actor: a.actor, depth: a.chainDepth || 0, from: ch ? ch.from : null, heal: ts.length > 0 && ts.every(function (x) { return x.heal; }), total: total, targets: ts, series: series };
+    });
+  }
+  // the rise / settle of the acting card (ms at speed ×1 before the speed factor). riseTiming: what a beat really waits —
+  // divided by the speed factor (×1 0.7 / ×2 1 / ×3 2), and nothing at all when skipped or with reduced motion (instant results).
+  var RISE = { up: 200, hold: 220, down: 180 };
+  function riseTiming(o) {
+    o = o || {}; if (o.skip || o.reduced) return { up: 0, hold: 0, down: 0 };
+    var s = o.spd > 0 ? o.spd : 1;
+    return { up: Math.round(RISE.up / s), hold: Math.round(RISE.hold / s), down: Math.round(RISE.down / s) };
+  }
+  var api = { actionBeats: actionBeats, RISE: RISE, riseTiming: riseTiming, hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.RoundPlan = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

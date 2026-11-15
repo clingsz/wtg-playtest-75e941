@@ -529,7 +529,9 @@ body.act-3 .heading.grim h2 { color: #c9a39a; }
 .bcard.enter { animation: enter .55s cubic-bezier(.2,1.2,.4,1) backwards; } /* batch6 H2-6: was 'both' — the forwards fill held opacity 1 over .down */
 .bcard.gone { display: none; }
 .bcard.down { opacity: .38; filter: grayscale(1) brightness(.7); transform: translateY(10px) rotate(-1deg); }
-.bcard.acting { transform: translateY(-22px) scale(1.06); box-shadow: 0 0 0 3px var(--c-gold-hi), 0 0 36px rgba(246,210,122,.85); z-index: 4; }
+.bcard.acting { transform: translateY(-34px) scale(1.06); box-shadow: 0 0 0 3px var(--c-gold-hi), 0 0 36px rgba(246,210,122,.85); z-index: 4; } /* v36: the acting card rises (one actor at a time, chains too) */
+.bcard.foe.acting { transform: translateY(-22px) scale(1.06); box-shadow: 0 0 0 3px #ff9a8a, 0 0 36px rgba(255,90,80,.8); }
+.float.splash { opacity: .92; } .float.splash small, .flynum.splash small { color: #ffd98a; }
 .bcard.hit { animation: hit .5s; } .bcard.healed { animation: healed .6s; } .bcard.felled { animation: shake .55s; }
 .bcard.strike { animation: strike .5s; z-index: 4; }
 .bcard.joy { box-shadow: 0 0 0 3px #fff2b0, 0 0 40px rgba(255,220,120,.9); }
@@ -1933,3 +1935,37 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 
 /* 2026-11-15: a keepsake she already holds — greyed head, not pickable (tip says why) */
 .who-head.has { opacity: .38; filter: grayscale(1); cursor: not-allowed; }
+
+/* ===== v36 (试玩者 1) 角色面板: the ⓘ on every unit card + the panel itself ===== */
+.uc-info { position: absolute; right: var(--sp-2); bottom: var(--sp-2); z-index: 5; width: var(--hit-min); height: var(--hit-min); padding: 0; border-radius: 50%;
+  display: grid; place-items: center; font: italic 700 var(--fs-m)/1 Georgia, 'Times New Roman', serif; color: #fff3d6; background: rgba(30,22,42,.82);
+  border: 2px solid var(--c-gold); box-shadow: var(--sh-1); cursor: pointer; opacity: .82; transition: opacity .15s, transform .15s; }
+.uc-info:hover, .uc-info:focus-visible { opacity: 1; transform: scale(1.08); }
+.bcard.down .uc-info { opacity: .6; }
+.camp-wrap.talking .uc-info { display: none; }
+.modal.unit-open { z-index: 58; }
+.modal .panel.unit-panel { width: 980px; max-height: 1000px; overflow-y: auto; text-align: left; padding: var(--sp-5) var(--sp-6); }
+.unit-panel.is-foe { border-color: #d47a7a; }
+.up-head { display: flex; gap: var(--sp-5); align-items: center; margin-bottom: var(--sp-4); }
+.up-face { flex: none; width: 200px; height: 240px; border-radius: var(--r-2); overflow: hidden; border: 3px solid var(--c-gold); background: #2a2138; }
+.unit-panel.is-foe .up-face { border-color: #d47a7a; }
+.up-face img, .up-face .up-img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.up-id { flex: 1; min-width: 0; }
+.unit-panel .up-id h2 { margin: 0 0 var(--sp-2); text-align: left; }
+.up-role { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-label); color: var(--c-gold-hi); margin-bottom: var(--sp-3); }
+.up-role .role-badge { position: static; width: 40px; height: 40px; }
+.up-stats { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.up-stat { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-text); }
+.up-stat .up-k { font-size: var(--fs-label); opacity: .8; }
+.up-stat b { font: 400 var(--fs-l)/1 var(--font-num); color: #fff3d6; }
+.up-stat .gi { width: 32px; height: 32px; } .up-stat .gi svg { width: 100%; height: 100%; }
+.up-mood { width: 36px; height: 36px; border-radius: 50%; }
+.up-body { display: grid; gap: var(--sp-3); }
+.up-sec { padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); background: rgba(0,0,0,.22); }
+.up-sec h3 { margin: 0 0 var(--sp-1); font: 400 var(--fs-label)/1.3 var(--font-display); color: var(--c-gold-hi); letter-spacing: .1em; }
+.unit-panel p.up-line { display: flex; align-items: center; gap: var(--sp-3); margin: 0; font-size: var(--fs-text); }
+.unit-panel p.up-txt { margin: var(--sp-1) 0 0; font-size: var(--fs-text); line-height: 1.45; text-align: left; }
+.up-sk { color: #fff3d6; }
+.up-lv { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-label); color: var(--c-gold-hi); }
+.up-lv .gi { width: 26px; height: 26px; } .up-lv .gi svg { width: 100%; height: 100%; }
+.up-perk { opacity: .9; }

@@ -722,6 +722,30 @@
     if (t.last) return { cls: '', text: A.t('ui.difficulty.badge.lastFell', { level: t.last }) };
     return { cls: '', text: A.t('ui.difficulty.badge.untried') };
   };
+  // v36 (试玩者 1) 角色面板: what the panel of one unit shows, from whatever the screen has (a party member on the formation /
+  // campfire, a battle unit in a fight + her party entry for the keepsakes and mood). Pure; app.js turns it into HTML.
+  // o = { member, field: { hp, maxHp, block }, cards: [reward cards] } — field (the live battle numbers) wins over the unit's own.
+  A.unitPanelModel = function (u, side, o) {
+    u = u || {}; o = o || {};
+    var m = o.member || {}, f = o.field || {}, ally = side !== 'enemy', pick = function (k) { return u[k] != null ? u[k] : m[k]; };
+    var sk = pick('skill') || {}, combo = pick('combo') || {}, cards = o.cards || [];
+    var toks = ally ? (pick('tokens') || []) : [];
+    var hp = f.hp != null ? f.hp : pick('hp'), maxHp = f.maxHp != null ? f.maxHp : pick('maxHp'), block = f.block != null ? f.block : u.block || 0;
+    return {
+      side: ally ? 'ally' : 'enemy', id: u.id || m.id, uid: u.uid || u.id || m.id, name: pick('name') || '', role: pick('role') || null, boss: !!u.boss,
+      hp: hp != null ? Math.max(0, hp) : null, maxHp: maxHp != null ? maxHp : null, atk: pick('atk'), block: Math.max(0, block | 0),
+      openBlock: !ally && u.openBlock > 0 ? u.openBlock : 0,
+      mood: ally ? pick('mood') : null, moodLabel: ally ? pick('moodLabel') || null : null,
+      skillName: pick('skillName') || sk.name || '', skillLv: ally ? pick('skillLv') || null : null,
+      skillText: pick('actionText') || sk.text || '', perkText: pick('perkText') || '',
+      comboName: pick('comboName') || combo.name || '', comboText: pick('bonusText') || combo.text || '',
+      keepsakes: toks.map(function (name) {
+        var c = cards.filter(function (x) { return x && x.effect && x.effect.type === 'token' && x.effect.tokenName === name; })[0];
+        return { name: name, text: c ? c.text || '' : '' };
+      }),
+      statuses: (pick('statuses') || []).slice()
+    };
+  };
   // i18n (docs/I18N.md): the one lookup lives in the engine; A.t / T() only delegate (engine.js loads after this file)
   A.t = function (k, v) { var f = (root.ChooserEngine && root.ChooserEngine.t) || root.T || nodeT(); return f ? f(k, v) : k; }; // root.T: the real engine's, even under ?stub
   // node (tests / tools): no browser globals → the engine module itself (it reads data/text directly)
