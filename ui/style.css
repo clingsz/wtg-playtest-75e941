@@ -1902,3 +1902,6 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .who-detail .wd-none { color: var(--c-ink-2); font-size: var(--fs-text); }
 .who-detail .wd-ok { align-self: flex-start; min-width: 200px; min-height: var(--hit-min); margin-top: var(--sp-2); }
 .who-detail .stat-prev { align-items: flex-start; }
+
+/* 2026-11-15 user: build version in the title's bottom-left corner */
+.title-ver { position: absolute; left: 20px; bottom: 14px; font-size: 22px; opacity: .6; color: #f3ead8; pointer-events: none; user-select: none; letter-spacing: .04em; }

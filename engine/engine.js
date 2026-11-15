@@ -108,7 +108,7 @@
   // rejectedHp / rejectedAtk (optional): the rejected girls who come back as enemies (vengeful) use these instead of hp / atk
   // DESIGN-skill-level: tiers 1–9 enemy hp ×1.1 (rounded) to pay for 技能等级 + 个人特点; 木头 unchanged
   const DIFFICULTIES = lazy(() => ([
-    { id: 0, name: TX('difficulty.name.0'), hp: 0.6, atk: 0, rest: 5, oneSacrifice: true, finalBossOnly: true, bellWound: false, diceTakes: 1, rejectedHp: 1.0, rejectedAtk: 3, enemyAssist: 0.15, levelHp: { 4: 0.9, 5: 0.9, 6: 0.9, 7: 0.8, 11: 1.7 }, levelAtk: { 7: -1, 8: 1, 11: 1 } }, // FEEDBACK-1112 #30: rejected girls 0.6 → 0.8 hp (sim 81% → ~77%) · SPEC-2026-11-13 E3: one girl per level L4–L7 → 1.0 hp, atk +3 (sim 83% → ~74%)
+    { id: 0, name: TX('difficulty.name.0'), hp: 0.6, atk: 0, rest: 5, oneSacrifice: true, finalBossOnly: true, bellWound: false, diceTakes: 1, rejectedHp: 1.0, rejectedAtk: 3, enemyAssist: 0.15, levelHp: { 4: 0.9, 5: 1.08, 6: 1.08, 7: 0.96, 8: 1.2, 9: 1.2, 10: 1.2, 11: 2.55 }, levelAtk: { 7: -1, 8: 1, 11: 1 } }, // 试玩反馈 2026-11-15: levelHp L5–L10 ×1.2, L11 (小铃的玩偶) 1.7 → 2.55 = ×1.5 (用户 2026-11-15: 玩偶太弱，至少 ×1.5) (was 4 .9 / 5 .9 / 6 .9 / 7 .8 / 8–10 1 / 11 1.7) · // FEEDBACK-1112 #30: rejected girls 0.6 → 0.8 hp (sim 81% → ~77%) · SPEC-2026-11-13 E3: one girl per level L4–L7 → 1.0 hp, atk +3 (sim 83% → ~74%)
     { id: 1, name: TX('difficulty.name.1'), hp: 0.66, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
     { id: 2, name: TX('difficulty.name.2'), hp: 0.83, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
     { id: 3, name: TX('difficulty.name.3'), hp: 0.88, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
@@ -203,7 +203,7 @@
       { id: 'form', label: TX('training.form.label'), text: TX('training.form.text'), effect: { type: 'skillUp' } },
     ],
     special: [
-      { id: 'allout', label: TX('training.allout.label'), text: TX('training.allout.text'), effect: { type: 'stat', stat: 'atk', delta: 3 }, downside: { type: 'stat', stat: 'maxHp', delta: -3 } },
+      { id: 'allout', label: TX('training.allout.label'), text: TX('training.allout.text'), effect: { type: 'stat', stat: 'atk', delta: 2 }, downside: { type: 'stat', stat: 'maxHp', delta: -3 }, downsideBack: { type: 'mood', delta: -1 } },
       { id: 'harsh', label: TX('training.harsh.label'), text: TX('training.harsh.text'), effect: { type: 'stat', stat: 'atk', delta: 2 }, downside: { type: 'mood', delta: -1 } },
     ],
   }));
@@ -516,9 +516,10 @@
   const CRIT_RATE = [0.3, 0.6, 0.9, 1], CRIT_X = 2, CRIT_X_MAX = 2.5; // hunters (aim): Lv1–3 crit 30/60/90% ×2 · Lv4 鹰眼 every arrow ×2.5
   const CHAIN_POWER = 1, COMBO_PITY = Infinity; // 加成: plain chance (用户 2026-11-14: no pity — it nearly doubled the real rate); set a number to bring the pity back
   const SPARK_TARGETS = [2, 3, 4, Infinity]; // 法师: Lv1 2 targets, +1 per level, Lv4 everyone
-  // 试玩反馈 2026-11-14 晚 #17: levels add ONLY targets; damage is 威力 alone — main 威力, the others ⌊威力/2⌋ (lv kept for callers)
+  // 试玩反馈 2026-11-14 晚 #17: levels add ONLY targets; damage is 威力 alone — main 威力 (lv kept for callers)
+  // 试玩反馈 2026-11-15 (法师成长削弱): the others take max(1, ⌊威力/3⌋) (was ⌊威力/2⌋); 威力 0 splashes nothing
   const sparkMain = (p, lv) => p; // eslint-disable-line no-unused-vars
-  const sparkSplash = (p, lv) => Math.floor(p / 2); // eslint-disable-line no-unused-vars
+  const sparkSplash = (p, lv) => (p > 0 ? Math.max(1, Math.floor(p / 3)) : 0); // eslint-disable-line no-unused-vars
   // 牧师 per heal share: 'half' = ⌈威力/2⌉ (chosen 2026-11-14 by sim, see DESIGN-2026-11-14-block 实施记录) · 'minus2' = max(1, 威力 − 2)
   // 试玩反馈 2026-11-14 晚 (用户): the priest was too weak — 'full' = each share heals the full 威力
   const HEAL_FORMULA = 'full';
@@ -1514,12 +1515,14 @@
       return { id, name: nameOf(data, id), amount: Math.max(0, hp - hp0), hp, maxHp: m.maxHp, full: hp0 >= m.maxHp, block: hp0 >= m.maxHp ? REST_BLOCK : 0 };
     });
   }
-  // G2 #10: odd campfires offer rest / explore, even ones rest / train. The bell night and the rules night keep every option.
+  // G2 #10: odd campfires offer rest / explore, even ones rest / train. The bell night keeps every option.
+  // 试玩反馈 2026-11-15: the rules night (run.sealNight) is rest / explore only — no training (it broke the every-other-night rhythm)
   // (old saves without camp.night: all three)
   function campOptionIds(run) {
     const C = run.camp || {};
     if (run.bell) return ['followBell', 'rest', 'explore', 'train'];
-    if (run.sealNight || !C.night) return ['rest', 'explore', 'train'];
+    if (run.sealNight) return ['rest', 'explore'];
+    if (!C.night) return ['rest', 'explore', 'train'];
     return C.night % 2 ? ['rest', 'explore'] : ['rest', 'train'];
   }
   function campChoose(data, run, choice, ev) {
@@ -1625,8 +1628,23 @@
     const first = suPool.length ? rngSample(run, suPool, 1) : [];
     const second = rngSample(run, restPool.length ? restPool : nAll.filter((b) => !first.includes(b)), first.length ? 1 : 2);
     const bonuses = first.concat(second).map((b) => Object.assign(clone(b), { special: false }))
-      .concat(rngSample(run, sPool.length ? sPool : P.special, 1).map((b) => Object.assign(clone(b), { special: true })));
+      .concat(rngSample(run, sPool.length ? sPool : P.special, 1).map((b) => Object.assign(clone(b), { special: true })))
+      .map((b) => costFor(data, run, id, b));
     Object.assign(C, { trainee: id, talkId: talk.talkId, talk: talk.lines, bonuses, step: 'train-bonus' });
+  }
+  // 试玩反馈 2026-11-15: a card may carry downsideBack (+ textBack) — the cost for a back-row class (法师 / 猎人 / 牧师);
+  // front-row classes (战士 / 刺客) keep downside. Resolved when the card is dealt, so view, preview and apply agree.
+  // The leader has no mood: a mood downsideBack never applies to her (she keeps the plain downside).
+  const BACK_ROLES = { mage: 1, adc: 1, healer: 1 };
+  function roleOfMember(data, run, id) { const m = run.members[id] || {}; return m.role || ((cand(data, id) || {}).role) || null; }
+  function costFor(data, run, id, b) {
+    const back = b.downsideBack;
+    delete b.downsideBack;
+    if (!back || !BACK_ROLES[roleOfMember(data, run, id)] || (isLeader(id) && back.type === 'mood')) { delete b.textBack; return b; }
+    b.downside = back; b.back = true;
+    if (b.textBack) b.text = b.textBack;
+    delete b.textBack;
+    return b;
   }
   function applyBonusEff(data, run, id, eff, d) {
     if (!eff) return;
@@ -2134,10 +2152,19 @@
   // the main hit for 威力 a (enemy archers keep +1; an enemy spark — the fairy's bell — keeps the old flat 1/2 to everyone)
   const rawAmount = (kind, a, enemy) => (kind === 'aim' ? a + (enemy ? 1 : 0) : kind === 'backstab' ? Math.max(1, a - 1) : kind === 'spark' ? (enemy ? (a >= 4 ? 2 : 1) : a) : a);
 
+  // 试玩反馈 2026-11-15: a member's skill text is copied at hire time; show the current data's text (rules change, saves don't)
+  function freshSkill(data, run, id, sk0) {
+    const sk = clone(sk0);
+    if (!sk) return sk;
+    const src = isLeader(id) ? ((((data.leader && data.leader.classes) || []).find((x) => x.id === (run.leader && run.leader.class)) || {}).skill)
+      : (((data.candidates || []).find((c) => c.id === id) || {}).skill);
+    if (src && src.kind === sk.kind && src.text) sk.text = src.text;
+    return sk;
+  }
   function allyUnit(data, run, id, idx) {
     const m = run.members[id];
     const c = cand(data, id);
-    const u = { id, ref: id, name: nameOf(data, id), side: 'ally', role: m.role || c.role || null, maxHp: m.maxHp, hp: clamp(hpOf(m), 1, m.maxHp), atk: m.atk, skill: clone(m.skill),
+    const u = { id, ref: id, name: nameOf(data, id), side: 'ally', role: m.role || c.role || null, maxHp: m.maxHp, hp: clamp(hpOf(m), 1, m.maxHp), atk: m.atk, skill: freshSkill(data, run, id, m.skill),
       mood: m.mood || 0, bond: m.bond || null, slot: idx, slowStart: m.statuses.includes('slow-start') ? (m.slowX2 ? 2 : true) : false, acts: 0, block: 0, damage: 0, healing: 0, debuffs: [], taken: 0, kills: 0, maxChain: 0, actions: 0 };
     if (isLeader(id)) u.noMood = true;
     const pk = perkOf(data, run, id);
@@ -2770,7 +2797,7 @@
         };
         if (sk.kind === 'spark') {
           // 法师 (three-factors, 用户 2026-11-14 final): Lv1 2 targets, +1 per level, main = leftmost, splash left→right.
-          // main 威力 + Lv · others ⌊威力/2⌋ + (Lv − 1) · max level: the same, but on everyone. An enemy spark (the bell) hits everyone flat.
+          // main 威力 · others max(1, ⌊威力/3⌋) · max level: the same, but on everyone. An enemy spark (the bell) hits everyone flat.
           const nT = ally ? SPARK_TARGETS[li] : Infinity, lv = li + 1;
           const list = af.slice(0, nT).filter((t, j) => !ally || j === 0 || sparkSplash(amountFor(t).amt, lv) > 0);
           targets = list.map((t, j) => softOrHit(t, 0, 1, !ally ? null : j === 0 ? (a) => sparkMain(a, lv) : (a) => sparkSplash(a, lv)));
@@ -3522,13 +3549,13 @@
       skillLv: lvOf(m.skill), perkText: perkText(perkOf(data, run, id)) };
     if (isLeader(id)) {
       return Object.assign({ id, name: c.name, isLeader: true, role: m.role, roleLabel: ROLE_LABELS()[m.role], hp: hpOf(m), maxHp: m.maxHp, atk: m.atk,
-        skill: clone(m.skill), mood: null, moodLabel: null, bond: null, visibleTags: [], revealedTraits: [], relation: null, tokens: m.tokens.slice(),
+        skill: freshSkill(data, run, id, m.skill), mood: null, moodLabel: null, bond: null, visibleTags: [], revealedTraits: [], relation: null, tokens: m.tokens.slice(),
         statuses: m.statuses.slice(), avgDps: avgOf(m), lastDps: m.lastDps, combo: m.combo ? clone(m.combo) : null }, common);
     }
     const rel = c.relation ? { with: c.relation.with, withName: nameOf(data, c.relation.with), kind: c.relation.kind, text: c.relation.text } : null;
     return Object.assign({
       id, name: c.name, role: c.role, roleLabel: ROLE_LABELS()[c.role], hp: hpOf(m), maxHp: m.maxHp, atk: m.atk,
-      skill: clone(m.skill), mood: m.mood, moodLabel: MOOD_LABELS()[m.mood], bond: m.bond || null, visibleTags: (c.visibleTags || []).slice(),
+      skill: freshSkill(data, run, id, m.skill), mood: m.mood, moodLabel: MOOD_LABELS()[m.mood], bond: m.bond || null, visibleTags: (c.visibleTags || []).slice(),
       revealedTraits: m.revealed.map((t) => ({ trait: t, label: TRAIT_LABELS()[t] || t, text: c.traitReveal || '' })),
       relation: rel, tokens: m.tokens.slice(), statuses: m.statuses.slice(), avgDps: avgOf(m), lastDps: m.lastDps,
       combo: c.combo ? clone(c.combo) : null,

@@ -980,8 +980,10 @@
     btns.push('<button class="btn btn-lg btn-secondary" data-act="menu">' + T('ui.title.options') + '</button>'); // 2026-11-14 user: 选项 sits under 开始冒险 on the title (no corner ☰ here)
     return '<div class="title">' + '<button class="title-fairy" data-act="fairyPoke" aria-label="' + T('ui.name.fairy') + '"' + (tfOff && (tfOff.x || tfOff.y) ? ' style="transform:translate(' + tfOff.x + 'px,' + tfOff.y + 'px)"' : '') + '><span class="tf-bob"><span class="tf-tilt"><span class="tf-form tf-n">' + fairyPic('fairy', 'stand-img', T('ui.name.fairy')) + '</span><span class="tf-form tf-d" aria-hidden="true">' + fairyPic('fairy-demon', 'stand-img', '') + '</span></span></span><span class="tf-hit"></span></button>' +
       '<div class="title-logo"><h1 class="logo"><span class="l1">' + T('ui.title.logo1') + '</span><span class="l2">' + T('ui.title.logo2') + '</span></h1></div>' +
-      '<div class="title-menu"><div class="menu">' + btns.join('') + '</div></div></div>';
+      '<div class="title-menu"><div class="menu">' + btns.join('') + '</div></div>' + (BUILD_V ? '<div class="title-ver">' + esc(BUILD_V) + '</div>' : '') + '</div>';
   }
+  // 2026-11-15 user: the build version sits in the title's bottom-left corner (read from this script's ?v= cache tag)
+  var BUILD_V = (function () { try { var sc = document.querySelector('script[src*="app.js"]'), m = sc && /[?&]v=([^&]+)/.exec(sc.getAttribute('src')); return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; } })();
   // UI-CLEAN §4: 团长设定 — a UI-only screen between the title and createRun (the name is in the run from the first line)
   function setupHtml() {
     return '<div class="title setup-screen">' + menuBtn('on-title') + '<div class="lg-stand">' + pic(A.portrait('leader'), 'stand-img', '', crestHtml()) + '</div>' +
