@@ -191,7 +191,7 @@
   const OPEN_BLOCK_SHARE = { fodder: 0, guard: 0.4, girl: 0.25, elite: 0.4 }, OPEN_BLOCK_MIN = 2;
   const OPEN_BLOCK_LEVEL = { 4: 0.5, 5: 0.5, 6: 0.75, 7: 0.75, 8: 1, 9: 1.5, 10: 1.5, 11: 1 };
   const openBlockKind = (u) => (isElite(u) ? 'elite' : u.candidate ? 'girl' : u.skill && u.skill.kind === 'guard' ? 'guard' : 'fodder');
-  const LUCK_ADD = 0.1; // nicota 好运 (2026-11-15): 加成 +10% from the round it is used to the end of the battle
+  const LUCK_ADD = 0.1; // nicota 好运 (2026-11-15): 加成 +10%, that round only
   const LUCKY_BONUS = 0.3; // G2 #8 (legacy flow kinds, unused by the advisors since 第六批 H1-1): ward — each ally's first hit taken each battle −1 · lucky — our first bonus roll each round +30%
   const EXPLORE_N = 2, EXPLORE_N_OUTLANDER = 3;
   const TEA_HP = 1; // 第六批 H1-1 (用户已选): 露西安「热茶」 rest +1 hp each · 妮可塔「幸运星」 (flow fortune): reward picks 4 instead of 3
@@ -2153,7 +2153,7 @@
       if (!u.noMood && u.mood <= -2) ids.push('mood-low');
       if (u.bond === 'high') ids.push('bond-high'); else if (u.bond === 'low') ids.push('bond-low');
       if ((u.debuffs || []).length) ids.push('debuffed');
-      if (B && B.mods) for (const k of ['formation', 'luck', 'drum']) if (B.mods[k] || (k === 'luck' && B.luckOn)) ids.push(k); // 好运 stays up for the rest of the battle
+      if (B && B.mods) for (const k of ['formation', 'luck', 'drum']) if (B.mods[k]) ids.push(k);
     } else {
       if (u.corruption) ids.push(u.corruption);
       if (u.corruption === 'vengeful' && u.grudge) ids.push('vengeful-' + u.grudge);
@@ -2973,8 +2973,7 @@
         if (hasTok(u, 'combo')) c += 0.1; // 信物 母亲的发绳
         if (B.mods.drum) c *= 2; // §2.5 drum
         if (B.lucky && B.luckyRound !== B.round) c += LUCKY_BONUS; // G2 #8 flow lucky (legacy): our first roll each round
-        if (B.mods.luck) B.luckOn = true; // 2026-11-15 user: nicota 好运 was 「every roll succeeds」 → one-round wipe; now 加成 +10% for the rest of this battle
-        if (B.luckOn) c = Math.min(1, c + LUCK_ADD);
+        if (B.mods.luck) c = Math.min(1, c + LUCK_ADD); // 2026-11-15 user: nicota 好运 was 「every roll succeeds」 → one-round wipe; now 加成 +10%, that round only
       } else if (B.enemyCombat === 'luck') c = Math.min(0.9, c + 0.15); // L10 boss: the v1 passive
       return Math.min(1, c);
     }
