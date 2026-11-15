@@ -1511,6 +1511,27 @@ body.act-3 .vn-box.tone-bewildered { background: linear-gradient(170deg, #e8eef6
 .seal-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 40px; font: 400 40px/1.3 var(--font-body); color: #f6eedd; background: rgba(14,10,18,.88); border: 2px solid rgba(232,208,160,.55); border-radius: 14px; cursor: pointer; }
 .seal-opt small { font-size: 28px; color: #f0c9a0; }
 .seal-opt:hover, .seal-opt:focus-visible { border-color: #f3d79b; background: rgba(40,24,30,.94); }
+/* 2026-11-15 小门: the small door at the side of the path after L10 (app.js sideDoorHtml). Three key slots; a lit slot = a key
+   the run holds. sd-open: the slots light one by one (--i delay), then 【打开小门】. sd-plain: an ordinary door, faint glow only. */
+.side-door { position: absolute; left: 50%; top: 80px; width: 360px; margin-left: -180px; z-index: 25; display: flex; flex-direction: column; align-items: center; gap: var(--sp-5); }
+.sd-frame { position: relative; width: 300px; height: 520px; border-radius: 150px 150px 10px 10px; border: 14px solid #3b2a1c; box-sizing: border-box;
+  background: repeating-linear-gradient(90deg, #6b4a2c 0 64px, #5a3d24 64px 68px), #6b4a2c; box-shadow: 0 18px 50px rgba(0,0,0,.6), inset 0 0 40px rgba(0,0,0,.45); }
+.sd-ring { position: absolute; right: 34px; top: 300px; width: 34px; height: 34px; border-radius: 50%; border: 6px solid #2a1d12; box-sizing: border-box; }
+.sd-slots { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 22px; }
+.sd-slot { display: flex; align-items: center; justify-content: center; width: 96px; height: 64px; min-width: var(--hit-min); min-height: var(--hit-min); border-radius: 12px;
+  background: #22170f; box-shadow: inset 0 4px 10px rgba(0,0,0,.8); cursor: help; outline-offset: 4px; }
+.sd-slot .gi { width: 42px; height: 42px; --c: #4a3a2c; --holec: #22170f; --holes: none; opacity: .55; background: none; box-shadow: none; padding: 0; }
+.sd-slot .gi svg { fill: #4a3a2c; }
+.side-door.lit .sd-slot.got .gi svg { fill: #ffd76a; }
+.side-door.lit .sd-slot.got .gi { opacity: 1; }
+.sd-plain.lit .sd-slot.got { box-shadow: inset 0 4px 10px rgba(0,0,0,.8), 0 0 10px rgba(255,200,90,.25); }
+.sd-plain.lit .sd-slot.got .gi { opacity: .7; }
+.sd-open.lit .sd-slot.got { animation: sdLight .6s calc(var(--i) * .6s) both; }
+.sd-open.lit .sd-slot.got .gi { animation: sdGlyph .6s calc(var(--i) * .6s) both; }
+@keyframes sdLight { from { box-shadow: inset 0 4px 10px rgba(0,0,0,.8); background: #22170f; } to { box-shadow: inset 0 2px 6px rgba(0,0,0,.6), 0 0 26px rgba(255,210,110,.85); background: #5a3a14; } }
+@keyframes sdGlyph { from { opacity: .55; transform: scale(.85); } 60% { transform: scale(1.18); } to { opacity: 1; transform: scale(1); } }
+.sd-go[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .sd-open.lit .sd-slot.got, .sd-open.lit .sd-slot.got .gi { animation-duration: .01s; animation-delay: 0s; } }
 /* #12 the first sacrifice is broadcast like an old TV: black first, then a slow fade-in; scanlines, dark corners, only the middle sharp,
    a small roll every few seconds; every other piece of chrome is hidden */
 .cine.tvin { background: #000; opacity: 1; transition: opacity 1.8s ease-in; }
@@ -1905,3 +1926,10 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 
 /* 2026-11-15 user: build version in the title's bottom-left corner */
 .title-ver { position: absolute; left: 20px; bottom: 14px; font-size: 22px; opacity: .6; color: #f3ead8; pointer-events: none; user-select: none; letter-spacing: .04em; }
+/* 方案 B (2026-11-15): arm the advisor skill for round 1 at the formation */
+.prep-foot .arm-skill { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; opacity: .8; }
+.prep-foot .arm-skill .pb-ic.face img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+.prep-foot .arm-skill.on { opacity: 1; outline: 2px solid var(--gold, #d8b25a); }
+
+/* 2026-11-15: a keepsake she already holds — greyed head, not pickable (tip says why) */
+.who-head.has { opacity: .38; filter: grayscale(1); cursor: not-allowed; }

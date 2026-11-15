@@ -65,6 +65,8 @@
     });
     var pk = (pv && pv.keys) || {}, nk = nv.keys || {};
     Object.keys(nk).forEach(function (k) { if (nk[k] && !pk[k]) out.push({ k: 'key', key: clip(k, 20) }); });
+    // 2026-11-15 小门: the door after L10, once — open (all three keys) or walked past, and which slots were lit
+    if (nv.door && !(pv && pv.door)) out.push({ k: 'door', open: !!nv.door.open, got: (nv.door.slots || []).filter(function (s) { return s && s.got; }).map(function (s) { return clip(s.key, 20); }) });
     // a battle ends: the screen moves off 'battle' (result, game over, or straight on — a fight can end in its first round)
     var b = nv.battle;
     var wasBattle = pv && (pv.phase === 'battle' || (pv.phase !== 'battleResult' && pv.phase !== 'gameOver' && (nv.phase === 'battleResult' || nv.phase === 'gameOver'))), isOver = nv.phase !== 'battle' && b;

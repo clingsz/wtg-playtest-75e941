@@ -565,6 +565,18 @@
     var t = tip === false ? '' : typeof tip === 'string' ? tip : glyphTip(name);
     return '<span class="gi gi-' + name + '"' + (t ? ' data-tip="' + String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }) + '"' : '') + ' aria-hidden="true"><svg viewBox="0 0 24 24">' + p + '</svg></span>';
   };
+  // 2026-11-15 小门: the three key slots on the side door (not in A.GLYPHS: they carry no keyword, the tip comes from ui.json
+  // door.slot.*). refuse = a raised palm (no), rules = a die, bell = the bell. Same .gi box as A.glyph.
+  var DOOR_PATHS = {
+    refuse: '<path d="M8.2 11V4.6a1.4 1.4 0 0 1 2.8 0V10h.4V3.4a1.4 1.4 0 0 1 2.8 0V10h.4V4.4a1.4 1.4 0 0 1 2.8 0V11h.3V7.6a1.4 1.4 0 0 1 2.8 0v6.2c0 4.6-3.2 8-7.4 8-3 0-4.9-1.5-6.3-3.8L3.6 13.6a1.4 1.4 0 0 1 2.3-1.6L8.2 14z"/>',
+    rules: '<rect x="3" y="3" width="18" height="18" rx="3.6"/><g style="fill:var(--holec);stroke:var(--holes,none)"><circle cx="8" cy="8" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="16" cy="16" r="1.8"/></g>',
+    bell: '<path d="M12 2.5a1.4 1.4 0 0 1 1.4 1.4v.7a6.2 6.2 0 0 1 4.8 6.1v4.1l1.9 2.6a.8.8 0 0 1-.6 1.3H4.5a.8.8 0 0 1-.6-1.3l1.9-2.6v-4.1a6.2 6.2 0 0 1 4.8-6.1v-.7A1.4 1.4 0 0 1 12 2.5z"/><path d="M9.4 19.6a2.6 2.6 0 0 0 5.2 0z"/>'
+  };
+  A.DOOR_KEYS = ['refuse', 'rules', 'bell'];
+  A.doorGlyph = function (key) {
+    var p = DOOR_PATHS[key]; if (!p) return '';
+    return '<span class="gi gi-door gi-door-' + key + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + p + '</svg></span>';
+  };
   A.ICON_TOKEN = /\{i:([a-z]+)\}/g;
   A.iconize = function (html) { return String(html == null ? '' : html).replace(A.ICON_TOKEN, function (m, n) { return A.GLYPHS[n] ? A.glyph(n) : m; }); };
   A.stripIcons = function (s) { return String(s == null ? '' : s).replace(A.ICON_TOKEN, ''); }; // plain-text contexts (tips, logs)

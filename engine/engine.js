@@ -108,7 +108,7 @@
   // rejectedHp / rejectedAtk (optional): the rejected girls who come back as enemies (vengeful) use these instead of hp / atk
   // DESIGN-skill-level: tiers 1–9 enemy hp ×1.1 (rounded) to pay for 技能等级 + 个人特点; 木头 unchanged
   const DIFFICULTIES = lazy(() => ([
-    { id: 0, name: TX('difficulty.name.0'), hp: 0.6, atk: 0, rest: 5, oneSacrifice: true, finalBossOnly: true, bellWound: false, diceTakes: 1, rejectedHp: 1.0, rejectedAtk: 3, enemyAssist: 0.15, levelHp: { 4: 0.9, 5: 1.08, 6: 1.08, 7: 0.96, 8: 1.2, 9: 1.2, 10: 1.2, 11: 2.55 }, levelAtk: { 7: -1, 8: 1, 11: 1 } }, // 试玩反馈 2026-11-15: levelHp L5–L10 ×1.2, L11 (小铃的玩偶) 1.7 → 2.55 = ×1.5 (用户 2026-11-15: 玩偶太弱，至少 ×1.5) (was 4 .9 / 5 .9 / 6 .9 / 7 .8 / 8–10 1 / 11 1.7) · // FEEDBACK-1112 #30: rejected girls 0.6 → 0.8 hp (sim 81% → ~77%) · SPEC-2026-11-13 E3: one girl per level L4–L7 → 1.0 hp, atk +3 (sim 83% → ~74%)
+    { id: 0, name: TX('difficulty.name.0'), hp: 0.6, atk: 0, /* 方案 B 开场护甲 2026-11-15: L11 2.55 → 2.2 (win rate back to before) */ rest: 5, oneSacrifice: true, finalBossOnly: true, bellWound: false, diceTakes: 1, rejectedHp: 1.0, rejectedAtk: 3, enemyAssist: 0.15, levelHp: { 4: 0.9, 5: 1.08, 6: 1.08, 7: 0.96, 8: 1.2, 9: 1.2, 10: 1.2, 11: 2.2 }, levelAtk: { 7: -1, 8: 1, 11: 1 } }, // 试玩反馈 2026-11-15: levelHp L5–L10 ×1.2, L11 (小铃的玩偶) 1.7 → 2.55 = ×1.5 (用户 2026-11-15: 玩偶太弱，至少 ×1.5) (was 4 .9 / 5 .9 / 6 .9 / 7 .8 / 8–10 1 / 11 1.7) · // FEEDBACK-1112 #30: rejected girls 0.6 → 0.8 hp (sim 81% → ~77%) · SPEC-2026-11-13 E3: one girl per level L4–L7 → 1.0 hp, atk +3 (sim 83% → ~74%)
     { id: 1, name: TX('difficulty.name.1'), hp: 0.66, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
     { id: 2, name: TX('difficulty.name.2'), hp: 0.83, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
     { id: 3, name: TX('difficulty.name.3'), hp: 0.88, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
@@ -184,6 +184,13 @@
   const FLAWLESS_MOOD_CAP = 1, STEW_CARD = 'guild-stew';
   const SMOKE_MISS = 0.4, CLAUSE_DAZE_N = 2; // 试玩反馈 2026-11-14 晚 #4 烟雾弹: each enemy hit misses 40% · #22 附加条款: two random enemies 发呆 this round
   const VETERAN_BLOCK = 1, ENEMY_GUARD_BLOCK = 3, FORMATION_BLOCK = 2, BOSS_FORMATION_BLOCK = 3, SHELL_BLOCK = 6, REST_BLOCK = 1;
+  // DESIGN-2026-11-15-initiative 方案 B (用户拍板, corrected 2026-11-15): 开场护甲 — only shield / elite types (and the returning girls) enter
+  // their wave with block = max(OPEN_BLOCK_MIN, round(maxHp × share × OPEN_BLOCK_LEVEL[level])); small fodder (slime / goblin / plain
+  // skeleton / blade / archer / priest) gets none, and L1–L3 none at all. An enemies.json entry may set its own share (openBlock).
+  // It sits on top of hp for our round 1 and goes when the enemy phase starts (the usual block clear). Tiered runs only.
+  const OPEN_BLOCK_SHARE = { fodder: 0, guard: 0.4, girl: 0.25, elite: 0.4 }, OPEN_BLOCK_MIN = 2;
+  const OPEN_BLOCK_LEVEL = { 4: 0.5, 5: 0.5, 6: 0.75, 7: 0.75, 8: 1, 9: 1.5, 10: 1.5, 11: 1 };
+  const openBlockKind = (u) => (isElite(u) ? 'elite' : u.candidate ? 'girl' : u.skill && u.skill.kind === 'guard' ? 'guard' : 'fodder');
   const LUCKY_BONUS = 0.3; // G2 #8 (legacy flow kinds, unused by the advisors since 第六批 H1-1): ward — each ally's first hit taken each battle −1 · lucky — our first bonus roll each round +30%
   const EXPLORE_N = 2, EXPLORE_N_OUTLANDER = 3;
   const TEA_HP = 1; // 第六批 H1-1 (用户已选): 露西安「热茶」 rest +1 hp each · 妮可塔「幸运星」 (flow fortune): reward picks 4 instead of 3
@@ -234,6 +241,8 @@
     bellEvent: [TX('story.bellEvent.1'), TX('story.bellEvent.2')],
     bellFollowed: [TX('story.bellFollowed.1'), TX('story.bellFollowed.2')],
     trueDoor: [TX('story.trueDoor.1'), TX('story.trueDoor.2')],
+    sideDoor: [TX('story.sideDoor.1'), TX('story.sideDoor.2')], // 2026-11-15 小门 (text only in data/text/zh/engine.json)
+    sideDoorPass: [TX('story.sideDoorPass.1'), TX('story.sideDoorPass.2'), TX('story.sideDoorPass.3')],
     nobleChamber: [TX('story.nobleChamber.1'), F(TX('story.nobleChamber.fairy')), { speaker: 'narrator', text: TX('story.nobleChamber.narrator'), fx: 'transform' }],
     trueEnding: [TX('story.trueEnding')], // 2026-11-14: the dolls turning back is told in l11After
     teamAssembled: [{ speaker: 'advisor', text: TX('story.teamAssembled') }], // v2.4 [9]
@@ -451,6 +460,9 @@
   }
   // 信物 (tokens): each one does something real besides the +1 mood
   const TOKEN_FX = lazy(() => ({ [TX('token.hairRope')]: 'combo', [TX('token.guildBadge')]: 'guard', [TX('token.pocketWatch')]: 'opener' }));
+  // 2026-11-15 user: a keepsake (信物) never stacks — the same person can't take a second copy; nobody left → the card isn't offered
+  const hasTokName = (m, eff) => !!(m && eff && eff.type === 'token' && (m.tokens || []).includes(eff.tokenName));
+  const tokenHolders = (run, card) => (card && card.effect && card.effect.type === 'token') ? run.party.filter((id) => hasTokName(run.members[id], card.effect)) : [];
   const hasTok = (u, fx) => (u.tokens || []).some((t) => TOKEN_FX()[t] === fx);
   function cardPreview(data, run, card, isReward) {
     const eff = card.effect || {};
@@ -961,6 +973,7 @@
         // feedback-1112 #7: the sealing story ends on a choice (story.sealChoice refuse | accept; a plain continue = accept)
         if (step.story === 'sealing' && run.party.some(isLeader)) run.story.choice = 'seal';
         if (step.story === 'teamAssembled') teamAssembled(data, run, events);
+        if (step.story === 'sideDoor' || step.story === 'sideDoorPass') run.story.door = true; // 2026-11-15 小门
         if (step.story === 'levelIntro') run.story.levelCard = (({ kind, ...c }) => c)(levelCardEvent(data, run, run.level));
         return;
       }
@@ -996,6 +1009,7 @@
       if (step.phase === 'reward' || step.phase === 'debuff') {
         let pool = step.phase === 'reward' ? data.cards.rewards : data.cards.debuffs;
         if (step.phase === 'reward' && bagFull(run)) pool = pool.filter((c) => !(c.effect && c.effect.type === 'item')); // v2.4 [24]
+        if (step.phase === 'reward') pool = pool.filter((c) => tokenHolders(run, c).length < run.party.length); // 2026-11-15: everyone has this keepsake → not offered
         const n = step.phase === 'reward' && (leaderHas(run, 'extra-option') || advisorFlow(data, run) === 'fortune') ? 4 : 3; // H1-1 妮可塔「幸运星」: 4, never 5 with both
         run.options = rngSample(run, pool.map((c) => c.id), n);
         // 试玩反馈 2026-11-14 晚 #21: while a girl is down (心情 ≤ −1) the stew is always on the table
@@ -1177,7 +1191,10 @@
 
   const HANDLERS = {
     story: {
-      continue: (data, run, a, ev) => (run.story && run.story.choice === 'seal' ? sealChoice(data, run, { choice: 'accept' }, ev) : advance(data, run, ev)),
+      // 2026-11-15 小门: on the open door a plain continue opens it (like the seal's continue = accept), so auto-play still runs
+      continue: (data, run, a, ev) => (run.story && run.story.choice === 'seal' ? sealChoice(data, run, { choice: 'accept' }, ev)
+        : run.story && run.story.door && doorView(data, run).open ? openDoor(data, run, ev) : advance(data, run, ev)),
+      openDoor(data, run, a, ev) { openDoor(data, run, ev); }, // 2026-11-15 小门: only when all three slots are lit
       sealChoice(data, run, a, ev) { if (!run.story || run.story.choice !== 'seal') fail('no seal choice here'); sealChoice(data, run, a, ev); }, // feedback-1112 #7
     },
     difficulty: { // v2.5: the fairy asks for a tier; locked tiers refuse
@@ -1241,12 +1258,15 @@
         if (!Array.isArray(o) || o.length !== run.party.length || [...o].sort().join() !== [...run.party].sort().join()) fail('order must be a permutation of the party');
         run.party = o.slice();
       },
+      // 方案 B (2026-11-15): the advisor skill can be armed at the formation for round 1 (the battle's first pause comes after round 1)
+      armSkill(data, run, a) { armSkill(data, run, a.on !== false); },
       fight(data, run, a, ev) { // 叙事节奏 2026-11-13: 「出发」 → the scene intro → the battle
+        if (a.advisorSkill != null) armSkill(data, run, !!a.advisorSkill);
         autoCamp(data, run, ev); ignoreBell(run);
         run.queue = goSteps(data, run, levelCfg(data, run.level)).concat(run.queue);
         advance(data, run, ev);
       },
-      cheatWin(data, run, a, ev) { autoCamp(data, run, ev); ignoreBell(run); run.battle = initBattle(data, run); cheatWin(data, run, ev); },
+      cheatWin(data, run, a, ev) { autoCamp(data, run, ev); ignoreBell(run); run.skillArmed = false; run.battle = initBattle(data, run); cheatWin(data, run, ev); },
       camp(data, run, a, ev) { campChoose(data, run, a.choice, ev); },
       campExplore(data, run, a, ev) { campExplore(data, run, a.itemId, a.drop, ev); },
       campTrainPick(data, run, a, ev) { campTrainPick(data, run, a.id, ev); },
@@ -1460,6 +1480,10 @@
     }
     if (post === 'finale') { // §4.4: after L10, the true door or the white room
       if (cfg.postStory) q.push({ story: cfg.postStory });
+      // 2026-11-15 小门: a small door at the side of the path shows the three keys (sideDoor = all three, the button
+      // 【打开小门】 → act openDoor; sideDoorPass = an ordinary door, she walks on past on a plain continue). Old saves already
+      // past this point keep their queue (no door); a save mid-L10 builds this queue when the battle is won.
+      q.push({ story: trueRoute(data, run) ? 'sideDoor' : 'sideDoorPass' });
       if (trueRoute(data, run)) q.push({ story: 'trueDoor' }, { startLevel: cfg.level + 1 });
       else { run.whiteout = true; q.push({ story: 'normalEnding' }, { story: 'whiteRoom' }, { phase: 'ending', outcome: 'victory' }); } // feedback-1112 #39/#40: the white room, the last talk
       return q;
@@ -1489,6 +1513,22 @@
   // feedback-1112 #14: self-sacrifice is gone, so every tier needs the two keys: the dice (first sacrifice left to the rules) + the bell.
   // Only the FIRST sacrifice can block it by naming a girl (the second one is always written by hand).
   const trueRoute = (data, run) => !!(run.keys && run.keys.refuse && run.keys.rules && run.keys.bell && !run.namedGirl && levelCfg(data, 11)); // all three keys, every tier
+  // 2026-11-15 小门: one slot per key, in the order the run meets them (L3 seal → the first sacrifice → the bell). Pure.
+  // rules counts only when the first sacrifice was left to the dice (naming a girl blocks it, whatever came later).
+  const DOOR_KEYS = ['refuse', 'rules', 'bell'];
+  function doorView(data, run) {
+    const k = run.keys || KEYS0();
+    const slots = DOOR_KEYS.map((key) => ({ key, got: !!k[key] && !(key === 'rules' && run.namedGirl) }));
+    return { slots, open: trueRoute(data, run) };
+  }
+  function openDoor(data, run, ev) {
+    if (!run.story || !run.story.door) fail('no door here');
+    if (!doorView(data, run).open) fail('the door does not open');
+    if (!run.flags) run.flags = {};
+    run.flags.door = 'open';
+    ev.push({ kind: 'doorOpen' });
+    advance(data, run, ev);
+  }
   function ignoreBell(run) { if (run.bell) { run.bell = false; run.bellDone = true; } }
 
   // ---------- v2.3 §B1/B2 camp: rest / explore / train ----------
@@ -1752,7 +1792,7 @@
       statEff(m, eff);
       m.growth.push({ source: card.id, stat: su.stat, delta: su.delta, level: run.level });
     } else if (eff.type === 'token') {
-      m.tokens.push(eff.tokenName);
+      if (!m.tokens.includes(eff.tokenName)) m.tokens.push(eff.tokenName); // 2026-11-15: keepsakes never stack (the UI greys holders; old auto-play / saves just don't get a second copy)
       addMood(d, a.target, 1);
     } else if (eff.type === 'status') {
       if (!m.statuses.includes(eff.status)) m.statuses.push(eff.status);
@@ -2068,6 +2108,11 @@
         u.maxHp = Math.ceil(u.maxHp * ENEMY_HP_MUL - 1e-9);
         if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct));
       }
+      if (df) for (const u of all) { // 方案 B 开场护甲 (after the final hp)
+        const t = data.enemies.find((x) => x.id === u.ref);
+        const share = (t && Number.isFinite(t.openBlock) ? t.openBlock : OPEN_BLOCK_SHARE[openBlockKind(u)]) * (OPEN_BLOCK_LEVEL[run.level] || 0);
+        u.openBlock = share > 0 ? Math.max(OPEN_BLOCK_MIN, Math.round(u.maxHp * share)) : 0;
+      }
       all.forEach((u, i) => { u.id = `e${wi + 1}-${i + 1}`; u.hp = u.startHp != null ? u.startHp : u.maxHp; delete u.startHp; });
       const out = { units: all, intro };
       if (wave.some((e) => e.phase2)) out.phase2 = true;
@@ -2123,7 +2168,7 @@
       statuses: unitStatuses(data, B, u), block: u.block || 0 };
     if (u.side === 'ally' && u.perk && u.perk.id === 'anvil' && u.block > 1) v.blockKeep = Math.floor(u.block / 2); // 铁砧不卸: kept at the next clear
     if (u.side === 'ally') { v.mood = u.noMood ? null : u.mood; if (isLeader(u.id)) v.isLeader = true; if (u.skill) v.skillLv = lvOf(u.skill); v.perkText = perkText(u.perk); }
-    else { v.faction = u.faction; v.boss = !!(u.advisorBoss || u.boss); if (u.padded) v.padded = true; if (u.advisorBoss) { v.advisorBoss = true; v.advisorId = u.ref; } }
+    else { v.faction = u.faction; v.boss = !!(u.advisorBoss || u.boss); if (u.padded) v.padded = true; if (u.openBlock > 0) v.openBlock = u.openBlock; if (u.advisorBoss) { v.advisorBoss = true; v.advisorId = u.ref; } }
     if (u.waveBoss) v.waveBoss = true;
     if (u.champion) v.champion = true;
     if (u.resummoned) v.resummoned = true;
@@ -3127,6 +3172,7 @@
       if (B.enemies.length) B.gone = (B.gone || []).concat(B.enemies.map(statRow)); // v2.3 §B9: earlier waves keep their stats
       for (const a of B.allies) if (a.block > 0) { a.block = 0; a.blockFrom = null; } // 2026-11-14 护甲: a new wave starts from 0 (kept block too)
       B.enemies = w.units.map((u) => Object.assign({ side: 'enemy', acts: 0, block: 0, damage: 0, healing: 0, taken: 0, kills: 0, maxChain: 0, actions: 0 }, clone(u)));
+      for (const u of B.enemies) if (u.openBlock > 0 && u.hp > 0) u.block = u.openBlock; // 方案 B 开场护甲: on the card from the entrance on; the enemy phase clears it
       if (w.phase2) { // §4.5: she gets back up, and calls the girls back
         push({ kind: 'phase2', round: B.round, wave: B.wi + 1, resummoned: B.enemies.filter((u) => u.resummoned).map((u) => u.ref),
           lines: fairyLines(data, 'phase2').map((raw) => resolveLine(data, run, raw, {}, 'fairy-demon')), text: TX('battle.fairyStands') });
@@ -3337,10 +3383,22 @@
     return { round, cheat };
   }
 
+  function armSkill(data, run, on) {
+    const adv = advisorData(data, run);
+    if (on && !(adv && run.advisorPresent && combatOf(adv))) fail('no advisor skill');
+    run.skillArmed = !!on;
+  }
   // prep → fight: resolve round 1, then pause in phase 'battle' unless it is already over.
   function startFight(data, run, ev) {
     run.battle = initBattle(data, run);
-    battleOps(data, run, run.battle).round([]);
+    const pre = [];
+    if (run.skillArmed) { // 方案 B: the advisor skill armed at the formation fires in round 1 (the battle's one use)
+      run.skillArmed = false;
+      const adv = advisorData(data, run), cb = adv && run.advisorPresent ? combatOf(adv) : null;
+      if (cb) { const B = run.battle; B.advisorSkillUsed = true; B.mods[cb.kind] = true;
+        pre.push({ kind: 'advisorSkill', open: true, advisorId: adv.id, skill: cb.kind, name: cb.name, text: `${adv.name}：「${cb.name}」——${cb.text}` }); }
+    }
+    battleOps(data, run, run.battle).round(pre);
     if (run.battle.over) return finishBattle(data, run, ev);
     run.phase = 'battle';
     if (!run.flags.firstPause) { run.flags.firstPause = true; advisorGuide(data, run, run.battle.lastRound, 'firstPause'); }
@@ -3735,6 +3793,7 @@
         if (run.story.rollcall) { v.rollcall = clone(run.story.rollcall); v.rally = clone(run.story.rally || []); } // v2.4 [9] teamAssembled
         if (run.story.levelCard) v.levelCard = clone(run.story.levelCard); // v2.4 [9] levelIntro
         if (run.story.id === 'sealRefuse') v.curse = clone(ctx); // feedback-1112 #7: { hpFrom, hpTo } for the curse line
+        if (run.story.door) v.door = doorView(data, run); // 2026-11-15 小门: { slots: [{ key, got }], open }
         if (run.story.choice === 'seal') v.sealOptions = clone(SEAL_OPTIONS()); // feedback-1112 #7: act story.sealChoice { choice }
         break;
       }
@@ -3764,7 +3823,7 @@
         v.sided = run.sided[run.interviewRound] || null;
         break;
       }
-      case 'prep': v.levelTitle = ''; Object.assign(v, prepInfo(data, run)); v.campfire = run.campfire ? { talkId: run.campfire.talkId } : null; v.bell = !!run.bell; v.bellWound = tierRule(run, 'bellWound') !== false; v.wounded = !!run.wounded; v.camp = campView(data, run); break; // 叙事节奏 2026-11-13: the night never names the next level
+      case 'prep': v.levelTitle = ''; Object.assign(v, prepInfo(data, run)); v.campfire = run.campfire ? { talkId: run.campfire.talkId } : null; v.bell = !!run.bell; v.bellWound = tierRule(run, 'bellWound') !== false; v.wounded = !!run.wounded; v.camp = campView(data, run); v.skillArmed = !!run.skillArmed; break; // 叙事节奏 2026-11-13: the night never names the next level
       case 'battle': v.battle = battleView(data, run); break;
       case 'battleResult': v.battle = clone(run.battle); break;
       case 'reward': case 'debuff': {
@@ -3774,6 +3833,7 @@
           if (c.effect && c.effect.type === 'item') { const it = itemDef(data, c.effect.item); c.item = it ? { itemId: it.id, name: it.name, text: it.text, needsTarget: !!it.needsTarget } : null; c.needsTarget = false; }
           else c.needsTarget = true;
           c.preview = cardPreview(data, run, pool.find((x) => x.id === id), run.phase === 'reward'); // v2.3 §B8
+          if (run.phase === 'reward') { const h = tokenHolders(run, pool.find((x) => x.id === id)); if (h.length) c.has = h; } // 2026-11-15: who already holds this keepsake (greyed in 「给谁」)
           return c;
         });
         v.targets = run.party.slice();
@@ -3790,7 +3850,7 @@
     return v;
   }
 
-  const ChooserEngine = { setOpenTiers: (n) => { OPEN_TIERS = Math.max(1, Math.floor(+n) || 1); }, get openTiers() { return OPEN_TIERS; }, createRun, view, act, simulateBattle, metaUpdate, metaDolls, dollLedger, rankOf, killCallFor, get DIFFICULTIES() { return DIFFICULTIES().map((d) => Object.assign({}, d)); }, version: 3,
+  const ChooserEngine = { setOpenTiers: (n) => { OPEN_TIERS = Math.max(1, Math.floor(+n) || 1); }, get openTiers() { return OPEN_TIERS; }, createRun, view, act, doorView, /* 2026-11-15 小门, pure */ simulateBattle, metaUpdate, metaDolls, dollLedger, rankOf, killCallFor, get DIFFICULTIES() { return DIFFICULTIES().map((d) => Object.assign({}, d)); }, version: 3,
     t, setLocale, getLocale: () => I18N.locale, i18n: { pickLocale, localizeData, setText: (tb) => { I18N.text = tb || null; }, get missing() { return I18N.missing; }, get strict() { return I18N.strict; }, set strict(v) { I18N.strict = !!v; }, get loadCalls() { return I18N.loadCalls; } } };
   I18N.loading = false;
   if (typeof window !== 'undefined' && typeof root.T !== 'function') root.T = t; // the UI's shared lookup (docs/I18N.md)

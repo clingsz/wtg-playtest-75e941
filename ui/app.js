@@ -1130,11 +1130,28 @@
       return '<button class="choice seal-opt so-' + esc(o.id) + '" data-act="sealPick" data-id="' + esc(o.id) + '" data-opt="seal:' + esc(o.id) + '">' + (A.grantsBell(o, 'seal') ? A.bellSvg('opt-bell') : '') + '<b>【' + esc(o.text) + '】</b>' + (o.note ? '<small>' + esc(o.note) + '</small>' : '') + '</button>';
     }).join('') + '</div>';
   }
+  // 2026-11-15 小门: the door at the side of the path after L10. One slot per key (view.door.slots, engine doorView); a lit
+  // slot = a key the run holds. door.open: the slots light one by one, then 【打开小门】 (act openDoor). Otherwise an
+  // ordinary door: the story's own continue walks on past.
+  function sideDoorHtml(v) {
+    var d = v.door; if (!d) return '';
+    return '<div class="side-door' + (d.open ? ' sd-open' : ' sd-plain') + '" id="sideDoor" aria-label="' + esc(T('ui.door.label')) + '"><div class="sd-frame"><div class="sd-slots">' +
+      (d.slots || []).map(function (s, i) {
+        var tip = esc(T('ui.door.slot.' + s.key));
+        return '<span class="sd-slot' + (s.got ? ' got' : '') + '" style="--i:' + i + '" tabindex="0" role="img" aria-label="' + tip + '" data-tip="' + tip + '">' + A.doorGlyph(s.key) + '</span>';
+      }).join('') + '</div><i class="sd-ring" aria-hidden="true"></i></div>' +
+      (d.open ? '<div class="sd-go" id="sideDoorGo" hidden><button class="btn btn-primary btn-lg" data-act="openDoor">' + T('ui.door.open') + '</button></div>' : '') + '</div>';
+  }
+  function sideDoorLight() { // the lit slots come on one by one (CSS delays), then the button
+    var d = $('sideDoor'); if (!d) return;
+    d.classList.add('lit');
+    later(function () { var g = $('sideDoorGo'); if (g) { g.hidden = false; var b = g.querySelector('button'); if (b) b.focus({ preventScroll: true }); } }, REDUCED ? 0 : 2000);
+  }
   SCREENS.story = {
     html: function (v) {
       return '<div class="cg"></div>' + (v.storyId === 'teamAssembled' ? standHtml().replace('stand-layer', 'stand-layer sl-lineup') + '<div class="lineup" id="lineup"></div>' : standHtml()) + // batch6 H2-4: the advisor's stand at the roll call is lineup-sized
 
-        (v.storyId === 'sacrificeIntro' ? '<div class="tv-fx" aria-hidden="true"><i class="tv-scan"></i><i class="tv-vig"></i></div>' : '') + (v.sealOptions ? sealChoiceHtml(v) : ''); // feedback-1112 #12 / #7
+        (v.storyId === 'sacrificeIntro' ? '<div class="tv-fx" aria-hidden="true"><i class="tv-scan"></i><i class="tv-vig"></i></div>' : '') + (v.sealOptions ? sealChoiceHtml(v) : '') + sideDoorHtml(v); // feedback-1112 #12 / #7 · 2026-11-15 小门
     },
     enter: function (v) {
       if (v.storyId === 'pathOn' || v.storyId === 'pathOnTaken') { sayFx(pathCardFx(v.lines || [])); say([], function () { doAct({ type: 'continue' }); }); return; } // feedback-1112 #16
@@ -1161,6 +1178,8 @@
       var tail = [];
       if ((v.storyId === 'advisorLeaves' || v.storyId === 'throneAdvisor') && v.advisor && v.advisor.combat) tail.push({ speaker: 'narrator', text: T('ui.advisor.lostSkill', { name: v.advisor.combat.name }), tone: 'loss' });
       if (v.sealOptions) { say(tail, function () { var c = $('sealChoice'); if (c) { c.hidden = false; var b = c.querySelector('button'); if (b) b.focus({ preventScroll: true }); } }); return; } // feedback-1112 #7
+      if (v.door && v.door.open) { say(tail, sideDoorLight); return; } // 2026-11-15 小门: the button opens it (act openDoor)
+      if (v.door) { var sd = $('sideDoor'); if (sd) sd.classList.add('lit'); } // an ordinary door: what she holds glows faintly, then on past
       say(tail, function () { if (v.storyId === 'levelIntro') standsOut(); doAct({ type: 'continue' }); }); // G1 #4: no stand left over on the way into the level
     }
   };
@@ -1471,6 +1490,12 @@
       fguideOpen(true);
     }, 600);
   }
+  // 方案 B (2026-11-15): the advisor skill can be armed here for round 1 (one use per battle; the pause bar shows it as used)
+  function armBtn(v) {
+    var a = v.advisor; if (!a || a.present === false || !a.combat) return '';
+    return '<button class="btn btn-secondary arm-skill' + (v.skillArmed ? ' on' : '') + '" data-act="armSkill" aria-pressed="' + (v.skillArmed ? 'true' : 'false') + '" data-tip="' + esc(T('ui.formation.armTip', { name: a.combat.name, text: a.combat.text })) + '">' +
+      '<span class="pb-ic face">' + pic(A.face(a.id, 'calm'), '', '', '') + '</span>' + T(v.skillArmed ? 'ui.formation.armOn' : 'ui.formation.armOff', { name: a.combat.name }) + '</button>';
+  }
   SCREENS.prep = {
     plate: function (v) { return plate(T(campStep(v) === 'done' ? 'ui.camp.plateDone' : 'ui.camp.plate')); }, // 叙事节奏 2026-11-13: the night never names the next level; the scene intro comes after 「出发」
     html: function (v) {
@@ -1490,7 +1515,7 @@
         '<div class="formation-ui"><div class="ahead panel"><span class="ah-k">' + T('ui.formation.ahead') + '</span><span class="ah-row">' + foes + '</span><span class="ah-n">' + (v.waveCount > 1 ? T('ui.formation.enemiesWaves', { n: esc(v.enemyCount || '?'), waves: esc(v.waveCount) }) : T('ui.formation.enemies', { n: esc(v.enemyCount || '?') })) + '</span></div>' +
         '<div class="order-hint"><span class="oh-k" tabindex="0" data-tip="' + T('ui.formation.orderTip') + '">' + T('ui.formation.orderLabel') + '</span></div>' + // user 2026-11-14: 站位顺序 + a numbered circle above each slot
         '<div class="lane lane-prep" id="formation">' + cards + '</div>' +
-        '<div class="prep-foot"><span class="hint">' + T('ui.formation.dragHint') + '</span><button class="btn btn-primary btn-lg" data-act="fight">' + T('ui.formation.go') + '</button></div></div></div>';
+        '<div class="prep-foot"><span class="hint">' + T('ui.formation.dragHint') + '</span>' + armBtn(v) + '<button class="btn btn-primary btn-lg" data-act="fight">' + T('ui.formation.go') + '</button></div></div></div>';
     },
     enter: function (v) {
       resetBattleMarks(); cue('fire', null, 0);
@@ -1557,7 +1582,7 @@
   function resetBattleMarks() { bmarks = { debts: {}, frenzy: 1 }; }
   function debtDots(id) { var d = bmarks.debts[id]; return d && d.length ? '<span class="debt-dots" data-tip="' + T('ui.battle.debtTip') + '">' + d.map(function (c) { return '<i' + (c === 'possessed' ? ' class="p"' : '') + '></i>'; }).join('') + '</span>' : ''; }
   // 2026-11-14 护甲: a steel shield badge (glyph + number) on the left end of the hp bar; hidden at 0. The bar gets a steel rim.
-  function blockBadge(n) { return '<span class="blk-badge' + (n > 0 ? '' : ' off') + '" data-tip="' + esc(termTip('block')) + '">' + A.glyph('block', false) + '<b class="blk-n">' + (n > 0 ? n : '') + '</b></span>'; }
+  function blockBadge(n, open) { return '<span class="blk-badge' + (n > 0 ? '' : ' off') + '" data-tip="' + esc(open ? T('ui.glyph.tip.openBlock') : termTip('block')) + '">' + A.glyph('block', false) + '<b class="blk-n">' + (n > 0 ? n : '') + '</b></span>'; }
   function setBlock(uid, n) {
     var el = cardEl(uid), u = ui.field && ui.field[uid]; if (u) u.block = Math.max(0, n | 0); if (!el) return;
     var bar = el.querySelector('.hpbar'), bd = el.querySelector('.blk-badge'), v = Math.max(0, n | 0); if (!bar || !bd) return;
@@ -2302,7 +2327,7 @@
         break; }
       case 'advisorSkill': cue('advisorSkill', null, 0);
         if (e.enemy) { el = cardEl(e.uid); if (el) pulse(el, 'strike', 520); if (!anim.skip) { announce({ title: T('ui.battle.skillTitle', { name: e.name || T('ui.battle.advisorSkill') }), sub: String(e.text || '').replace(/^[^——]*——/, '') || T('ui.battle.thisRound'), face: A.face(e.advisorId, 'special') }); await wait(1300, tok); } break; } // feedback-1112 #36: the boss casts it on you, every round
-        if (!ui.announced) { announce({ title: (e.name ? T('ui.battle.skillTitle', { name: e.name }) : T('ui.battle.advisorSkill')), sub: T('ui.battle.nextRound'), face: A.face(e.advisorId || (view.advisor && view.advisor.id), 'special') }); await wait(1300, tok); } break;
+        if (!ui.announced) { announce({ title: (e.name ? T('ui.battle.skillTitle', { name: e.name }) : T('ui.battle.advisorSkill')), sub: T(e.open ? 'ui.battle.thisRound' : 'ui.battle.nextRound'), face: A.face(e.advisorId || (view.advisor && view.advisor.id), 'special') }); await wait(1300, tok); } break;
       case 'item': cue('item', null, 0); if (!ui.announced && e.itemId) { announce({ title: e.name || e.text || T('ui.battle.item'), face: null }); await wait(1100, tok); } break;
       case 'flashback': {
         el = cardEl(e.uid) || cardById(e.speakerId || e.speaker); var img = el && el.querySelector('.uc-img'), keep = img && img.dataset.cands;
@@ -2597,11 +2622,12 @@
         }
         // 2026-11-14 (user): a row of round heads to pick who, ONE big preview box for the selected one, 「确定」 gives it
         // 试玩 #9: nobody is picked at first — the box asks, 「确定」 waits for a head
-        var ids = v.targets || [], sel = ids.indexOf(ui.who) >= 0 ? ui.who : null;
+        var ids = v.targets || [], has = (c && c.has) || [], sel = ids.indexOf(ui.who) >= 0 && has.indexOf(ui.who) < 0 ? ui.who : null; // 2026-11-15: keepsake holders can't be picked
         ui.who = sel;
         var whoName = function (m) { return whoNameOf(m, heavy); };
         var heads = ids.map(function (id) {
           var m = member(id) || { id: id, name: nameOf(id) }, art = unitArt({ id: id, side: 'ally', isLeader: isLeader(m) });
+          if (has.indexOf(id) >= 0) return '<button class="who-head has" disabled aria-disabled="true" data-tip="' + esc(T('ui.reward.alreadyHas')) + '" title="' + esc(T('ui.reward.alreadyHas')) + '"><span class="wh-face">' + pic(art.list, '', m.name, art.fb) + '</span><b>' + esc(whoName(m)) + '</b></button>';
           return '<button class="who-head' + (id === sel ? ' on' : '') + '" data-act="whoSel" data-id="' + esc(id) + '" data-opt="w:' + esc(id) + '" aria-pressed="' + (id === sel) + '"><span class="wh-face">' + pic(art.list, '', m.name, art.fb) + '</span><b>' + esc(whoName(m)) + '</b></button>';
         }).join('');
         var detail = whoDetailHtml(c, sel, heavy);
@@ -3160,6 +3186,7 @@
     ivSkip: function (d, t, e) { if (e) e.stopPropagation(); var sk = $('ivSkip'); if (!sk || sk.hidden || ui.ivReady) return; pl('event', 'ivSkip', { round: view && view.round }); vnSkipToMarker(); },
     ivReplay: function () { $('ivChoices').hidden = true; $('ivUnder').hidden = true; ivTalk(view); },
     move: function (d) { var i = +d.i, j = i + +d.d, o = ui.order, t = o[i]; if (j < 0 || j >= o.length) return; o[i] = o[j]; o[j] = t; ui.moves++; render(); },
+    armSkill: function () { if (doAct({ type: 'armSkill', on: !view.skillArmed }, true)) render(); },
     fight: function () { tracker.switches = ui.moves || 0; if (doAct({ type: 'setOrder', order: ui.order.slice() }, true)) doAct({ type: 'fight' }); },
     speed: function (d) { setSpeed(+d.s); },
     speedCycle: function () { setSpeed((prefs.speed || 1) % 3 + 1); },
@@ -3230,6 +3257,11 @@
       if (ui.acted || (d.id !== 'refuse' && d.id !== 'accept')) return; ui.acted = 1;
       var c = $('sealChoice'); if (c) c.remove();
       if (!doAct({ type: 'sealChoice', choice: d.id }, true)) ui.acted = 0;
+    },
+    openDoor: function () { // 2026-11-15 小门 → the existing true route (trueDoor → L11)
+      if (ui.acted) return; ui.acted = 1;
+      var g = $('sideDoorGo'); if (g) g.remove();
+      if (!doAct({ type: 'openDoor' }, true)) ui.acted = 0;
     },
     page: function (d) { ui.page = d.p; render(); },
     rate: function (d) { var q = qState(); q.ratings[d.r] = +d.v; qSave(q); render(); },
