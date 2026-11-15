@@ -126,7 +126,55 @@
     var s = o.spd > 0 ? o.spd : 1;
     return { up: Math.round(RISE.up / s), hold: Math.round(RISE.hold / s), down: Math.round(RISE.down / s) };
   }
-  var api = { actionBeats: actionBeats, RISE: RISE, riseTiming: riseTiming, hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
+
+  // v38 (试玩 v37「玛尔塔掉血了，护甲角标还挂着数字」): the 护甲 badge follows the engine event by event. Pure parts:
+  // blockStart(evs, units) = every unit's block at the START of the round (units = the round's end-state views; walks back
+  // through hits / gains / clears). hitBlocks(t, field) = the badge updates one hit target brings: 伊芙's shield owner −shieldAmt,
+  // then the target's own blockAfter; a hit that took hp and that the block took no part of means her block was already 0.
+  // eventBlocks(e) = the updates of a 'block' (gain → its total) / 'blockClear' (→ to) event. beatExtras(group) = for each
+  // action of a chain group, the block events that follow it (before the next action): played right after THAT beat, not
+  // after the whole chain (they used to wait for the end of the chain and then set a stale total over later hits).
+  function blockStart(evs, units) {
+    var blk = {};
+    (units || []).forEach(function (u) { blk[u.uid] = u.block || 0; });
+    for (var i = (evs || []).length - 1; i >= 0; i--) {
+      var e = evs[i];
+      if (e.kind === 'action') for (var j = (e.targets || []).length - 1; j >= 0; j--) {
+        var t = e.targets[j]; if (t.miss || t.capped) continue;
+        if (t.blockAfter != null) blk[t.uid] = t.blockAfter + (t.blocked || 0) - (t.shieldAmt || 0);
+        if (t.shieldBy) blk[t.shieldBy] = (blk[t.shieldBy] || 0) + (t.shieldAmt || 0);
+      }
+      if (e.kind === 'block') blk[e.uid] = Math.max(0, (blk[e.uid] || 0) - (e.amount || 0));
+      if (e.kind === 'blockClear') (e.units || []).forEach(function (x) { blk[x.uid] = x.from; });
+    }
+    Object.keys(blk).forEach(function (k) { blk[k] = Math.max(0, blk[k] || 0); });
+    return blk;
+  }
+  function hitBlocks(t, field) {
+    var out = [];
+    if (!t || t.miss || t.capped || t.kind === 'heal') return out;
+    if (t.shieldBy) { var f = field && field[t.shieldBy]; out.push([t.shieldBy, Math.max(0, ((f && f.block) || 0) - (t.shieldAmt || 0))]); }
+    if (t.blockAfter != null) out.push([t.uid, t.blockAfter]);
+    else if ((t.amount || 0) > 0 && !t.tough) out.push([t.uid, 0]); // the hp took it: nothing of her block was left
+    else if (t.hpAfter != null && t.hpAfter <= 0) out.push([t.uid, 0]);
+    return out;
+  }
+  function eventBlocks(e) {
+    if (!e) return [];
+    if (e.kind === 'block') return [[e.uid, e.total || 0]];
+    if (e.kind === 'blockClear') return (e.units || []).map(function (x) { return [x.uid, x.to || 0]; });
+    return [];
+  }
+  function beatExtras(group) {
+    var out = [], k = -1;
+    (group || []).forEach(function (e) {
+      if (!e) return;
+      if (e.kind === 'action') { k++; out[k] = []; return; }
+      if (k >= 0 && (e.kind === 'block' || e.kind === 'blockClear')) out[k].push(e);
+    });
+    return out;
+  }
+  var api = { blockStart: blockStart, hitBlocks: hitBlocks, eventBlocks: eventBlocks, beatExtras: beatExtras, actionBeats: actionBeats, RISE: RISE, riseTiming: riseTiming, hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.RoundPlan = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -1635,9 +1635,8 @@
   // a hit the block took part of: a grey number first, then the badges (her own, and 伊芙's when she stepped in)
   function hitBlock(t, el) {
     if (!t) return;
-    if (t.shieldBy) { var f = ui.field && ui.field[t.shieldBy]; if (f) setBlock(t.shieldBy, (f.block || 0) - (t.shieldAmt || 0)); }
     if (t.blocked && el && !t.numShown) floatAt(el, '−' + t.blocked, 'blk', '', -70); // 先飞后结算: the flying number already showed it
-    if (t.blockAfter != null) setBlock(t.uid, t.blockAfter);
+    RoundPlan.hitBlocks(t, ui.field).forEach(function (x) { setBlock(x[0], x[1]); }); // v38: the badge = the engine's block after this hit (hp hit ⇒ 0)
   }
   function battleCard(u, hp, hidden, blk) {
     var art = unitArt(u), m = u.side === 'ally' ? member(u.id) : null, pct = u.maxHp ? Math.max(0, Math.round(100 * hp / u.maxHp)) : 100;
@@ -1987,12 +1986,12 @@
       if (fx) stop = Math.max(stop, HitFX.contact(x.el, { tier: x.tier, kind: x.kind, dir: x.dir, scale: x.scale, from: x.from ? stagePt(x.from, 0.5, 0.4) : null }));
     });
     if (stop) await wait(stop, tok); // the hit-stop: everything holds on the contact frame
-    var RANK = { ko: 4, crit: 3, heavy: 2, normal: 1 }, shook = false;
-    list.sort(function (a, b) { return (RANK[b.tier] || 0) - (RANK[a.tier] || 0); }); // the heaviest hit drives the one shake
-    list.forEach(function (x) {
+    var RANK = { ko: 4, crit: 3, heavy: 2, normal: 1 };
+    var heavy = list.filter(function (x) { return !x.skip && !x.seq && x.kind !== 'heal'; }).sort(function (a, b) { return (RANK[b.tier] || 0) - (RANK[a.tier] || 0); })[0]; // the heaviest hit drives the one shake
+    list.forEach(function (x) { // v38: hp + 护甲 land in the engine's order (two hits on one card: the later one wins)
       if (x.skip) return;
       if (x.seq) { setHp(x.uid, x.t.hpAfter); hitBlock(x.t, x.el); return; }
-      if (fx && x.kind !== 'heal') { HitFX.after(x.el, x, shook ? null : sh); shook = true; } else pulse(x.el, x.t.kind === 'heal' ? 'healed' : 'hit', 520);
+      if (fx && x.kind !== 'heal') HitFX.after(x.el, x, x === heavy ? sh : null); else pulse(x.el, x.t.kind === 'heal' ? 'healed' : 'hit', 520);
       if (x.t.kind === 'heal') pulse(x.el, 'healed', 520);
       setHp(x.uid, x.t.hpAfter); hitBlock(x.t, x.el);
     });
@@ -2005,11 +2004,11 @@
   // land, she settles, then the next chained girl rises. ×2 / ×3 shorten every wait; skip / reduced motion = instant results.
   async function settleCard(el, tok) { await wait(RoundPlan.RISE.hold, tok); if (el) el.classList.remove('acting'); await wait(RoundPlan.RISE.down, tok); } // v36: the actor settles back
   async function playChain(group, tok) {
-    var beats = RoundPlan.actionBeats(group), acts = beats.map(function (b) { return b.act; }), first = acts[0];
+    var beats = RoundPlan.actionBeats(group), acts = beats.map(function (b) { return b.act; }), first = acts[0], extras = RoundPlan.beatExtras(group);
     if (!first || !aEl(first)) return;
     cue('allyAttack');
     var ctag = null, RS = RoundPlan.RISE;
-    for (var k = 0; k < beats.length; k++) await playBeat(beats[k], k, tok);
+    for (var k = 0; k < beats.length; k++) { await playBeat(beats[k], k, tok); for (var xb = 0; xb < (extras[k] || []).length; xb++) await playOne(extras[k][xb], tok); } // v38: a block gain lands with its own beat
     if (ctag) { var ct = ctag; ct.classList.add('out'); setTimeout(function () { ct.remove(); }, 400); }
     await wait(200, tok);
     async function playBeat(bt, k, tok) {
@@ -2068,7 +2067,7 @@
     }
     var end = group.filter(function (e) { return e.kind === 'chainEnd'; })[0], depth = end ? end.depth : acts.length > 1 ? acts[acts.length - 1].chainDepth : 0;
     var mkLines = group.filter(function (e) { return e.kind === 'line' && e.bark === 'multiKill'; });
-    for (var g = 0; g < group.length; g++) { if (group[g].kind !== 'action' && group[g].kind !== 'chainEnd' && mkLines.indexOf(group[g]) < 0) await playOne(group[g], tok); }
+    for (var g = 0; g < group.length; g++) { if (group[g].kind !== 'action' && group[g].kind !== 'chainEnd' && group[g].kind !== 'block' && group[g].kind !== 'blockClear' && mkLines.indexOf(group[g]) < 0) await playOne(group[g], tok); }
     await killCalls(acts, mkLines, tok); // SPEC-11-13 F: after the foes fall; her happy line right after the banner
     if (depth >= 1) {
       celebrate(depth);
@@ -2231,8 +2230,8 @@
     switch (e.kind) {
       case 'enemyEnter': el = cardEl(e.uid || (e.unit && e.unit.uid)); if (el) { el.classList.remove('pre-enter'); el.classList.add('enter'); setTimeout(function (c) { return function () { c.classList.remove('enter'); }; }(el), 700); } cue('enemyEnter', null, 150); await wait(420, tok); break; // batch6 H2-6: drop 'enter' once played — left on, every later pulse (felled / hit) restarted it and a greyed-out foe slid back in · fix: this comment once swallowed the wait+break, so enemyEnter fell through into 'phase2' (「第二阶段」 on every entrance)
       case 'phase2': await playPhase2(e, tok); break;
-      case 'block': el = cardEl(e.uid); setBlock(e.uid, e.total); if (el && !anim.skip) { floatAt(el, '+' + e.amount, 'blk gain', '', -70); cue('guard', null, 0); await wait(260, tok); } break; // 2026-11-14 护甲
-      case 'blockClear': (e.units || []).forEach(function (x) { setBlock(x.uid, x.to); }); break;
+      case 'block': el = cardEl(e.uid); RoundPlan.eventBlocks(e).forEach(function (x) { setBlock(x[0], x[1]); }); if (el && !anim.skip) { floatAt(el, '+' + e.amount, 'blk gain', '', -70); cue('guard', null, 0); await wait(260, tok); } break; // 2026-11-14 护甲
+      case 'blockClear': RoundPlan.eventBlocks(e).forEach(function (x) { setBlock(x[0], x[1]); }); break;
       case 'turncoat': await playTurncoat(e, tok); break;
       case 'switchSide': moveToAllies(e.uid); break;
       case 'wave': if (e.advBoss) { await playWaveCard(e, tok); break; }
@@ -2265,6 +2264,8 @@
         var eBeats = A.comboBeats(e.targets, function (t) { var x = tEl(t); return x ? x.dataset.u : null; });
         if (eBeats.length > 1) { // batch6 H2-7: an enemy 连击 — every hit its own beat (flash, shake, cue, number, hp step)
           await comboSeq(eBeats, el, e.skillKind, tok); chk(tok);
+          var eRest = (e.targets || []).filter(function (t) { return !t.miss && !t.capped && !eBeats.some(function (sb) { return sb.t === t; }) && tEl(t); }); // v38: a target outside the 连击 still lands
+          if (eRest.length) await impacts(eRest.map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
           (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
           await wait(160, tok); await settleCard(el, tok); break;
         }
@@ -2456,7 +2457,8 @@
     plate: function (v) { return plate(levelText(v)); },
     html: function (v) {
       var b = v.battle, evs = b.lastRound || [], entering = {}, hp = {}, mx0 = {}, blk = {};
-      b.allies.concat(b.enemies).forEach(function (u) { hp[u.uid] = u.hp; blk[u.uid] = u.block || 0; });
+      b.allies.concat(b.enemies).forEach(function (u) { hp[u.uid] = u.hp; });
+      blk = RoundPlan.blockStart(evs, b.allies.concat(b.enemies)); // v38: pure (ui/round-plan.js, tests/block-sync.test.cjs)
       evs.forEach(function (e) { if (e.kind === 'enemyEnter') entering[e.uid || (e.unit && e.unit.uid)] = e.unit || true; });
       // §4.5 a girl who turned this round still starts the round on their side; the turncoat animation carries her over
       var sw = {}; if (!replayed[(run.history || []).length]) evs.forEach(function (e) { if (e.kind === 'switchSide' || e.kind === 'turncoat') sw[e.uid] = 1; });
@@ -2465,10 +2467,7 @@
       var allies = b.allies.filter(function (u) { return !sw[u.uid]; });
       for (var i = evs.length - 1; i >= 0; i--) { // walk back to the state before this round
         var e = evs[i];
-        if (e.kind === 'action') (e.targets || []).forEach(function (t) { if (t.miss || t.capped) return; var before = t.kind === 'heal' ? t.hpAfter - t.amount : t.hpAfter + t.amount; hp[t.uid] = before;
-          if (t.blockAfter != null) blk[t.uid] = t.blockAfter + (t.blocked || 0) - (t.shieldAmt || 0); if (t.shieldBy) blk[t.shieldBy] = (blk[t.shieldBy] || 0) + (t.shieldAmt || 0); });
-        if (e.kind === 'block') blk[e.uid] = Math.max(0, (blk[e.uid] || 0) - (e.amount || 0)); // 2026-11-14 护甲: the round starts from its first state
-        if (e.kind === 'blockClear') (e.units || []).forEach(function (x) { blk[x.uid] = x.from; });
+        if (e.kind === 'action') (e.targets || []).forEach(function (t) { if (t.miss || t.capped) return; var before = t.kind === 'heal' ? t.hpAfter - t.amount : t.hpAfter + t.amount; hp[t.uid] = before; });
         if (e.kind === 'relic' && e.uid != null && e.hpBefore != null) hp[e.uid] = e.hpBefore;
         if (e.kind === 'memory' && e.hpWas) e.hpWas.forEach(function (w) { hp[w.uid] = w.hp; mx0[w.uid] = w.maxHp; }); // batch6 H2-14: a debt's numbers change when its dots land
       }
@@ -2513,7 +2512,7 @@
     } catch (e) { if (e !== CANCEL) throw e; }
   }
   function syncField(v) { // snap every card to the round's end state (after a skip or a failed animation)
-    v.battle.allies.concat(v.battle.enemies).forEach(function (u) { var el = cardEl(u.uid); if (!el) return; el.classList.remove('pre-enter', 'acting'); el.classList.toggle('down', u.hp <= 0); if (ui.field && ui.field[u.uid]) ui.field[u.uid].maxHp = u.maxHp; setHp(u.uid, u.hp); }); // batch6 H2-14: max hp too
+    v.battle.allies.concat(v.battle.enemies).forEach(function (u) { var el = cardEl(u.uid); if (!el) return; el.classList.remove('pre-enter', 'acting'); el.classList.toggle('down', u.hp <= 0); if (ui.field && ui.field[u.uid]) ui.field[u.uid].maxHp = u.maxHp; setHp(u.uid, u.hp); if (u.hp > 0) setBlock(u.uid, u.block || 0); }); // batch6 H2-14: max hp too · v38: the 护甲 badge too (it used to keep a stale number next to the end-state hp)
   }
   function announce(an) {
     var d = fxDiv('toast', (an.face ? '<span class="toast-face">' + pic(an.face, '', '', '') + '</span>' : '') + '<b>' + esc(an.title) + '</b>' + (an.sub ? '<small>' + esc(an.sub) + '</small>' : ''), 960, 380);
