@@ -53,7 +53,7 @@
     else { raf = 0; if (el) el.style.transform = ''; }
   }
   function star(x, y, r) { ctx.beginPath(); for (var i = 0; i < 8; i++) { var rr = i % 2 ? r * 0.3 : r, an = i * Math.PI / 4; ctx.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr); } ctx.closePath(); ctx.fill(); }
-  function addFx(dur, draw) { if (!ensure()) return; fxs.push({ t: 0, dur: dur, draw: draw }); kick(); }
+  function addFx(dur, draw) { if (!ensure()) return; if (fxs.length >= 80) fxs.shift(); fxs.push({ t: 0, dur: dur, draw: draw }); kick(); }
   function slash(at, o) { // a crescent: draws in over the first 30%, then fades; the width tapers at both ends
     var P = pal(), R = o.R || 140, W = o.W || 18, a0 = o.a0 != null ? o.a0 : -2.3, a1 = o.a1 != null ? o.a1 : 0.5, col = o.col || P.glow;
     addFx(o.dur || 300, function (p) {
@@ -110,7 +110,7 @@
     if (!ensure()) return; var P = pal(); o = o || {};
     for (var i = 0; i < n; i++) {
       var an = (o.dir || 0) + (Math.random() - 0.5) * (o.spread || 2.4), sp = (o.speed || 900) * (0.4 + Math.random() * 0.8);
-      parts.push({ x: at.x, y: at.y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp - (o.up || 0), g: o.g != null ? o.g : 1400, drag: o.drag || 0.9,
+      if (parts.length >= 600) parts.shift(); parts.push({ x: at.x, y: at.y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp - (o.up || 0), g: o.g != null ? o.g : 1400, drag: o.drag || 0.9,
         life: (o.life || 380) * (0.6 + Math.random() * 0.6), age: 0, size: (o.size || 4) * (0.6 + Math.random() * 0.8), col: o.col || P.spark[i % 3], kind: o.kind || 'spark' });
     }
     kick();

@@ -37,9 +37,10 @@
   var PLM = window.ChooserPlaylog, PL = null;
   var BUILD_V = (function () { try { var m = /[?&]v=([^&]+)/.exec((document.currentScript && document.currentScript.src) || ''); return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; } })();
   function plEnv() {
-    var w = window.innerWidth || 0, h = window.innerHeight || 0, sc = window.screen || {};
-    return { v: BUILD_V, engine: E && E.version, stub: STUB || undefined, profile: PROFILE || undefined, w: w, h: h, sw: sc.width, sh: sc.height, dpr: window.devicePixelRatio || 1,
-      orient: w >= h ? 'landscape' : 'portrait', touch: !!(('ontouchstart' in window) || (navigator.maxTouchPoints > 0)), ua: navigator.userAgent, lang: navigator.language };
+    // 游玩记录 v2: only what helps read a playtest — the browser FAMILY (playlog.js reduces the UA), never the URL
+    var w = window.innerWidth || 0, h = window.innerHeight || 0, B = window.ChooserPlaylog;
+    return { v: BUILD_V, engine: E && E.version, stub: STUB || undefined, profile: PROFILE || undefined, w: w, h: h, dpr: window.devicePixelRatio || 1,
+      touch: !!(('ontouchstart' in window) || (navigator.maxTouchPoints > 0)), browser: B && B.browserFamily ? B.browserFamily(navigator.userAgent) : undefined, lang: navigator.language };
   }
   function pl(fn, a, b, c) { try { if (PL && PL[fn]) PL[fn](a, b, c); } catch (e) { /* the play log must never break the game */ } }
   if (PLM && Q.get('log') !== '0') {
@@ -121,29 +122,14 @@
   // ---------- audio (ui/audio.js, owned by the audio worker; may be missing → every call is guarded) ----------
   var MUTE_Q = Q.get('mute') === '1'; // ?mute=1: tests and screenshot runs never make sound
   function au(fn, a, b) { try { var X = window.CHOOSER_AUDIO; if (X && typeof X[fn] === 'function') return X[fn](a, b); } catch (e) { /* audio must never break the game */ } return undefined; }
-  // sound control: 音 button + a small popover with mute and two volume sliders (used in the top bar and on the title)
-  function soundCtl(cls) {
-    var v = au('getVolume') || { music: 0.35, sfx: 0.5 }, m = !!au('isMuted');
-    return '<span class="sound-ctl vn-pass ' + (cls || '') + '"><button class="btn-icon vn-pass mute' + (m ? ' off' : '') + '" data-act="soundPop" data-tip="' + T('ui.sound.tip') + '">' + T('ui.sound.button') + '</button>' +
-      '<span class="sound-pop panel vn-pass" hidden><label class="sp-row vn-pass"><input type="checkbox" class="vn-pass" data-snd="mute"' + (m ? ' checked' : '') + '> ' + T('ui.sound.mute') + '</label>' +
-      '<label class="sp-row vn-pass">' + T('ui.sound.music') + '<input type="range" class="vn-pass" min="0" max="100" value="' + Math.round(v.music * 100) + '" data-snd="music"></label>' +
-      '<label class="sp-row vn-pass">' + T('ui.sound.sfx') + '<input type="range" class="vn-pass" min="0" max="100" value="' + Math.round(v.sfx * 100) + '" data-snd="sfx"></label>' +
-      (PL ? '<span class="sp-log vn-pass"><button class="btn-link vn-pass" data-act="plExport">' + T('ui.playlog.export') + '</button>' +
-        '<button class="btn-link vn-pass" data-act="plCopy" data-tip="' + T('ui.playlog.copyTip') + '">' + T('ui.playlog.copy') + '</button></span>' : '') + '</span></span>';
-  }
+  // UI-CLEAN §3: the sound controls (mute, music, sfx) live in the ☰ menu (menuHtml)
   var cueLast = {};
   // every cue is throttled per name (default 60 ms) so nothing can fire in a tight loop
   function cue(name, detail, ms) { var t = Date.now(), gap = ms == null ? 60 : ms; if (cueLast[name] && t - cueLast[name] < gap) return; cueLast[name] = t; au('cue', name, detail); }
-  // ?mute=1 mutes this page only: audio.js persists setMuted, so put the player's own stored setting back afterwards
-  function muteSession() {
-    var k = 'chooser.audio.v2', raw = null; try { raw = localStorage.getItem(k); } catch (e) { /* */ }
-    au('setMuted', true);
-    try { if (raw == null) localStorage.removeItem(k); else localStorage.setItem(k, raw); } catch (e) { /* */ }
-  }
-  if (MUTE_Q) muteSession();
+  // ?mute=1 mutes this page only: audio.js reads it itself (session-only, never written); its store is per ?profile=
   var auReady = false, sceneKey = null, sceneCtx = null;
   function audioInit() {
-    if (auReady) return; auReady = true; au('init'); if (MUTE_Q) muteSession();
+    if (auReady) return; auReady = true; au('init');
     if (sceneCtx && !introHold) au('scene', sceneCtx);
     var mb = document.querySelector('[data-act="mute"]'); if (mb) mb.classList.toggle('off', !!au('isMuted'));
   }
@@ -185,7 +171,7 @@
   function moodExpr(m) { return m == null ? 'calm' : m <= -2 ? 'sad' : m < 0 ? 'upset' : m > 0 ? 'happy' : 'calm'; }
   var MOOD_WORD_KEY = { '-2': 'ui.mood.word.m2', '-1': 'ui.mood.word.m1', '0': 'ui.mood.word.0', '1': 'ui.mood.word.1', '2': 'ui.mood.word.2' };
   function moodWord(m) { var k = m == null ? null : MOOD_WORD_KEY[String(m)]; return k ? T(k) : ''; }
-  var IC = { hp: '<i class="ic ic-hp"></i>', atk: '<i class="ic ic-atk"></i>', swords: '<i class="ic ic-swords"></i>', chain: '<i class="ic ic-chain"></i>' };
+  var IC = { hp: '<i class="ic ic-hp"></i>', atk: A.glyph('power'), /* 2026-11-14: 威力 = the power glyph (its tip says what 威力 is) */ swords: '<i class="ic ic-swords"></i>', chain: '<i class="ic ic-chain"></i>' };
 
   // ---------- image loader: ordered candidates, falls back on error (docs/ASSET-DEPOT.md) ----------
   var BAD = {};
@@ -330,9 +316,11 @@
   // statuses: buffs gold, debuffs dark + cracked; bond / corruption are already shown by the heart and the card frame
   var ST_HIDE = { debt: 1, 'bond-high': 1, 'bond-low': 1, vengeful: 1, 'vengeful-high': 1, 'vengeful-low': 1, possessed: 1 };
   var ST_BAD = { 'slow-start': 1, 'mood-low': 1, debuffed: 1, smoke: 1, clause: 1 };
-  var ST_LABEL = lazy(function () { var o = {}; ['slow-start', 'guard', 'formation', 'clause', 'luck', 'smoke', 'drum', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.label.' + k); }); return o; });
-  function stObj(s) { return typeof s === 'string' ? { id: s, label: ST_LABEL()[s] || s } : s; }
-  function isBadStatus(s) { var o = stObj(s); return !!(o.dark || o.bad || ST_BAD[o.id] || (!ST_LABEL()[o.id] && !ST_HIDE[o.id] && o.id && o.id !== 'guard')); }
+  var ST_LABEL = lazy(function () { var o = {}; ['slow-start', 'formation', 'clause', 'luck', 'smoke', 'drum', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.label.' + k); }); return o; });
+  var ST_GOOD = { tough: 1, shell: 1 };
+  function kwStatus(id) { var K = DATA.keywords && DATA.keywords.status; return (K && K[id]) || null; } // 2026-11-14 发呆 (daze): keywords.json status label / tip
+  function stObj(s) { if (typeof s !== 'string') return s; var k = kwStatus(s); return { id: s, label: ST_LABEL()[s] || (k && k.label) || s, tip: k && k.tip }; }
+  function isBadStatus(s) { var o = stObj(s); return !!(o.dark || o.bad || ST_BAD[o.id] || (!ST_LABEL()[o.id] && !ST_HIDE[o.id] && o.id && !ST_GOOD[o.id])); }
   function hasBad(list) { return (list || []).some(function (s) { return !ST_HIDE[stObj(s).id] && isBadStatus(s); }); }
   function statusChips(list, side) {
     return (list || []).map(stObj).filter(function (o) { return !ST_HIDE[o.id] && !(side === 'enemy' && ST_BAD[o.id]) ; }).map(function (o) {
@@ -359,23 +347,23 @@
     if ((!items || !items.length) && !rl) return '';
     return '<span class="bag-chip" data-tip="' + T('ui.bag.tip') + '">' + (items || []).map(function (it) { return '<img src="' + esc(A.itemIcon(it.itemId)) + '" alt="" data-tip="' + esc(it.name + '：' + it.text) + '">'; }).join('') + rl + '</span>';
   }
-  function advisorChip(a) {
+  function advisorChip(a) { // UI-CLEAN §2.1: only her face in the top bar; name, state and skill live in the tip
     if (!a) return '';
-    var gone = !a.present;
-    return '<span class="adv-chip' + (gone ? ' gone' : '') + '" data-tip="' + esc(a.combat ? '「' + a.combat.name + '」' + a.combat.text : '') + '"><span class="ac-face">' + pic(A.face(a.id, gone ? 'sad' : 'calm'), '', a.name, initialHtml(a.name)) +
-      '</span><b>' + esc(a.name) + '</b>' + (gone ? '<small>' + T('ui.advisor.gone') + '</small>' : '') + '</span>';
+    var gone = !a.present, tip = T(gone ? 'ui.advisor.chipTipGone' : a.combat ? 'ui.advisor.chipTip' : 'ui.advisor.chipTipPlain', { name: a.name, skill: a.combat ? a.combat.name : '', text: a.combat ? a.combat.text : '' });
+    return '<span class="adv-chip' + (gone ? ' gone' : '') + '" tabindex="0" data-tip="' + esc(tip) + '"><span class="ac-face">' + pic(A.face(a.id, gone ? 'sad' : 'calm'), '', a.name, initialHtml(a.name)) + '</span></span>';
   }
 
   // ---------- tooltip ----------
   function stagePt(el, ax, ay) { return A.elStagePt(el, ax, ay, stageEl); } // also right when the stage is turned (A.rectToStage)
   // data-tip = plain text; data-rich = escaped HTML (ability rows etc.). A rich tip above a card never covers the card's face:
   // it sits above the card, or below it when there is no room.
-  var hoverEl = null;
-  document.addEventListener('mouseover', function (e) {
-    var h = e.target.closest && e.target.closest('button:not(:disabled), .choice, .adv-pick, .bcard, .p-slot');
-    if (h !== hoverEl) { hoverEl = h; if (h) cue('hover', null, 90); }
-    var t = e.target.closest && e.target.closest('[data-tip], [data-rich]');
-    if (!t || !(t.dataset.tip || t.dataset.rich) || vnActive()) { tipEl.hidden = true; return; }
+  var hoverEl = null, tipFor = null, tipPinned = false;
+  function tipTarget(el) { var t = el && el.closest && el.closest('[data-tip], [data-rich]'); return t && (t.dataset.tip || t.dataset.rich) ? t : null; }
+  function hideTip() { tipEl.hidden = true; tipFor = null; tipPinned = false; }
+  // UI-CLEAN §5.2: one place shows a tip — hover, a tap on an info element, a long press on a button, keyboard focus
+  function showTip(t) {
+    if (!t || vnActive()) { hideTip(); return; }
+    tipFor = t;
     var rich = !!t.dataset.rich;
     if (rich) tipEl.innerHTML = t.dataset.rich; else tipEl.textContent = fixWords(t.dataset.tip).replace(/\*\*/g, ''); // batch6 H2-17: plain tips drop the bold marks
     tipEl.classList.toggle('rich', rich); tipEl.classList.remove('tight'); tipEl.hidden = false;
@@ -391,7 +379,33 @@
     tipEl.classList.toggle('below', below);
     var half = (tipEl.offsetWidth || 340) / 2 + 10;
     tipEl.style.left = Math.max(half, Math.min(STAGE_W - half, p.x)) + 'px'; tipEl.style.top = top + 'px';
+  }
+  document.addEventListener('mouseover', function (e) {
+    var h = e.target.closest && e.target.closest('button:not(:disabled), .choice, .adv-pick, .bcard, .p-slot');
+    if (h !== hoverEl) { hoverEl = h; if (h) cue('hover', null, 90); }
+    if (tipPinned) return; // a tapped-open tip stays until the next tap
+    var t = tipTarget(e.target); if (!t) { hideTip(); return; }
+    if (t !== tipFor || tipEl.hidden) showTip(t);
   });
+  // an info element (not a button / link / input, no data-act) opens its tip on a tap; a second tap or a tap elsewhere closes it
+  function tipInfoOnly(t) { return !(t.matches('button, a, input, select, textarea, label, [data-act]') || t.closest('button, [data-act], .bcard, .p-slot, .choice')); } // cards are controls: a touch long press shows their tip
+  document.addEventListener('click', function (e) {
+    if (tipLongFired) { tipLongFired = false; e.preventDefault(); e.stopPropagation(); return; } // the long press only showed the tip
+    var t = tipTarget(e.target);
+    if (t && tipInfoOnly(t)) { if (tipPinned && tipFor === t) hideTip(); else { showTip(t); tipPinned = !tipEl.hidden; } return; }
+    if (tipPinned) hideTip();
+  }, true);
+  // a button with a tip: a long press (450 ms) shows the tip and swallows the click (touch screens have no hover)
+  var tipLong = null, tipLongFired = false;
+  document.addEventListener('pointerdown', function (e) {
+    clearTimeout(tipLong); tipLongFired = false;
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return; // a mouse has hover; a held mouse button never loses its click
+    var t = tipTarget(e.target); if (!t || tipInfoOnly(t)) return;
+    tipLong = setTimeout(function () { showTip(t); if (!tipEl.hidden) { tipPinned = true; tipLongFired = true; } }, 450);
+  }, true);
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (n) { document.addEventListener(n, function () { clearTimeout(tipLong); }, true); });
+  document.addEventListener('focusin', function (e) { var t = tipTarget(e.target); if (t && e.target.matches && e.target.matches(':focus-visible')) showTip(t); });
+  document.addEventListener('focusout', function () { if (!tipPinned) hideTip(); });
 
   // ---------- dialogue: ONE queue for lines, markers and blocking effects ----------
   // say(lines, done): a line is the contract object { speaker, speakerId, name, text, expr } or a plain string (narration).
@@ -405,6 +419,17 @@
   }
   function say(lines, done) { (lines || []).forEach(function (l) { var n = normLine(l); if (n) vn.q.push(n); }); if (done) vn.q.push({ marker: done }); kick(); }
   function sayFx(fn) { vn.q.push({ effect: fn }); kick(); }
+  // UI-CLEAN §2.5a: drop the queued LINES up to the first marker and run it (= the talk was heard to the end). Effects are
+  // never dropped (a blocking animation must still play); the line on screen is closed and the speaker un-highlighted.
+  function vnSkipToMarker() {
+    clearInterval(vn.t); vn.typing = false; vnEl.classList.remove('typing');
+    var keep = [], it, mk = null;
+    while ((it = vn.q.shift())) { if (it.marker) { mk = it; break; } if (it.effect) keep.push(it); }
+    vn.q = keep.concat(vn.q);
+    vn.cur = null; vnEl.hidden = true; vnEl.innerHTML = ''; document.body.classList.remove('vn-on'); if (ui.onSpeak) ui.onSpeak(undefined);
+    if (mk) mk.marker();
+    kick();
+  }
   function sayP(lines) { return new Promise(function (r) { say(lines, r); }); }
   function kick() { if (!vn.cur && !vn.eff && !vn.busy) vnNext(); }
   function vnActive() { return !!(vn.cur || vn.eff || vn.q.length); }
@@ -589,15 +614,17 @@
       }, 250 + i * 300);
     });
   }
+  var STAT_GLYPH = { atk: 'power', maxHp: 'maxhp', hp: 'hp', mood: 'mood', skillLv: 'level', skillPower: 'level' };
   function statRow(c) {
     if (c.stat === 'skill') { // v2.4 [17]: only the part that changes, e.g. 「造成 2 → 3 点伤害」; the full texts as a fallback
       var unmark = function (x) { return String(x == null ? '' : x).replace(/\*\*/g, ''); }, sd = skillDiff(unmark(c.from), unmark(c.to)); // batch6 H2-17: diff the plain text
       if (sd) return '<span class="sp-row sp-skill short"><b>' + T('ui.skill.label') + '</b> ' + esc(sd.pre) + '<span class="sk-from">' + esc(sd.from) + '</span><span class="sk-arrow">→</span><span class="sk-to">' + esc(sd.to) + '</span>' + esc(sd.suf) + '</span>';
-      return '<span class="sp-row sp-skill"><b>' + T('ui.skill.label') + '</b><span class="sk-from">' + richText(c.from) + '</span><span class="sk-arrow">→</span><span class="sk-to">' + richText(c.to) + '</span></span>';
+      return '<span class="sp-row sp-skill"><b>' + T('ui.skill.label') + '</b><span class="sk-from">' + richText(c.from) + '</span><span class="sk-to"><span class="sk-arrow">→</span>' + richText(c.to) + '</span></span>'; // user 2026-11-14: 「→ B」 on one line under A
     }
     var down = c.to < c.from, f = c.stat === 'mood' ? moodWord(c.from) || c.from : c.from, t = c.stat === 'mood' ? moodWord(c.to) || c.to : c.to;
     if (c.stat === 'skillLv') { f = 'Lv' + c.from; t = 'Lv' + c.to; } // DESIGN-skill-level: 「技能等级 Lv1 → Lv2」
-    return '<span class="sp-row' + (down ? ' down' : c.to > c.from ? ' up' : '') + '"><b>' + esc(STAT_NAME()[c.stat] || c.stat) + '</b> ' + esc(f) + ' → ' + esc(t) + '</span>';
+    var g = STAT_GLYPH[c.stat] ? A.glyph(STAT_GLYPH[c.stat]) : ''; // 2026-11-14: icon + numbers, the word in the icon's tip
+    return '<span class="sp-row' + (down ? ' down' : c.to > c.from ? ' up' : '') + '"><b>' + (g || esc(STAT_NAME()[c.stat] || c.stat)) + '</b> ' + esc(f) + ' → ' + esc(t) + '</span>';
   }
   function skillDiff(a, b) { // common prefix / suffix of the two action texts (bracketed formulas dropped), cut to the clause
     var strip = function (x) { return String(x || '').replace(/（[^（）]*）/g, '').replace(/\([^()]*\)/g, '').trim(); };
@@ -611,9 +638,11 @@
     var pre = a.slice(0, i).split(/[，；。,;]/).pop(), suf = a.slice(a.length - j).split(/[，；。,;]/)[0];
     return { pre: pre, from: from, to: to, suf: suf };
   }
-  function previewHtml(list) { return list && list.length ? '<span class="stat-prev">' + list.map(statRow).join('') + '</span>' : ''; }
+  // 2026-11-14 试玩 #6/#7: each change once — a 生命上限 change carries the current-生命 one along (show only the 上限 row), and
+  // the same row twice (same stat, same from → to) is one row. Pure: A.statRows (tests/fb1114-ui.test.cjs)
+  function previewHtml(list) { list = A.statRows(list); return list.length ? '<span class="stat-prev">' + list.map(statRow).join('') + '</span>' : ''; }
   function statToast(ev) {
-    var ch = (ev.changes || []).filter(function (c) { return !(c.stat === 'mood' && ev.id === 'leader'); }); if (!ch.length) return;
+    var ch = A.statRows((ev.changes || []).filter(function (c) { return !(c.stat === 'mood' && ev.id === 'leader'); })); if (!ch.length) return;
     var who = isLeader(ev.id) ? T('ui.name.you') : (member(ev.id) || {}).name || nameOf(ev.id);
     var d = document.createElement('div'); d.className = 'stat-toast';
     d.innerHTML = '<b class="st-who">' + esc(who) + '</b>' + ch.map(statRow).join('');
@@ -630,7 +659,16 @@
   function sceneChanged(pv, nv) { return !!pv && !!nv && (pv.phase !== nv.phase || (pv.storyId || null) !== (nv.storyId || null) || (pv.level || 0) !== (nv.level || 0)); }
   // §E15: entering L3 holds the black longer before the L3 story / battle intro
   function fadeFx(longHold) { return stages([[function () { fadeHold = longHold ? 1100 : 60; blackOn(); }, REDUCED ? 60 : 420]]); }
-  function fadeThen(fn, longHold) { app.classList.add('stale'); fadeHold = longHold ? 1100 : 60; blackOn(); setTimeout(function () { app.classList.remove('stale'); fn(); }, REDUCED ? 60 : 420); }
+  // 2026-11-14 试玩 #5: toScene (scene intro / prep → battle): never through black — the old screen's content fades away over its
+  // background, the battle screen fades in over the battle background (render swaps the bg), then the foes walk in (pre-enter)
+  function fadeThen(fn, longHold, toScene) {
+    app.classList.add('stale'); fadeHold = longHold ? 1100 : 60;
+    if (toScene && !REDUCED) app.classList.add('scene-out'); else if (!toScene) blackOn();
+    setTimeout(function () {
+      app.classList.remove('stale', 'scene-out'); fn();
+      if (toScene && !REDUCED) { app.classList.add('scene-in'); setTimeout(function () { app.classList.remove('scene-in'); }, 700); }
+    }, REDUCED ? 60 : 420);
+  }
   var SILENT = { card: 1, sacrifice: 1, pleased: 1, displeased: 1, phase: 1, chain: 1, end: 1 };
   function eventsToQueue(evs, nextView, opts) {
     var moods = [], skipDark = opts && opts.skipDark, trainEv = null;
@@ -704,7 +742,7 @@
   // v2.4 [2] new game: fade to white, the caption, then fade into the guild
   var njPending = false;
   function newJourney(fn) {
-    var d = document.createElement('div'); d.className = 'nj-white'; d.innerHTML = '<span class="nj-cap">' + T('ui.newJourney.caption') + '</span>'; stageEl.appendChild(d);
+    var d = document.createElement('div'); d.className = 'nj-white'; var nm = String(prefs.leaderName || '').trim(); d.innerHTML = '<span class="nj-cap">' + (nm ? '<b class="nj-hello">' + T('ui.newJourney.hello', { name: esc(nm) }) + '</b>' : '') + T('ui.newJourney.caption') + '</span>'; stageEl.appendChild(d); // 2026-11-14 user: greet the leader by name
     var TS = REDUCED ? 0.2 : 1; void d.offsetWidth; d.classList.add('on');
     setTimeout(function () { d.classList.add('cap'); }, 700 * TS);
     njPending = true;
@@ -734,7 +772,8 @@
     Object.keys(action).forEach(function (k) { if (k !== 'meta' && k !== 'type') choice[k] = action[k]; });
     var entry = { seed: prevRun.seed, seq: (prevRun.history || []).length, level: prevRun.level, phase: prevRun.phase, type: action.type, choice: choice, ms: action.meta.ms, switches: action.meta.switches, at: Date.now(), stub: STUB };
     Object.keys(action.meta).forEach(function (k) { if (k !== 'ms' && k !== 'switches') entry[k] = action.meta[k]; });
-    list.push(entry); if (!lsSet(TKEY, list)) notice(T('ui.notice.telemetryFailed'));
+    list.push(entry); if (list.length > 3000) list.splice(0, list.length - 3000); // 2026-11-14: bounded (it was read + written whole on every decision)
+    if (!lsSet(TKEY, list)) notice(T('ui.notice.telemetryFailed'));
   }
 
   // ---------- act ----------
@@ -750,10 +789,10 @@
     pl('act', action, prevView, nv); // 游玩记录: the action + key moments read from the new view (pure bookkeeping)
     // battle rounds animate on the battle screen itself (their events ride along in battle.lastRound)
     if (nv.battle && nv.battle.lastRound && (nv.phase === 'battle' || nv.phase === 'battleResult' || prevView.phase === 'battle' || prevView.phase === 'prep')) {
-      if ((prevView.phase === 'prep' || prevView.phase === 'story') && nv.phase !== prevView.phase) fadeThen(render); else render(); // §E3 camp / scene intro → battle fades through black
+      if ((prevView.phase === 'prep' || prevView.phase === 'story') && nv.phase !== prevView.phase) fadeThen(render, false, true); else render(); // §E3 camp / scene intro → battle: fades to the battle scene (試玩 #5: not black)
       return true;
     }
-    app.classList.add('stale'); tipEl.hidden = true;
+    app.classList.add('stale'); hideTip();
     var pre = opts && opts.pre ? opts.pre(prevView, nv) : null;
     if (pre) sayFx(pre);
     view = nv; // speakers resolve against the new state (new members, the advisor) …
@@ -784,7 +823,9 @@
       back.style.backgroundImage = src ? 'url("' + src + '")' : ''; back.classList.toggle('bg-fallback', !src); back.dataset.scene = id;
       back.classList.toggle('lores', /\blores\b/.test(cls || '')); // G1 #6: a low-res picture blown up to 1080p: soft blur + grain + vignette
       back.classList.toggle('cold', /\bcold\b/.test(cls || '')); // 修复 2026-11-13: the act-1 fire standing in for a crypt / night camp gets a cold tint
-      back.classList.add('front'); bgFront.classList.remove('front'); bgFront = back;
+      var old = bgFront; back.classList.add('front'); old.classList.remove('front'); bgFront = back;
+      // 2026-11-14 memory: once the cross-fade is over, the hidden layer lets go of its 1920×1080 picture (it was held until the next scene)
+      clearTimeout(old._bgFree); old._bgFree = setTimeout(function () { if (old !== bgFront) { old.style.backgroundImage = ''; delete old.dataset.scene; } }, 1100);
     }
   }
   var RAIN_STORIES = { sacrificeIntro: 1, secondSacrificeIntro: 1, aftermath: 1, sacrificeRandomTaken: 1, sacrificeRandomTakenOne: 1 };
@@ -812,25 +853,28 @@
     cv.classList.toggle('on', level > 0);
     if (level > 0 && !rain.raf && !REDUCED) rain.raf = requestAnimationFrame(rainTick);
   }
-  function rainTick() {
+  function rainTick(now) {
+    // 2026-11-14 perf: ~30 fps is plenty for rain (a full-stage canvas); the step scales with the time passed
+    if (rain.level > 0 && rain.last && now - rain.last < 30) { rain.raf = requestAnimationFrame(rainTick); return; }
+    var k = rain.last && now ? Math.min(3, (now - rain.last) / 16.7) : 1; rain.last = now || 0;
     var c = rain.ctx, want = Math.round(rain.level * 260);
     while (rain.drops.length < want) rain.drops.push({ x: Math.random() * 2100 - 90, y: Math.random() * -1080, v: 22 + Math.random() * 20, l: 20 + Math.random() * 34, a: 0.12 + Math.random() * 0.3 });
     if (rain.drops.length > want) rain.drops.length = want;
     c.clearRect(0, 0, STAGE_W, STAGE_H); c.lineWidth = 1.3;
     rain.drops.forEach(function (d) {
-      d.y += d.v; d.x -= d.v * 0.18;
+      d.y += d.v * k; d.x -= d.v * 0.18 * k;
       if (d.y > STAGE_H - Math.random() * 160) { if (Math.random() < 0.3) rain.splash.push({ x: d.x, y: d.y, r: 1, a: 0.35 }); d.y = -40 - Math.random() * 200; d.x = Math.random() * 2100 - 90; }
       c.strokeStyle = 'rgba(205,215,240,' + d.a + ')'; c.beginPath(); c.moveTo(d.x, d.y); c.lineTo(d.x + d.l * 0.18, d.y - d.l); c.stroke();
     });
-    rain.splash = rain.splash.filter(function (s) { s.r += 1.4; s.a -= 0.03; if (s.a <= 0) return false; c.strokeStyle = 'rgba(205,215,240,' + s.a + ')'; c.beginPath(); c.ellipse(s.x, s.y, s.r * 2.2, s.r * 0.6, 0, 0, Math.PI * 2); c.stroke(); return true; });
-    if (rain.level > 0) rain.raf = requestAnimationFrame(rainTick); else { rain.raf = 0; c.clearRect(0, 0, STAGE_W, STAGE_H); rain.drops = []; }
+    rain.splash = rain.splash.filter(function (s) { s.r += 1.4 * k; s.a -= 0.03 * k; if (s.a <= 0) return false; c.strokeStyle = 'rgba(205,215,240,' + s.a + ')'; c.beginPath(); c.ellipse(s.x, s.y, s.r * 2.2, s.r * 0.6, 0, 0, Math.PI * 2); c.stroke(); return true; });
+    if (rain.level > 0) rain.raf = requestAnimationFrame(rainTick); else { rain.raf = 0; rain.last = 0; c.clearRect(0, 0, STAGE_W, STAGE_H); rain.drops = []; rain.splash = []; }
   }
 
   // ---------- frame ----------
-  var anim = { token: 0, skip: false }, shownPhase = null;
+  var anim = { token: 0, skip: false }, shownPhase = null, setupOpen = false; // setupOpen: UI-CLEAN §4 the 团长设定 screen (before createRun)
   function render() {
-    clearTimers(); anim.token++; anim.skip = false; flushWaits(); fxLayer.innerHTML = ''; tipEl.hidden = true; njPending = false;
-    if (!run) { view = null; vnClear(); applyTheme(null); app.innerHTML = titleHtml(); pl('screen', 'title', null); return; }
+    clearTimers(); anim.token++; anim.skip = false; flushWaits(); fxLayer.innerHTML = ''; hideTip(); njPending = false;
+    if (!run) { view = null; vnClear(); applyTheme(null); app.innerHTML = setupOpen ? setupHtml() : titleHtml(); pl('screen', setupOpen ? 'setup' : 'title', null); return; }
     try { view = E.view(DATA, run); } catch (e) { view = null; vnClear(); app.innerHTML = brokenHtml(e); pl('event', 'broken', { msg: String(e && e.message).slice(0, 300) }); return; }
     metaOnEnd(view);
     var key = (run.history || []).length + ':' + view.phase + ':' + (view.leaderStep || view.interviewStep || ''), entering = key !== screenKey;
@@ -846,19 +890,57 @@
     shownPhase = name;
     var s = SCREENS[name];
     app.className = 'screen-host phase-' + name;
-    app.innerHTML = '<main class="screen screen-' + esc(name) + '">' + (s ? s.html(view) : '<div class="panel">' + T('ui.screen.unknownPhase', { phase: esc(view.phase) }) + '</div>') + '</main>' + topbar(view, s && s.plate ? s.plate(view) : null);
+    app.innerHTML = '<main class="screen screen-' + esc(name) + '">' + (s ? s.html(view) : '<div class="panel">' + T('ui.screen.unknownPhase', { phase: esc(view.phase) }) + '</div>') + '</main>' + topbar(view, s && s.plate ? s.plate(view) : null, s && s.topExtra ? s.topExtra(view) : '');
     if (s && s.after) s.after(view);
     if (entering && s && s.enter) s.enter(view);
     blackOffSoon(); // §E3: the new screen is up under the black → fade back in
     if (flyQ.length) flyItems();
   }
-  function topbar(v, custom) {
-    return '<header class="topbar">' + (custom != null ? custom : plate(levelText(v))) + '<span class="spacer"></span>' +
-      (STUB ? '<span class="badge" data-tip="' + (realOK ? '?stub=1' : T('ui.topbar.stubTip')) + '">' + T('ui.topbar.stub') + '</span>' : '') + (PROFILE ? '<span class="badge">' + T('ui.topbar.profile', { name: esc(PROFILE) }) + '</span>' : '') + (v.difficulty ? '<span class="diff-badge t' + esc(v.difficulty.id) + '" data-tip="' + T('ui.topbar.difficultyTip') + '">' + T('ui.topbar.difficulty', { name: esc(v.difficulty.name) }) + '</span>' : '') +
-      teamBtn(v) + keysChip(v.keys) + cheatKeysBtn(v) + cheatBtn(v) + bagChip(v.items, v.relics || (v.run && v.run.relics)) + advisorChip(v.advisor) +
-      soundCtl() +
-      '<button class="btn-icon vn-pass" data-act="home" data-tip="' + T('ui.topbar.homeTip') + '">⌂</button></header>';
+  // UI-CLEAN §2.0 (user: 方案 A): the top bar is only ☰; the item group (team / bag / advisor face / keys) only where it is used.
+  // TOPBAR_PLATE = true switches to 方案 B (the level plate top-left, the difficulty in its tip).
+  var TOPBAR_PLATE = false;
+  function showItems(v) { return !!v && (v.phase === 'battle' || v.phase === 'reward' || v.phase === 'debuff' || (v.phase === 'prep' && !v.bell)); }
+  function topbar(v, custom, extra) {
+    var items = showItems(v), pl8 = '';
+    if (TOPBAR_PLATE) pl8 = '<span class="tb-plate"' + (v.difficulty ? ' data-tip="' + esc(T('ui.topbar.difficultyTip') + ' ' + T('ui.topbar.difficulty', { name: v.difficulty.name })) + '"' : '') + '>' + (custom != null ? custom : plate(levelText(v))) + '</span>';
+    return '<header class="topbar">' + pl8 + '<span class="spacer"></span>' +
+      (items ? teamBtn(v) + bagChip(v.items, v.relics || (v.run && v.run.relics)) + advisorChip(v.advisor) : '') + (items || v.bell ? keysChip(v.keys) : '') +
+      (extra || '') + menuBtn() + '</header>';
   }
+  // ---------- ☰ menu (UI-CLEAN §3): one button in the same top-right spot on every screen, one panel in #modal ----------
+  function menuBtn(cls) { return '<button class="btn-icon menu-btn vn-pass' + (cls ? ' ' + cls : '') + '" data-act="menu" aria-label="' + T('ui.menu.label') + '">☰</button>'; }
+  var menuTab = ''; // ☰: which group tab is open, by its text key (kept while the page lives; the tab list differs title vs run, so not an index)
+  function mnGroup(key, body, cls) { return body ? '<section class="mn-group' + (cls ? ' ' + cls : '') + '"><h3>' + T(key) + '</h3><div class="mn-body">' + body + '</div></section>' : ''; }
+  function menuHtml() {
+    var v = run ? view : null, m = !!au('isMuted'), vol = au('getVolume') || { music: 0.35, sfx: 0.5 }, rk = rankText(loadMeta());
+    var head = v ? '<div class="mn-head"><span class="mn-chip">' + (v.level ? T('ui.level.no', { n: esc(v.level) }) : T('ui.level.guild')) + '</span>' +
+      (v.difficulty ? '<span class="mn-chip">' + T('ui.topbar.difficulty', { name: esc(v.difficulty.name) }) + '</span>' : '') +
+      (rk ? '<span class="mn-chip">' + T('ui.title.rank') + ' <b>' + esc(rk) + '</b></span>' : '') + keysChip(v.keys) + '</div>' : '';
+    var team = v && (v.party || []).length ? '<button class="btn btn-secondary" data-act="viewTeam">' + T('ui.team.view') + '</button>' : '';
+    var sound = '<label class="mn-row"><input type="checkbox" data-snd="mute"' + (m ? ' checked' : '') + '> ' + T('ui.sound.mute') + '</label>' +
+      '<label class="mn-row"><span class="mn-k">' + T('ui.sound.music') + '</span><input type="range" min="0" max="100" value="' + Math.round(vol.music * 100) + '" data-snd="music"></label>' +
+      '<label class="mn-row"><span class="mn-k">' + T('ui.sound.sfx') + '</span><input type="range" min="0" max="100" value="' + Math.round(vol.sfx * 100) + '" data-snd="sfx"></label>';
+    var game = '<div class="mn-row"><span class="mn-k">' + T('ui.menu.speed') + '</span>' + [1, 2, 3].map(function (n) { return '<button class="pill-btn' + (prefs.speed === n ? ' on' : '') + '" data-act="speed" data-s="' + n + '">×' + n + '</button>'; }).join('') + '</div>' +
+      '<label class="mn-row"><input type="checkbox" data-pref="autoCont"' + (prefs.autoCont ? ' checked' : '') + '> ' + T('ui.menu.autoCont') + '</label><p class="mn-note">' + T('ui.menu.autoContNote') + '</p>' +
+      (run ? '' : '<div class="mn-row"><button class="btn btn-secondary" data-act="replayIntro">' + T('ui.title.replayIntro') + '</button></div>') +
+      (window.CHOOSER_FGUIDE ? '<div class="mn-row"><button class="btn btn-secondary" data-act="fguide">' + T('ui.fguide.menu') + '</button></div>' : ''); // 布阵教学: reopen the pages
+    var log = (PL ? '<div class="mn-row"><button class="btn btn-secondary" data-act="plExport">' + T('ui.playlog.export') + '</button>' +
+      '<button class="btn btn-secondary" data-act="plCopy" data-tip="' + T('ui.playlog.copyTip') + '">' + T('ui.playlog.copy') + '</button></div>' : '') + '<p class="mn-note">' + T('ui.title.localOnly') + '</p>';
+    var lang = '<div class="mn-row"><button class="pill-btn on" disabled>' + T('ui.menu.lang.zh') + '</button><span class="mn-note">' + T('ui.menu.lang.soon') + '</span></div>';
+    var home = run ? '<div class="mn-row"><button class="btn btn-secondary" data-act="menuHome">' + T('ui.menu.home') + '</button></div>' : '';
+    var cheat = NOCHEAT ? '' : (!run ? '<button class="btn-ghost cheat-keys" data-act="newKeys" data-tip="' + T('ui.title.newKeysTip') + '">' + T('ui.title.newKeys') + '</button>' :
+      cheatKeysBtn(v) + cheatBtn(v) + cheatLostBtn()) + // cheatLostBtn: only when the engine can re-score this lost battle
+      (STUB ? '<p class="mn-note" data-tip="' + (realOK ? '?stub=1' : T('ui.topbar.stubTip')) + '">' + T('ui.title.devStub') + (realOK ? '' : T('ui.title.devStubNotV2')) + '</p>' : '') +
+      (PROFILE ? '<p class="mn-note">' + T('ui.topbar.profile', { name: esc(PROFILE) }) + '</p>' : '');
+    // 2026-11-14 user: left side = the group tabs, right side = one group's content (a single tall column overflowed the stage)
+    var gs = [['ui.menu.group.team', team], ['ui.menu.group.sound', sound], ['ui.menu.group.game', game], ['ui.menu.group.log', log], ['ui.menu.group.lang', lang], ['ui.menu.group.cheat', cheat, 'mn-cheat']].filter(function (g) { return g[1]; });
+    var on = Math.max(0, gs.map(function (g) { return g[0]; }).indexOf(menuTab));
+    var tabs = gs.map(function (g, i) { return '<button class="mn-tab' + (i === on ? ' on' : '') + (g[2] ? ' ' + g[2] : '') + '" data-act="menuTab" data-i="' + i + '" data-k="' + g[0] + '">' + T(g[0]) + '</button>'; }).join('');
+    var pages = gs.map(function (g, i) { return '<div class="mn-page" data-i="' + i + '"' + (i === on ? '' : ' hidden') + '>' + mnGroup(g[0], g[1], g[2]) + '</div>'; }).join('');
+    return '<h2>' + T('ui.menu.title') + '</h2>' + head + '<div class="mn-split"><nav class="mn-side">' + tabs + '<span class="spacer"></span>' + home +
+      '<button class="btn btn-primary" data-act="modalCancel">' + T('ui.common.close') + '</button></nav><div class="mn-main">' + pages + '</div></div>';
+  }
+  function openMenu() { hideTip(); modal(menuHtml()); modalEl.classList.add('vn-pass', 'menu-open'); var p = modalEl.querySelector('.panel'); if (p) p.classList.add('menu-panel'); }
   // v2.4 [10] 查看队伍 on every choice screen (reward, debuff, the campfire choice / explore / train)
   function teamBtn(v) {
     if (!v || !(v.party || []).length) return '';
@@ -875,7 +957,7 @@
   function keysChip(k) {
     if (!k) return '';
     var got = KEY_GLYPH.filter(function (g) { return k[g[0]]; });
-    return got.length ? '<span class="keys-chip">' + got.map(function (g) { return '<i class="key-g kg-' + g[1] + '" data-key="' + g[0] + '" data-tip="' + esc(T(g[2])) + '"></i>'; }).join('') + '</span>' : '';
+    return got.length ? '<span class="keys-chip">' + got.map(function (g) { return '<span class="key-hit" tabindex="0" data-key="' + g[0] + '" data-tip="' + esc(T(g[2])) + '"><i class="key-g kg-' + g[1] + '"></i></span>'; }).join('') + '</span>' : '';
   }
   // playtest cheat (engine action cheatKeys): any phase of a run; ?nocheat=1 hides both cheats
   var cheatKeysBroken = false;
@@ -888,18 +970,24 @@
   var cheatBroken = false;
   function cheatBtn(v) {
     if (NOCHEAT || cheatBroken || !v || (v.phase !== 'prep' && v.phase !== 'battle')) return '';
-    return '<span class="cheat vn-pass"><button class="btn-ghost vn-pass" data-act="cheat">' + T('ui.cheat.win') + '</button>' +
-      '<span class="cheat-pop panel" id="cheatPop" hidden>' + T('ui.cheat.winAsk') + '<button class="btn-ghost vn-pass" data-act="cheatYes">' + T('ui.common.ok') + '</button><button class="btn-ghost vn-pass" data-act="cheatNo">' + T('ui.cheat.never') + '</button></span></span>';
+    return '<button class="btn-ghost cheat-keys vn-pass" data-act="cheat">' + T('ui.cheat.win') + '</button>';
   }
+  // UI-CLEAN §2.2: the title is the logo, the fairy, 继续冒险 (with a save) / 开始冒险 and ☰ — nothing else
   function titleHtml() {
     var s = loadSave(), btns = [];
-    if (s) btns.push('<button class="btn btn-primary btn-lg" data-act="continue">' + T('ui.title.continue') + (s.level ? '<small>' + T('ui.level.no', { n: esc(s.level) }) + '</small>' : '') + '</button>');
-    btns.push('<button class="btn btn-lg ' + (s ? 'btn-secondary' : 'btn-primary') + '" data-act="new">' + T(s ? 'ui.title.newRun' : 'ui.title.start') + '</button>');
-    return '<div class="title">' + soundCtl('on-title') + '<button class="title-fairy" data-act="fairyPoke" aria-label="' + T('ui.name.fairy') + '"' + (tfOff && (tfOff.x || tfOff.y) ? ' style="transform:translate(' + tfOff.x + 'px,' + tfOff.y + 'px)"' : '') + '><span class="tf-bob"><span class="tf-tilt"><span class="tf-form tf-n">' + fairyPic('fairy', 'stand-img', T('ui.name.fairy')) + '</span><span class="tf-form tf-d" aria-hidden="true">' + fairyPic('fairy-demon', 'stand-img', '') + '</span></span></span><span class="tf-hit"></span></button>' +
-      (NOCHEAT ? '' : '<button class="btn-ghost title-cheat" data-act="newKeys" data-tip="' + T('ui.title.newKeysTip') + '">' + T('ui.title.newKeys') + '</button>') +
+    if (s) btns.push('<button class="btn btn-primary btn-lg" data-act="continue">' + T('ui.title.continue') + '</button>');
+    btns.push('<button class="btn btn-lg ' + (s ? 'btn-secondary' : 'btn-primary') + '" data-act="new">' + T('ui.title.start') + '</button>');
+    btns.push('<button class="btn btn-lg btn-secondary" data-act="menu">' + T('ui.title.options') + '</button>'); // 2026-11-14 user: 选项 sits under 开始冒险 on the title (no corner ☰ here)
+    return '<div class="title">' + '<button class="title-fairy" data-act="fairyPoke" aria-label="' + T('ui.name.fairy') + '"' + (tfOff && (tfOff.x || tfOff.y) ? ' style="transform:translate(' + tfOff.x + 'px,' + tfOff.y + 'px)"' : '') + '><span class="tf-bob"><span class="tf-tilt"><span class="tf-form tf-n">' + fairyPic('fairy', 'stand-img', T('ui.name.fairy')) + '</span><span class="tf-form tf-d" aria-hidden="true">' + fairyPic('fairy-demon', 'stand-img', '') + '</span></span></span><span class="tf-hit"></span></button>' +
       '<div class="title-logo"><h1 class="logo"><span class="l1">' + T('ui.title.logo1') + '</span><span class="l2">' + T('ui.title.logo2') + '</span></h1></div>' +
-      '<div class="title-menu"><label class="title-name" for="leaderName"><span class="tn-k">' + T('ui.title.leaderName') + '</span><span class="tn-row"><input id="leaderName" maxlength="8" autocomplete="off" spellcheck="false" value="' + esc(prefs.leaderName || '') + '" placeholder="' + T('ui.title.leaderNamePlaceholder') + '"><button class="tn-dice" data-act="randName" data-tip="' + T('ui.title.randNameTip') + '" aria-label="' + T('ui.title.randNameLabel') + '">🎲</button></span></label><div class="menu">' + btns.join('') + '</div>' +
-      (STUB ? '<p class="small dim">' + T('ui.title.devStub') + (realOK ? '（?stub=1）' : T('ui.title.devStubNotV2')) + '</p>' : '') + (rankText(loadMeta()) ? '<p class="title-rank">' + T('ui.title.rank') + ' <b>' + esc(rankText(loadMeta())) + '</b></p>' : '') + '<p class="small dim">' + T('ui.title.localOnly') + '<button class="btn-link" data-act="replayIntro">' + T('ui.title.replayIntro') + '</button></p></div></div>';
+      '<div class="title-menu"><div class="menu">' + btns.join('') + '</div></div></div>';
+  }
+  // UI-CLEAN §4: 团长设定 — a UI-only screen between the title and createRun (the name is in the run from the first line)
+  function setupHtml() {
+    return '<div class="title setup-screen">' + menuBtn('on-title') + '<div class="lg-stand">' + pic(A.portrait('leader'), 'stand-img', '', crestHtml()) + '</div>' +
+      '<div class="setup-form panel">' + heading(T('ui.setup.title'), T('ui.setup.sub')) +
+      '<label class="title-name" for="leaderName"><span class="tn-k">' + T('ui.setup.leaderName') + '</span><span class="tn-row"><input id="leaderName" maxlength="8" autocomplete="off" spellcheck="false" value="' + esc(prefs.leaderName || '') + '" placeholder="' + T('ui.setup.leaderNamePlaceholder') + '"><button class="tn-dice" data-act="randName" data-tip="' + T('ui.setup.randNameTip') + '" aria-label="' + T('ui.setup.randNameLabel') + '">🎲</button></span></label>' +
+      '<div class="row setup-row"><button class="btn btn-secondary" data-act="setupBack">' + T('ui.setup.back') + '</button><button class="btn btn-primary btn-lg" data-act="setupGo">' + T('ui.setup.go') + '</button></div></div></div>';
   }
   function brokenHtml(e) {
     return '<div class="title"><div class="title-menu broken panel"><h2>' + T('ui.title.broken') + '</h2><p class="small dim">' + esc(e && e.message) + '</p>' +
@@ -1206,13 +1294,15 @@
       (v.interviewStep === 'hire' && v.sided === c.id ? '<span class="iv-sided" data-tip="' + T('ui.interview.sidedTip') + '">' + T('ui.interview.sided') + '</span>' : '') + rowsHtml(c) + '</div></div>';
   }
   SCREENS.interview = {
+    // UI-CLEAN §2.5a: 「跳过剧情」 left of ☰ while the intros / topic talk play (not her reaction: that carries the mood fx)
+    topExtra: function () { return '<button class="btn-ghost iv-skip vn-pass" data-act="ivSkip" id="ivSkip" hidden>' + T('ui.interview.skipTalk') + '</button>'; },
     plate: function (v) { var role = v.pair[0] && v.pair[0].role; return plate(T('ui.interview.plate') + '<small>' + (v.roundTotal ? T('ui.interview.roundOfTotal', { round: esc(v.round), total: esc(v.roundTotal), role: esc(ROLE_NAME()[role] || '') }) : T('ui.interview.round', { round: esc(v.round), role: esc(ROLE_NAME()[role] || '') })) + '</small>'); },
     html: function (v) {
       var side = v.interviewStep === 'side' && v.conflict, opts = side ? v.conflict.options : v.pair.map(function (c) { return { id: c.id }; });
       var btns = opts.map(function (o, i) {
         var n = nameOf(o.id);
         // v2.4 [7] the side step: parchment speech bubbles beside each speaker; the hire step: big portrait buttons
-        return side ? '<button class="iv-quote iq-' + (i ? 'right' : 'left') + '" data-act="side" data-id="' + esc(o.id) + '" data-opt="side:' + esc(o.id) + '"><span class="iq-who">' + esc(n) + '：</span><q>' + esc(o.label || '……') + '</q>' + (o.effect ? '<span class="iq-eff" style="display:block;font-size:var(--fs-s);opacity:.85;margin-top:2px">' + esc(o.effect) + '</span>' : '') + (o.against ? '<span class="iq-eff iq-against" style="display:block;font-size:var(--fs-s);opacity:.7">' + esc(o.against) + '</span>' : '') + '<span class="iq-pick">' + T('ui.interview.agree') + '</span></button>'
+        return side ? '<button class="iv-quote iq-' + (i ? 'right' : 'left') + '" data-act="side" data-id="' + esc(o.id) + '" data-opt="side:' + esc(o.id) + '"><span class="iq-who">' + esc(n) + '：</span><q>' + esc(o.label || '……') + '</q>' + (o.effect ? '<span class="iq-eff">' + esc(o.effect) + '</span>' : '') + (o.against ? '<span class="iq-eff iq-against">' + esc(o.against) + '</span>' : '') + '<span class="iq-pick">' + T('ui.interview.agree') + '</span></button>'
           : '<button class="bigchoice hire-btn ' + (i ? 'btn btn-secondary' : 'btn btn-primary') + '" data-act="hire" data-id="' + esc(o.id) + '" data-opt="hire:' + esc(o.id) + '"><span class="hb-face">' + pic(A.face(o.id, 'happy'), '', n, initialHtml(n)) + '</span><span>' + T('ui.interview.invite', { name: esc(n) }) + '</span></button>';
       }).join('');
       if (side) btns = '<div class="iq-head"><span>' + T('ui.interview.whoAgree') + '</span></div>' + btns;
@@ -1255,7 +1345,8 @@
     ui.ivReady = false; // a re-render (any cause) keeps the choices up once the talk is over
     var st0 = $('ivStage'), ti0 = $('ivTitle'); if (st0) st0.classList.remove('ready'); if (ti0) ti0.hidden = true; // feedback-1113 #4 (also on 再听一遍)
     app.querySelectorAll('.iv-side.peek').forEach(function (el) { el.classList.remove('peek'); });
-    say(lines, function () { ui.ivReady = true; var c = $('ivChoices'), u = $('ivUnder'), st = $('ivStage'), ti = $('ivTitle'); if (c) c.hidden = false; if (u) u.hidden = false; if (st) st.classList.add('ready'); if (ti) ti.hidden = false; });
+    var sk = $('ivSkip'); if (sk) sk.hidden = !lines.length;
+    say(lines, function () { ui.ivReady = true; var sk1 = $('ivSkip'); if (sk1) sk1.hidden = true; var c = $('ivChoices'), u = $('ivUnder'), st = $('ivStage'), ti = $('ivTitle'); if (c) c.hidden = false; if (u) u.hidden = false; if (st) st.classList.add('ready'); if (ti) ti.hidden = false; });
   }
 
   // ---------- prep = the campfire rest: a small talk around the fire, then the formation and 出发 ----------
@@ -1266,12 +1357,13 @@
       '<div class="uc-art">' + pic(art.list, 'uc-img', m.name, art.fb) + roleBadge(m.role, 'uc-role') + '<span class="uc-slot" data-tip="' + T('ui.card.slotTip', { n: i + 1 }) + '"><b>' + (i + 1) + '</b></span>' + moodFace(m) + bondMark(m) + '</div>' +
       '<div class="uc-body"><div class="uc-name">' + esc(isLeader(m) ? (m.name && m.name !== T('ui.name.leader') ? m.name : T('ui.name.you')) : m.name) + '</div><div class="uc-stats"><span data-tip="' + T('ui.card.hpTip') + '">' + IC.hp + ' ' + esc(m.hp != null && m.hp !== m.maxHp ? m.hp + '/' + m.maxHp : m.maxHp) + '</span><span>' + IC.atk + ' ' + esc(m.atk) + '</span></div>' +
       '<div class="uc-chips">' + (o.wounded ? '<span class="chip bad wound" data-tip="' + T('ui.card.woundTip') + '">' + T('ui.card.wound') + '</span>' : '') + statusChips(m.statuses) + '</div></div>' +
+      (o.orderNo ? '<span class="order-no" aria-hidden="true" data-tip="' + T('ui.card.slotTip', { n: i + 1 }) + '">' + (i + 1) + '</span>' : '') +
       (o.moves ? '<div class="uc-moves"><button data-act="move" data-i="' + i + '" data-d="-1"' + (i === 0 ? ' disabled' : '') + ' data-tip="' + T('ui.card.moveLeftTip') + '">◀</button><button data-act="move" data-i="' + i + '" data-d="1"' + (i === n - 1 ? ' disabled' : '') + ' data-tip="' + T('ui.card.moveRightTip') + '">▶</button></div>' : '') + (o.moves && typeof comboTab === 'function' ? comboTab(m) : '') + '</div>';
   }
   function campLines(v) { return (v.events || []).filter(function (e) { return e && e.kind === 'line' && e.key === 'campfire'; }); }
   function bellLines(v) { return (v.events || []).filter(function (e) { return e && e.kind === 'line' && /^bell/i.test(e.key || ''); }); }
   function woundedNow(v) { return v.wounded != null ? !!v.wounded : !!(run && run.wounded); }
-  function bellRing() { return '<div class="bell-ring" id="bellRing" aria-hidden="true"><i></i><i></i><i></i><span class="bell-dot"></span></div>'; }
+  function bellRing() { return '<div class="bell-ring" id="bellRing" aria-hidden="true" data-tip="' + A.bellTip() + '"><i></i><i></i><i></i><span class="bell-dot"></span></div>'; }
   function ringBell() { var r = $('bellRing'); if (r) pulse(r, 'ring', 3200); cue('bell', { act: actNo() }, 0); }
   // ---------- v2.3 §E4 the campfire choice: 休息 / 探索 / 锻炼 → (explore: keep 1 of 2 | train: who → her talk → 3 bonuses) → formation ----------
   function campStep(v) { return v && v.camp && v.camp.step ? v.camp.step : 'done'; }
@@ -1291,7 +1383,7 @@
       var hasBell = opts.some(function (o) { return (o && o.id || o) === 'followBell'; });
       return (hasBell ? bellRing() : '') + heading(T('ui.camp.heading'), T(hasBell ? 'ui.camp.pickOneBell' : 'ui.camp.pickOne')) + '<div class="camp-cards' + (hasBell ? ' n4' : '') + '"' + (hasBell ? ' id="bellChoices"' + (ui.bellHeard ? '' : ' hidden') : '') + '>' + opts.map(function (o) {
         var id = typeof o === 'string' ? o : o.id, d = CAMP_OPT()[id] || [id, ''];
-        if (id === 'followBell') return '<button class="choice camp-card cc-bell" data-act="followBell" data-opt="bell:follow">' + (A.grantsBell('followBell', 'camp') ? A.bellSvg('opt-bell') : '') + '<span class="ch-head"><span class="cc-bell-ring"><i class="key-g kg-bell"></i></span></span>' + // batch6 H2-9: the bell mark // §A[26] the eerie fourth card
+        if (id === 'followBell') return '<button class="choice camp-card cc-bell" data-act="followBell" data-opt="bell:follow">' + (A.grantsBell('followBell', 'camp') ? A.bellSvg('opt-bell') : '') + '<span class="ch-head"><span class="cc-bell-ring" data-tip="' + A.bellTip() + '"><i class="key-g kg-bell"></i></span></span>' + // batch6 H2-9: the bell mark // §A[26] the eerie fourth card
           '<b class="ch-name">' + esc((o && o.label) || T('ui.camp.bell.label')) + '</b><span class="ch-rule"></span><span class="ch-text">' + esc((o && o.text) || T('ui.camp.bell.text')) + '</span><span class="cc-down">' + esc((o && o.down) || T('ui.camp.bell.down')) + '</span></button>'; // face-exempt: camp menu (where to go, not an effect card)
         var full = id === 'explore' && ((o && o.disabled) || (v.items && v.items.length >= 3)); // v2.4 [24] no exploring with a full bag
         return '<button class="choice camp-card cc-' + esc(id) + (full ? ' cc-off' : '') + '"' + (full ? ' aria-disabled="true" data-tip="' + esc((o && o.tip) || T('ui.camp.bagFull')) + '"' : ' data-act="campChoose"') + ' data-id="' + esc(id) + '" data-opt="camp:' + esc(id) + '"><span class="ch-head">' + pic(A.campIcon(id), '', '', '') + '</span>' +
@@ -1319,7 +1411,8 @@
           var sp = b.special || !!b.downside, pv = b.preview ? (b.preview[who] || b.preview[Object.keys(b.preview)[0]]) : null;
           return '<button class="choice camp-card bonus' + (sp ? ' special' : '') + '" data-act="campTrainBonus" data-id="' + esc(b.id) + '" data-opt="bonus:' + esc(b.id) + '">' + (sp ? '<span class="cc-tag">' + T('ui.train.special') + '</span>' : '') +
             '<b class="ch-name">' + esc(b.label || b.name || b.id) + '</b><span class="ch-rule"></span>' + cardFaceHtml(b) +
-            (sp && b.downside ? '<span class="cc-down">' + T('ui.train.cost', { text: esc(b.downsideText || b.downside.text || effText(b.downside)) }) + '</span>' : '') + previewHtml(pv) + '</button>';
+            (b.extra && effIcon(b.extra) ? '<span class="ch-eff ch-extra">' + richText(effIcon(b.extra)) + '</span>' : '') + // 2026-11-14 锻炼卡 extra: the second gain, its own line
+            (sp && b.downside ? '<span class="cc-down">' + T('ui.train.cost', { text: b.downsideText || b.downside.text ? esc(b.downsideText || b.downside.text) : richText(effIcon(b.downside)) }) + '</span>' : '') + previewHtml(pv) + '</button>';
         }).join('') + '</div></div>';
     }
     return '';
@@ -1338,7 +1431,7 @@
     var rows = heals.map(function (h) {
       var n = restWho(h);
       return '<div class="rs-one' + (h.full ? ' full' : '') + '"><span class="md-face">' + restFace(h.id, n) + '</span><b class="rs-name">' + esc(n) + '</b>' +
-        '<span class="rs-amt">' + (h.full ? T('ui.rest.full') : '+' + h.amount) + '</span><span class="rs-hp">' + T('ui.rest.hp', { hp: h.hp, maxHp: h.maxHp }) + '</span></div>';
+        '<span class="rs-amt">' + (h.full ? (h.block ? richText('{i:block}+' + h.block) : T('ui.rest.full')) : '+' + h.amount) + '</span><span class="rs-hp">' + T('ui.rest.hp', { hp: h.hp, maxHp: h.maxHp }) + '</span></div>';
     }).join('');
     var L = A.restLayout(heals.length); // G1 #3: fixed 176 px columns, smaller faces from 5 people on, two rows from 7 — always inside 1920×1080
     var html = '<div class="rs-card paper" style="--rs-face:' + L.face + 'px;--rs-gap:' + L.gap + 'px;--rs-cols:' + L.perRow + ';width:' + L.cardW + 'px"><b class="rs-title">' + T('ui.rest.title') + '</b><div class="rs-row">' + rows + '</div><button class="btn btn-primary rs-go" type="button">' + T('ui.common.continue') + '</button></div>';
@@ -1358,6 +1451,24 @@
     replayed[k] = true; var side = $('trainSide'); if (side) side.classList.add('hidden-till-talk');
     say(ls, function () { var s2 = $('trainSide'); if (s2) s2.classList.remove('hidden-till-talk'); });
   }
+  // 布阵教学 (docs/DESIGN-2026-11-14-formation-guide.md, ui/formation-guide.js): the advisor offers to explain the formation the
+  // first time the formation itself is on screen (never in the bell night, never over a talk or a dialog); once per player (prefs)
+  function fguideOpen(ask) {
+    var G = window.CHOOSER_FGUIDE; if (!G) return null;
+    var a = view && view.advisor && view.advisor.present !== false ? view.advisor : null;
+    hideTip();
+    return G.open({ ask: ask, advisor: a ? { id: a.id, name: a.name } : null, prefs: prefs, save: function (p) { lsSet(PKEY, p); }, t: T, face: a ? A.face(a.id, 'calm') : null });
+  }
+  function fguideMaybe() {
+    var G = window.CHOOSER_FGUIDE;
+    if (!G || !G.shouldShow(prefs) || G.isOpen()) return;
+    later(function () {
+      var w = $('campWrap');
+      if (!G.shouldShow(prefs) || G.isOpen() || !view || view.phase !== 'prep' || view.bell || campStep(view) !== 'done') return;
+      if (!$('formation') || !w || w.classList.contains('talking') || vnActive() || !modalEl.hidden) return;
+      fguideOpen(true);
+    }, 600);
+  }
   SCREENS.prep = {
     plate: function (v) { return plate(T(campStep(v) === 'done' ? 'ui.camp.plateDone' : 'ui.camp.plate')); }, // 叙事节奏 2026-11-13: the night never names the next level; the scene intro comes after 「出发」
     html: function (v) {
@@ -1368,14 +1479,14 @@
           '<button class="bigchoice btn btn-primary" data-act="stayFire" data-opt="bell:stay"><span>' + T('ui.camp.bell.stay') + '</span><q>' + T('ui.camp.bell.stayDown') + '</q></button></div></div>';
       }
       if (ui.talking == null) ui.talking = !v.bell && campLines(v).length > 0 && !replayed['camp:' + (run.history || []).length]; // G2 #12: the bell night plays its own talk (enter) — talking mode here hid #bellChoices for good
-      var wd = woundedNow(v), n = ui.order.length, cards = ui.order.map(function (id, i) { return memberCard(member(id), i, n, { drag: true, moves: true, wounded: wd }); }).join('');
+      var wd = woundedNow(v), n = ui.order.length, cards = ui.order.map(function (id, i) { return memberCard(member(id), i, n, { drag: true, moves: true, wounded: wd, orderNo: true }); }).join('');
       var foes = ''; for (var i = 0; i < Math.min(v.enemyCount || 0, 7); i++) foes += '<span class="foe-ghost">?</span>';
       var cs = campStep(v);
       if (ui.campSeen !== cs) { ui.campSeen = cs; ui.acted = 0; }
       if (!ui.talking && cs !== 'done') return '<div class="camp-wrap camp-choose step-' + esc(cs) + '" id="campWrap">' + standHtml() + campPanel(v, cs) + '</div>'; // §E4
       return '<div class="camp-wrap' + (ui.talking ? ' talking' : '') + '" id="campWrap">' + standHtml() +
         '<div class="formation-ui"><div class="ahead panel"><span class="ah-k">' + T('ui.formation.ahead') + '</span><span class="ah-row">' + foes + '</span><span class="ah-n">' + (v.waveCount > 1 ? T('ui.formation.enemiesWaves', { n: esc(v.enemyCount || '?'), waves: esc(v.waveCount) }) : T('ui.formation.enemies', { n: esc(v.enemyCount || '?') })) + '</span></div>' +
-        '<div class="order-hint"><span>' + T('ui.formation.firstHint') + '</span><span>' + T('ui.formation.lastHint') + '</span></div>' +
+        '<div class="order-hint"><span class="oh-k" tabindex="0" data-tip="' + T('ui.formation.orderTip') + '">' + T('ui.formation.orderLabel') + '</span></div>' + // user 2026-11-14: 站位顺序 + a numbered circle above each slot
         '<div class="lane lane-prep" id="formation">' + cards + '</div>' +
         '<div class="prep-foot"><span class="hint">' + T('ui.formation.dragHint') + '</span><button class="btn btn-primary btn-lg" data-act="fight">' + T('ui.formation.go') + '</button></div></div></div>';
     },
@@ -1403,12 +1514,14 @@
         var w = $('campWrap'); if (w) w.classList.remove('talking');
         var st = $('stand'); if (st) st.querySelectorAll('.stand').forEach(function (x) { x.classList.add('gone'); setTimeout(function () { x.remove(); }, 500); });
         app.querySelectorAll('#formation .p-slot').forEach(function (g) { g.classList.remove('speaking'); });
+        fguideMaybe();
       });
     },
     after: function () {
       var box = $('formation'), dragId = null; if (!box) return;
+      fguideMaybe(); // 布阵教学: the first time the formation shows (it checks the talk / bell / dialog itself)
       function slot(e) { return e.target.closest && e.target.closest('.p-slot'); }
-      box.addEventListener('dragstart', function (e) { var li = slot(e); if (!li) return; dragId = li.dataset.id; li.classList.add('dragging'); tipEl.hidden = true; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) { /* */ } });
+      box.addEventListener('dragstart', function (e) { var li = slot(e); if (!li) return; dragId = li.dataset.id; li.classList.add('dragging'); hideTip(); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) { /* */ } });
       box.addEventListener('dragover', function (e) { e.preventDefault(); });
       box.addEventListener('drop', function (e) {
         e.preventDefault(); var li = slot(e); if (!li || !dragId || li.dataset.id === dragId) return render();
@@ -1441,7 +1554,23 @@
   var bmarks = { debts: {}, frenzy: 1 };
   function resetBattleMarks() { bmarks = { debts: {}, frenzy: 1 }; }
   function debtDots(id) { var d = bmarks.debts[id]; return d && d.length ? '<span class="debt-dots" data-tip="' + T('ui.battle.debtTip') + '">' + d.map(function (c) { return '<i' + (c === 'possessed' ? ' class="p"' : '') + '></i>'; }).join('') + '</span>' : ''; }
-  function battleCard(u, hp, hidden) {
+  // 2026-11-14 护甲: a steel shield badge (glyph + number) on the left end of the hp bar; hidden at 0. The bar gets a steel rim.
+  function blockBadge(n) { return '<span class="blk-badge' + (n > 0 ? '' : ' off') + '" data-tip="' + esc(termTip('block')) + '">' + A.glyph('block', false) + '<b class="blk-n">' + (n > 0 ? n : '') + '</b></span>'; }
+  function setBlock(uid, n) {
+    var el = cardEl(uid), u = ui.field && ui.field[uid]; if (u) u.block = Math.max(0, n | 0); if (!el) return;
+    var bar = el.querySelector('.hpbar'), bd = el.querySelector('.blk-badge'), v = Math.max(0, n | 0); if (!bar || !bd) return;
+    var was = bar.classList.contains('has-block');
+    bar.classList.toggle('has-block', v > 0); bd.classList.toggle('off', !(v > 0)); bd.querySelector('.blk-n').textContent = v > 0 ? v : '';
+    if (was && !(v > 0)) pulse(bd, 'broke', 500); else if (v > 0) pulse(bd, 'gain', 420);
+  }
+  // a hit the block took part of: a grey number first, then the badges (her own, and 伊芙's when she stepped in)
+  function hitBlock(t, el) {
+    if (!t) return;
+    if (t.shieldBy) { var f = ui.field && ui.field[t.shieldBy]; if (f) setBlock(t.shieldBy, (f.block || 0) - (t.shieldAmt || 0)); }
+    if (t.blocked && el && !t.numShown) floatAt(el, '−' + t.blocked, 'blk', '', -70); // 先飞后结算: the flying number already showed it
+    if (t.blockAfter != null) setBlock(t.uid, t.blockAfter);
+  }
+  function battleCard(u, hp, hidden, blk) {
     var art = unitArt(u), m = u.side === 'ally' ? member(u.id) : null, pct = u.maxHp ? Math.max(0, Math.round(100 * hp / u.maxHp)) : 100;
     var turned = u.side === 'ally' && isTurned(u);
     var cls = 'ucard bcard ' + (u.side === 'ally' ? 'ally' : 'foe') + (isLeader(u) ? ' is-leader' : '') + (u.boss ? ' is-boss' : '') + (A.isFairy(u.id) ? ' is-fairy' : '') + (turned ? ' turned' : u.corruption ? ' corrupt-' + u.corruption : '') +
@@ -1449,11 +1578,12 @@
     return '<div class="' + cls + '" data-u="' + esc(u.uid) + '" data-id="' + esc(u.id) + '" data-rich="' + esc(unitTip(u, u.side)) + '">' +
       '<div class="uc-art">' + pic(art.list, 'uc-img', u.name, art.fb) + (u.role ? roleBadge(u.role, 'uc-role') : '') + (m ? moodFace(m) + bondMark(m) : '') + (u.corruption && !turned ? '<span class="corrupt-mark"></span>' : '') + (u.side === 'ally' ? debtDots(u.id) : '') + '</div>' +
       '<div class="uc-body"><div class="uc-name">' + esc(u.name || T('ui.name.you')) + '</div><div class="hpn">' + Math.max(0, hp) + ' / ' + esc(u.maxHp) + '</div>' +
-      '<div class="hpbar"><div class="lag" style="width:' + pct + '%"></div><div class="fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="hpwrap"><div class="hpbar' + (blk > 0 ? ' has-block' : '') + '"><div class="lag" style="width:' + pct + '%"></div><div class="fill" style="width:' + pct + '%"></div></div>' + blockBadge(blk) + '</div>' +
       '<div class="uc-chips st-row">' + statusIcons(u.statuses, u.side) + '</div></div>' + comboTab(u) + '</div>';
   }
   // ===== v2.3 battle §D1: statuses as small icons, ×N when stacked; hover = name + effect =====
-  var ST_GLYPH = lazy(function () { var o = {}; ['guard', 'formation', 'clause', 'luck', 'smoke', 'drum', 'slow-start', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.glyph.' + k); }); return o; });
+  var ST_GLYPH = lazy(function () { var o = {}; ['formation', 'clause', 'luck', 'smoke', 'drum', 'slow-start', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.glyph.' + k); }); return o; });
+  var ST_SVG = { weak: 'weak', tough: 'tough', shell: 'block', 'slow-start': 'daze', daze: 'daze' }; // 2026-11-14: code-drawn glyphs (no art file)
   var ST_FILE = { 'mood-low': 'mood-down', 'mood-high': 'mood-up', 'vengeful-high': 'vengeful', 'vengeful-low': 'vengeful', wound: 'wounded' };
   function statusIcons(list, side) {
     var seen = {}, order = [];
@@ -1466,7 +1596,7 @@
       var s = seen[id], o = s.o, name = o.label || o.name || id, bad = isBadStatus(o);
       var tip = name + (s.n > 1 ? ' ×' + s.n : '') + (o.tip || o.text ? '：' + (o.tip || o.text) : '');
       return '<span class="st-ic ' + (bad ? 'bad' : 'buff') + '" data-st="' + esc(id) + '" data-tip="' + esc(tip) + '">' +
-        pic([A.ver('../art/cells/status/' + (ST_FILE[id] || id) + '.png')], 'st-img', '', '<i class="st-g">' + esc(ST_GLYPH()[id] || name.slice(0, 1)) + '</i>') +
+        (ST_SVG[id] ? A.glyph(ST_SVG[id], false) : pic([A.ver('../art/cells/status/' + (ST_FILE[id] || id) + '.png')], 'st-img', '', '<i class="st-g">' + esc(ST_GLYPH()[id] || name.slice(0, 1)) + '</i>')) +
         (s.n > 1 ? '<b class="st-n">×' + s.n + '</b>' : '') + '</span>';
     }).join('');
   }
@@ -1503,6 +1633,7 @@
     u.hp = Math.max(0, hp); var pct = u.maxHp ? Math.max(0, Math.round(100 * u.hp / u.maxHp)) : 100;
     el.querySelector('.fill').style.width = pct + '%'; el.querySelector('.hpn').textContent = u.hp + ' / ' + u.maxHp;
     var lag = el.querySelector('.lag'); setTimeout(function () { lag.style.width = pct + '%'; }, dur(500));
+    if (u.hp <= 0) { u.block = 0; var bd = el.querySelector('.blk-badge'), bar = el.querySelector('.hpbar'); if (bd) bd.classList.add('off'); if (bar) bar.classList.remove('has-block'); } // 试玩 #15: a fallen unit has no 护甲 badge
   }
   function pulse(el, cls, ms) {
     if (!el) return; var c = cls.split(' '), L = el.classList;
@@ -1676,10 +1807,32 @@
     setTimeout(function () { d.remove(); }, dur(1500));
   }
   // a damage / heal number flies from a point to the target's top edge, then rises and fades there
-  function flyNum(from, el, text, cls, tag, ox) {
-    if (!el) return Promise.resolve(); var to = stagePt(el, 0.5, 0); to = { x: to.x + (ox || 0), y: to.y + (/\b(crit|multi)\b/.test(cls || '') ? 60 : -26) };
-    var d = fxDiv('flynum hitnum ' + (cls || ''), esc(text), from.x, from.y);
-    return flyTo(d, from, to, 420, (to.x > from.x ? 1 : -1) * 90).then(function () { floatAt(el, text, cls, tag, ox); });
+  // 2026-11-14 伤害数字「先飞后结算」: with t (an engine hit), the number that flies is the attack's FULL amount and it resolves
+  // on the target into the hp damage (RoundPlan.hitNum): 5 → 2 with a crack on the 护甲 badge, or 0 + a shield clank (no red).
+  // A heal just pops on the target. Speed (dur) / skip / REDUCED: the flight and the swap shorten or happen at once.
+  function flyNum(from, el, text, cls, tag, ox, t) {
+    if (!el) return Promise.resolve();
+    var n = t ? RoundPlan.hitNum(t) : null;
+    if (n && n.heal) { floatAt(el, n.to, cls, tag, ox); return Promise.resolve(); }
+    var to = stagePt(el, 0.5, 0); to = { x: to.x + (ox || 0), y: to.y + (/\b(crit|multi)\b/.test(cls || '') ? 60 : -26) };
+    var d = fxDiv('flynum hitnum ' + (cls || ''), esc(n ? n.from : text), from.x, from.y);
+    return flyTo(d, from, to, 420, (to.x > from.x ? 1 : -1) * 90).then(function () {
+      if (!n || !n.changes) { floatAt(el, n ? n.to : text, cls, tag, ox); return; }
+      t.numShown = true; // hitBlock: no second grey 「−挡下」 number
+      floatResolve(el, n, cls, tag, ox);
+    });
+  }
+  function floatResolve(el, n, cls, tag, ox) {
+    var p = stagePt(el, 0.5, 0), dy = /\bcrit\b/.test(cls || '') ? 110 : /\bmulti\b/.test(cls || '') ? 40 : -26;
+    var d = fxDiv('float resolving ' + (cls || ''), (tag ? '<small>' + esc(tag) + '</small>' : '') + '<span class="rv">' + esc(n.from) + '</span>', p.x + (ox || 0), p.y + dy);
+    var bd = el.querySelector('.blk-badge');
+    var swap = function () {
+      var rv = d.querySelector('.rv'); if (rv) rv.textContent = n.to;
+      d.classList.add(n.clank ? 'clank' : 'resolved'); if (n.clank) d.classList.remove('dmg', 'foe-hit', 'huge', 'crit');
+      if (bd) pulse(bd, 'crack', 420); if (n.clank) cue('guard', null, 0);
+    };
+    if (anim.skip || REDUCED) swap(); else setTimeout(swap, dur(150));
+    setTimeout(function () { d.remove(); }, 1800 / Math.min(1, spd()));
   }
   // DESIGN-skill-level §5: a 连击 series (one blow, many hits) flies one number per hit (a little apart, a beat between them); a crit is the
   // big gold-and-red number with 「暴击！」 over it (ui/dev/research/hit-feel-demo.html)
@@ -1715,7 +1868,7 @@
       floatAt(el, '−' + h.amount, 'dmg multi' + (h.crit ? ' crit' : ''), h.crit ? T('ui.battle.crit') : T('ui.battle.hitNo', { n: i + 1 }), n > 1 ? Math.round((i - (n - 1) / 2) * 62) : 0);
       if (stop) await wait(Math.min(stop, 90), tok); // a shorter hit-stop than a single blow: the beats must keep moving
       if (fx) HitFX.after(el, { tier: tier, kind: t.skill || 'strike', dir: dir, scale: h.crit ? 1 : 0.7 }, sh); else pulse(el, 'hit', 300);
-      hp = last ? t.hpAfter : Math.max(t.hpAfter, hp - (h.amount || 0)); setHp(uid, hp);
+      hp = last ? t.hpAfter : Math.max(t.hpAfter, hp - (h.amount || 0)); setHp(uid, hp); if (last) hitBlock(t, el);
       if (!last) await wait(gap, tok);
     }
     t.seqDone = true;
@@ -1740,7 +1893,7 @@
       floatAt(el, '−' + b.amount, 'dmg multi' + (b.crit ? ' crit' : ''), b.crit ? T('ui.battle.crit') : T('ui.battle.hitNo', { n: i + 1 }), 0);
       if (stop) await wait(Math.min(stop, 90), tok);
       if (fx) HitFX.after(el, { tier: tier, kind: skill || 'strike', dir: dir, scale: b.crit ? 1 : 0.7 }, sh); else pulse(el, 'hit', 300);
-      setHp(b.uid, b.hpAfter);
+      setHp(b.uid, b.hpAfter); hitBlock(b.t, el);
       if (!b.last) await wait(gap, tok);
     }
   }
@@ -1806,10 +1959,10 @@
     list.sort(function (a, b) { return (RANK[b.tier] || 0) - (RANK[a.tier] || 0); }); // the heaviest hit drives the one shake
     list.forEach(function (x) {
       if (x.skip) return;
-      if (x.seq) { setHp(x.uid, x.t.hpAfter); return; }
+      if (x.seq) { setHp(x.uid, x.t.hpAfter); hitBlock(x.t, x.el); return; }
       if (fx && x.kind !== 'heal') { HitFX.after(x.el, x, shook ? null : sh); shook = true; } else pulse(x.el, x.t.kind === 'heal' ? 'healed' : 'hit', 520);
       if (x.t.kind === 'heal') pulse(x.el, 'healed', 520);
-      setHp(x.uid, x.t.hpAfter);
+      setHp(x.uid, x.t.hpAfter); hitBlock(x.t, x.el);
     });
   }
   function hitCue(t) { if (t.miss) cue('miss'); else if (t.kind === 'heal') cue('heal'); else if (t.capped || t.crit) return; /* 收尾: a crit sounds 'crit' (flyHits), not 'bigHit' on top */ else cue(t.amount >= 6 ? 'bigHit' : 'hit'); }
@@ -1850,7 +2003,7 @@
       else if (el) { var p = stagePt(el, 0.5, 0.2), d = fxDiv('flynum', '+' + (a.base || 0), p.x, p.y); await flyTo(d, p, { x: at.x, y: at.y - 46 }, 420, -120); chk(tok); setVal(val + (a.base || 0), true); }
       for (var j = 0; j < (a.bonuses || []).length; j++) {
         var b = a.bonuses[j], src = bonusSource(b, el), sp = src ? stagePt(src, 0.5, 0.3) : { x: at.x, y: at.y };
-        var bd = fxDiv('flynum bonus', (b.amount >= 0 ? '+' : '') + b.amount + '<small>' + esc(b.label || '') + '</small>', sp.x, sp.y);
+        var bd = fxDiv('flynum bonus', (b.noEffect ? '' : (b.amount >= 0 ? '+' : '') + b.amount) + '<small>' + esc(b.label || '') + '</small>', sp.x, sp.y); // 虚弱 that did nothing: no 「+0」, just the words
         await flyTo(bd, sp, { x: at.x, y: at.y - 46 }, 380, 80); chk(tok); inStep++; setVal(val + b.amount);
       }
       await wait(140, tok);
@@ -1860,7 +2013,7 @@
     var agg = {}, order = [], soft = [];
     acts.forEach(function (a) { (a.targets || []).forEach(function (t) {
       if (t.miss) { soft.push({ a: a, t: t }); return; }
-      var el = tEl(t), k = el ? el.dataset.u : t.uid; if (!agg[k]) { agg[k] = { amount: 0, hpAfter: t.hpAfter, kind: t.kind, capped: t.capped, hits: [] }; order.push(k); } agg[k].amount += t.amount || 0; agg[k].hpAfter = t.hpAfter; agg[k].skill = t.refund ? 'strike' : a.skillKind; agg[k].from = aEl(a);
+      var el = tEl(t), k = el ? el.dataset.u : t.uid; if (!agg[k]) { agg[k] = { amount: 0, hpAfter: t.hpAfter, kind: t.kind, capped: t.capped, hits: [] }; order.push(k); } agg[k].amount += t.amount || 0; agg[k].hpAfter = t.hpAfter; if (t.blocked) { agg[k].blocked = (agg[k].blocked || 0) + t.blocked; agg[k].blockAfter = t.blockAfter; } if (t.shieldBy) { agg[k].shieldBy = t.shieldBy; agg[k].shieldAmt = (agg[k].shieldAmt || 0) + (t.shieldAmt || 0); } agg[k].skill = t.refund ? 'strike' : a.skillKind; agg[k].from = aEl(a);
       if (t.kind !== 'heal') { agg[k].hits.push({ amount: t.amount || 0, crit: !!t.crit, from: aEl(a) }); if (t.crit) agg[k].crit = true; } }); });
     var tEls = order.map(cardEl).filter(Boolean);
     if (acts.length > 1 && !heal) { bubble.classList.add('hold'); await wait(Math.min(520, 220 + 60 * (acts.length - 1)), tok); } // v2.6: hold the breath, then let it all out
@@ -1872,8 +2025,9 @@
     var nums = (combos.length ? [wait(260, tok).then(async function () { for (var ci = 0; ci < combos.length; ci++) await comboSeq(combos[ci].beats, aEl(combos[ci].a), combos[ci].a.skillKind, tok); })] : []).concat(order.map(function (uid) {
       var t = agg[uid], el = cardEl(uid); if (!el || t.capped || t.seqDone) return null;
       if (t.kind !== 'heal' && t.hits.length > 1) return wait(260, tok).then(function () { return comboHits(el, uid, t, tok); }); // G1 #5: one beat per hit, once the sparks get there
-      if (t.kind !== 'heal' && t.crit) return flyHits(src0, el, t.hits, 'dmg'); // DESIGN-skill-level: 暴击
-      return flyNum(src0, el, (t.kind === 'heal' ? '+' : '−') + t.amount, t.kind === 'heal' ? 'heal' : 'dmg' + (hitTier(uid, t) !== 'normal' ? ' huge' : ''));
+      if (t.kind !== 'heal' && t.crit && t.hits.length > 1) return flyHits(src0, el, t.hits, 'dmg'); // DESIGN-skill-level: 暴击
+      if (t.kind !== 'heal' && t.crit) { cue('crit', null, 0); return flyNum(src0, el, '', 'dmg crit', T('ui.battle.crit'), 0, t); } // one crit: same 先飞后结算
+      return flyNum(src0, el, '', t.kind === 'heal' ? 'heal' : 'dmg' + (hitTier(uid, t) !== 'normal' ? ' huge' : ''), '', 0, t);
     })).filter(Boolean);
     if (tEls.length) await Promise.all([burst(src0, tEls, heal ? 'heal' : 'gold', Math.min(18, 6 + val))].concat(nums));
     chk(tok);
@@ -2045,6 +2199,8 @@
     switch (e.kind) {
       case 'enemyEnter': el = cardEl(e.uid || (e.unit && e.unit.uid)); if (el) { el.classList.remove('pre-enter'); el.classList.add('enter'); setTimeout(function (c) { return function () { c.classList.remove('enter'); }; }(el), 700); } cue('enemyEnter', null, 150); await wait(420, tok); break; // batch6 H2-6: drop 'enter' once played — left on, every later pulse (felled / hit) restarted it and a greyed-out foe slid back in · fix: this comment once swallowed the wait+break, so enemyEnter fell through into 'phase2' (「第二阶段」 on every entrance)
       case 'phase2': await playPhase2(e, tok); break;
+      case 'block': el = cardEl(e.uid); setBlock(e.uid, e.total); if (el && !anim.skip) { floatAt(el, '+' + e.amount, 'blk gain', '', -70); cue('guard', null, 0); await wait(260, tok); } break; // 2026-11-14 护甲
+      case 'blockClear': (e.units || []).forEach(function (x) { setBlock(x.uid, x.to); }); break;
       case 'turncoat': await playTurncoat(e, tok); break;
       case 'switchSide': moveToAllies(e.uid); break;
       case 'wave': if (e.advBoss) { await playWaveCard(e, tok); break; }
@@ -2084,7 +2240,7 @@
           var te = tEl(t); if (!te || t.miss || t.capped) return null;
           var nth = seen[t.uid] = (seen[t.uid] || 0) + 1, delay = (nth - 1) * 190; // DESIGN-skill-level: an enemy 连击 hits the same card again a beat later
           return new Promise(function (r) { setTimeout(r, anim.skip ? 0 : dur(delay)); }).then(function () {
-            return flyNum(from, te, (t.kind === 'heal' ? '+' : '−') + t.amount, t.kind === 'heal' ? 'heal' : 'dmg foe-hit' + (t.hit ? ' multi' : ''), '', nth > 1 ? (nth - 1) * 62 : 0);
+            return flyNum(from, te, '', t.kind === 'heal' ? 'heal' : 'dmg foe-hit' + (t.hit ? ' multi' : ''), '', nth > 1 ? (nth - 1) * 62 : 0, t); // 先飞后结算
           });
         }).filter(Boolean)); chk(tok);
         (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
@@ -2107,6 +2263,12 @@
           setTimeout(function (x) { return function () { x.classList.add('out'); setTimeout(function () { x.remove(); }, 400); }; }(et), REDUCED ? 700 : 1200);
         }
         await wait(e.fairy ? 520 : 420, tok); break;
+      }
+      case 'clauseDaze': { // 2026-11-14 附加条款: the next round, 2 foes stand there dazed (their turn then brings a daze reason:'clause')
+        var dz = (e.units || []).map(function (u) { return cardEl(typeof u === 'object' ? u.uid : u); }).filter(Boolean);
+        if (e.text) banner(e.text, 'clause');
+        dz.forEach(function (x) { pulse(x, 'dazed', 900); floatAt(x, T('ui.battle.dazed'), 'miss'); var row = x.querySelector('.st-row'); if (row && !row.querySelector('[data-st="daze"]')) row.insertAdjacentHTML('beforeend', statusIcons(['daze'], 'enemy')); });
+        cue('advisorSkill', null, 0); await wait(dz.length ? 900 : 300, tok); break;
       }
       case 'daze': el = cardEl(e.actor || e.uid) || cardById(e.actorId || e.id); if (el) { pulse(el, 'dazed', 900); floatAt(el, T(e.reason === 'regret' ? 'ui.battle.regret' : 'ui.battle.dazed'), 'miss'); } await wait(e.reason === 'regret' ? 1100 : 700, tok); break; // 2026-11-14 L8: the leader freezes
       case 'mood': el = cardById(e.id); if (el) moodDrop(el, e); await wait(500, tok); break;
@@ -2260,8 +2422,8 @@
   SCREENS.battle = {
     plate: function (v) { return plate(levelText(v)); },
     html: function (v) {
-      var b = v.battle, evs = b.lastRound || [], entering = {}, hp = {}, mx0 = {};
-      b.allies.concat(b.enemies).forEach(function (u) { hp[u.uid] = u.hp; });
+      var b = v.battle, evs = b.lastRound || [], entering = {}, hp = {}, mx0 = {}, blk = {};
+      b.allies.concat(b.enemies).forEach(function (u) { hp[u.uid] = u.hp; blk[u.uid] = u.block || 0; });
       evs.forEach(function (e) { if (e.kind === 'enemyEnter') entering[e.uid || (e.unit && e.unit.uid)] = e.unit || true; });
       // §4.5 a girl who turned this round still starts the round on their side; the turncoat animation carries her over
       var sw = {}; if (!replayed[(run.history || []).length]) evs.forEach(function (e) { if (e.kind === 'switchSide' || e.kind === 'turncoat') sw[e.uid] = 1; });
@@ -2270,12 +2432,15 @@
       var allies = b.allies.filter(function (u) { return !sw[u.uid]; });
       for (var i = evs.length - 1; i >= 0; i--) { // walk back to the state before this round
         var e = evs[i];
-        if (e.kind === 'action') (e.targets || []).forEach(function (t) { if (t.miss || t.capped) return; var before = t.kind === 'heal' ? t.hpAfter - t.amount : t.hpAfter + t.amount; hp[t.uid] = before; });
+        if (e.kind === 'action') (e.targets || []).forEach(function (t) { if (t.miss || t.capped) return; var before = t.kind === 'heal' ? t.hpAfter - t.amount : t.hpAfter + t.amount; hp[t.uid] = before;
+          if (t.blockAfter != null) blk[t.uid] = t.blockAfter + (t.blocked || 0) - (t.shieldAmt || 0); if (t.shieldBy) blk[t.shieldBy] = (blk[t.shieldBy] || 0) + (t.shieldAmt || 0); });
+        if (e.kind === 'block') blk[e.uid] = Math.max(0, (blk[e.uid] || 0) - (e.amount || 0)); // 2026-11-14 护甲: the round starts from its first state
+        if (e.kind === 'blockClear') (e.units || []).forEach(function (x) { blk[x.uid] = x.from; });
         if (e.kind === 'relic' && e.uid != null && e.hpBefore != null) hp[e.uid] = e.hpBefore;
         if (e.kind === 'memory' && e.hpWas) e.hpWas.forEach(function (w) { hp[w.uid] = w.hp; mx0[w.uid] = w.maxHp; }); // batch6 H2-14: a debt's numbers change when its dots land
       }
       ui.field = {};
-      b.allies.concat(b.enemies).forEach(function (u) { var mx = mx0[u.uid] != null ? mx0[u.uid] : u.maxHp; ui.field[u.uid] = { hp: hp[u.uid], maxHp: mx }; });
+      b.allies.concat(b.enemies).forEach(function (u) { var mx = mx0[u.uid] != null ? mx0[u.uid] : u.maxHp; ui.field[u.uid] = { hp: hp[u.uid], maxHp: mx, block: Math.max(0, blk[u.uid] || 0) }; });
       Object.keys(ui.field).forEach(function (k) { var f = ui.field[k]; f.hp = Math.min(f.maxHp, f.hp); });
       var round = b.round || 1, fz = evs.some(function (x) { return x.kind === 'frenzy'; }) ? 1 : (b.mult || bmarks.frenzy || 1);
       if (fz > 1) bmarks.frenzy = fz;
@@ -2283,10 +2448,10 @@
       return '<div class="battle' + (v.level === 11 ? ' noble' : '') + '"><div class="frenzy-edge' + (fz > 1 ? ' on' : '') + '" id="frenzyEdge" style="--fz:' + Math.min(lv, 5) + '"></div>' +
         '<div class="b-top"><span class="b-pill" id="roundNo"><span class="bp-k">' + T('ui.battle.round', { n: esc(round) }) + '</span>' + (b.waveCount > 1 ? '<span class="bp-sep"></span><span>' + T('ui.battle.waveOf', { n: esc(b.wave || 1), total: esc(b.waveCount) }) + '</span>' : '') +
         (fz > 1 ? '<span class="bp-sep"></span><span class="bp-fz">' + T('ui.battle.frenzy', { n: fz }) + '</span>' : '') + '</span></div>' +
-        '<span class="b-ctl vn-pass">' + [1, 2, 3].map(function (s) { return '<button class="pill-btn' + (prefs.speed === s ? ' on' : '') + '" data-act="speed" data-s="' + s + '">×' + s + '</button>'; }).join('') +
+        '<span class="b-ctl vn-pass"><button class="pill-btn speed-cycle" data-act="speedCycle" data-tip="' + T('ui.battle.speedTip') + '">×' + (prefs.speed || 1) + '</button>' + // UI-CLEAN §2.7: one button cycles ×1 → ×2 → ×3
         '<button class="pill-btn" data-act="skip" id="skipBtn">' + T('ui.battle.skip') + '</button></span>' +
-        '<div class="b-foe"><div class="lane lane-foe" id="laneFoe">' + foes.map(function (u) { return battleCard(u, ui.field[u.uid].hp, !!entering[u.uid]); }).join('') + '</div></div>' +
-        '<div class="b-ally"><div class="lane lane-ally" id="laneAlly">' + allies.map(function (u) { return battleCard(mx0[u.uid] != null ? A.withMaxHp(u, mx0[u.uid]) : u, ui.field[u.uid].hp, false); }).join('') + '</div></div>' +
+        '<div class="b-foe"><div class="lane lane-foe" id="laneFoe">' + foes.map(function (u) { return battleCard(u, ui.field[u.uid].hp, !!entering[u.uid], ui.field[u.uid].block); }).join('') + '</div></div>' +
+        '<div class="b-ally"><div class="lane lane-ally" id="laneAlly">' + allies.map(function (u) { return battleCard(mx0[u.uid] != null ? A.withMaxHp(u, mx0[u.uid]) : u, ui.field[u.uid].hp, false, ui.field[u.uid].block); }).join('') + '</div></div>' +
         '<div id="pauseWrap" class="pause-wrap"></div><div id="resultWrap"></div></div>';
     },
     enter: function (v) { battleFlow(v); }
@@ -2340,8 +2505,7 @@
         : '<button class="pbtn" disabled data-tip="' + T('ui.pause.advisorGoneTip') + '"><span class="pb-ic">✦</span><b>' + T('ui.pause.advisor') + '</b><small>' + T('ui.common.none') + '</small></button>') +
       '<button class="pbtn" data-act="pItem"' + (items.length ? '' : ' disabled') + ' data-tip="' + T('ui.pause.itemTip') + '"><span class="pb-ic">✚</span><b>' + T('ui.pause.item') + '</b><small>' + items.length + ' / 3</small></button>' +
       '<button class="pbtn go" data-act="pContinue"><span class="pb-ic">▶</span><b>' + T('ui.common.continue') + '</b></button>' +
-      '<label class="auto vn-pass" data-tip="' + T('ui.pause.autoTip') + '"><input type="checkbox" id="autoCont"' + (prefs.autoCont ? ' checked' : '') + '> ' + T('ui.pause.auto') + '</label></div><div class="pause-sub" id="pauseSub"></div>';
-    $('autoCont').addEventListener('change', function (e) { prefs.autoCont = e.target.checked; lsSet(PKEY, prefs); e.target.blur(); if (prefs.autoCont && !ui.mode) later(function () { if (!vnActive() && view && view.phase === 'battle') autoContinue(); }, 500); });
+      '</div><div class="pause-sub" id="pauseSub"></div>'; // UI-CLEAN §2.8: 自动继续 is a ☰ 游戏组 switch now (prefs.autoCont)
     // v2.4 [15] root cause: the 继续 button used to take focus here, so the keyup of the Space / Enter that closed the round's
     // last line (or a key held through the animation) "clicked" it and the pause was skipped. Nothing takes focus now, and
     // 继续 ignores input that started before the bar was up (see pauseReady).
@@ -2350,6 +2514,11 @@
     if (prefs.autoCont) later(function () { if (!vnActive() && view && view.phase === 'battle' && !ui.mode) autoContinue(); }, 900 / spd());
   }
   function nowMs() { return window.performance && performance.now ? performance.now() : Date.now(); } // the dev driver freezes Date.now
+  function setSpeed(n) {
+    prefs.speed = n; lsSet(PKEY, prefs);
+    document.querySelectorAll('[data-act="speed"]').forEach(function (b) { b.classList.toggle('on', +b.dataset.s === prefs.speed); });
+    document.querySelectorAll('[data-act="speedCycle"]').forEach(function (b) { b.textContent = '×' + prefs.speed; });
+  }
   function autoContinue() { if (ui.acted) return; ui.acted = 1; doAct({ type: 'continue' }, true); }
   // a real click / key counts only once the bar has been up a moment and the key was pressed after it appeared
   function pauseReady(e) { return !e || !e.isTrusted || (ui.pauseAt && nowMs() - ui.pauseAt > 450); }
@@ -2381,7 +2550,7 @@
     w.innerHTML = '<div class="result-wrap"><div class="result paper">' + heading(T(win ? 'ui.result.win' : 'ui.result.lose'), (b.rounds || b.round) ? T('ui.result.rounds', { n: b.rounds || b.round }) : '', win ? 'laurel' : 'grim') +
       (b.maxChain ? '<p class="chain-sum">' + T('ui.result.maxChain') + ' <b>×' + esc(b.maxChain) + '</b></p>' : '') +
       (mvp ? '<div class="mvp"><span class="mvp-face">' + pic(isLeader(mvp) ? A.face('leader', 'happy') : A.face(mvp.id, 'happy'), '', mvp.name, isLeader(mvp) ? crestHtml(true) : initialHtml(mvp.name)) + '</span><img class="crown" src="' + esc(A.icon('dps-crown')) + '" alt=""><b>' + esc(isLeader(mvp) ? T('ui.name.you') : mvp.name) + '</b></div>' : '') +
-      '<div class="actions"><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button>' + (win ? '' : cheatLostBtn()) + '</div></div></div>';
+      '<div class="actions"><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button></div></div></div>'; // UI-CLEAN §2.9: 改判胜利 is in ☰ 试玩作弊
     resultUp(w);
   }
   // ===== v2.3 battle §D8 [5]: one clean stats table (per ally: damage, healing, taken, kills, longest 加成; MVP crown; rounds) =====
@@ -2400,7 +2569,7 @@
     }).join('');
     w.innerHTML = '<div class="result-wrap"><div class="result paper rs-panel">' + heading(T(win ? 'ui.result.win' : 'ui.result.lose'), rounds ? T('ui.result.roundsTotal', { n: rounds }) : '', win ? 'laurel' : 'grim') +
       '<table class="rs-table"><thead><tr><th></th>' + COLS.map(function (c) { return '<th>' + c[1] + '</th>'; }).join('') + '</tr></thead><tbody>' + body + '</tbody></table>' +
-      '<div class="actions"><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button>' + (win ? '' : cheatLostBtn()) + '</div></div></div>';
+      '<div class="actions"><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button></div></div></div>'; // UI-CLEAN §2.9: 改判胜利 is in ☰ 试玩作弊
     resultUp(w);
   }
   // ===== v2.3 §H: 「作弊：改判胜利」 on a lost battleResult and on gameOver (from a battle loss); ?nocheat=1 hides it.
@@ -2412,7 +2581,7 @@
     var ok = false; try { E.act(DATA, run, { type: 'cheatWin' }); ok = true; } catch (e) { ok = false; }
     cheatLostMemo = { seq: run.seq, run: run, ok: ok }; return ok;
   }
-  function cheatLostBtn(cls) { return canCheatLost() ? '<button class="btn btn-secondary cheat-lost vn-pass' + (cls ? ' ' + cls : '') + '" data-act="cheatLost" data-tip="' + T('ui.cheat.lostTip') + '">' + T('ui.cheat.lost') + '</button>' : ''; }
+  function cheatLostBtn() { return canCheatLost() ? '<button class="btn-ghost cheat-keys cheat-lost vn-pass" data-act="cheatLost" data-tip="' + T('ui.cheat.lostTip') + '">' + T('ui.cheat.lost') + '</button>' : ''; }
 
   // ---------- reward / debuff: card first, then who ----------
   function cardScreen(heavy) {
@@ -2424,18 +2593,37 @@
           return heading(T(heavy ? 'ui.reward.heavyHeading' : 'ui.reward.heading'), T(heavy ? 'ui.reward.heavySub' : 'ui.reward.sub'), heavy ? 'grim' : 'laurel') + // feedback-1112 #11
             '<div class="three">' + opts.map(function (o) { return bigCard(o, heavy, v); }).join('') + '</div>';
         }
-        var targets = (v.targets || []).map(function (id) {
-          var m = member(id) || { id: id, name: nameOf(id) }, me = isLeader(m), art = unitArt({ id: id, side: 'ally', isLeader: me });
-          return '<button class="who" data-act="pickTarget" data-id="' + esc(id) + '" data-opt="t:' + esc(id) + '"><span class="who-face">' + pic(art.list, '', m.name, art.fb) + '</span><b>' + esc(me ? T(heavy ? 'ui.reward.heavySelf' : 'ui.reward.self') : m.name) + '</b>' +
-            '<span class="who-sub">' + moodFace(m) + IC.hp + esc(m.maxHp) + ' ' + IC.atk + esc(m.atk) + '</span>' + previewHtml(c.preview && c.preview[id]) + '</button>'; // §E5
+        // 2026-11-14 (user): a row of round heads to pick who, ONE big preview box for the selected one, 「确定」 gives it
+        // 试玩 #9: nobody is picked at first — the box asks, 「确定」 waits for a head
+        var ids = v.targets || [], sel = ids.indexOf(ui.who) >= 0 ? ui.who : null;
+        ui.who = sel;
+        var whoName = function (m) { return whoNameOf(m, heavy); };
+        var heads = ids.map(function (id) {
+          var m = member(id) || { id: id, name: nameOf(id) }, art = unitArt({ id: id, side: 'ally', isLeader: isLeader(m) });
+          return '<button class="who-head' + (id === sel ? ' on' : '') + '" data-act="whoSel" data-id="' + esc(id) + '" data-opt="w:' + esc(id) + '" aria-pressed="' + (id === sel) + '"><span class="wh-face">' + pic(art.list, '', m.name, art.fb) + '</span><b>' + esc(whoName(m)) + '</b></button>';
         }).join('');
+        var detail = whoDetailHtml(c, sel, heavy);
         return heading(T(heavy ? 'ui.reward.heavyWho' : 'ui.reward.who'), heavy ? T('ui.reward.heavyWhoSub') : '', heavy ? 'grim' : '') +
-          '<div class="picked">' + bigCard(c, heavy, v, true) + '<button class="btn-ghost back" data-act="unpickCard">' + T('ui.reward.swap') + '</button></div><div class="whos">' + targets + '</div>';
+          '<div class="picked">' + bigCard(c, heavy, v, true) + '<button class="btn-ghost back" data-act="unpickCard">' + T('ui.reward.swap') + '</button></div><div class="whos"><div class="who-heads">' + heads + '</div>' + detail + '</div>';
       }
     };
   }
+  function whoNameOf(m, heavy) { return isLeader(m) ? T(heavy ? 'ui.reward.heavySelf' : 'ui.reward.self') : m.name; }
+  // the one preview box of the 「给谁」 screen. 试玩 #9: no head picked → a prompt and a disabled 「确定」 (same box, same place)
+  function whoDetailHtml(c, sel, heavy) {
+    if (!sel) return '<div class="who-detail panel wd-empty"><div class="wd-body"><b class="wd-name">' + T('ui.reward.pickWhoPrompt') + '</b>' +
+      '<button class="btn btn-primary wd-ok" disabled aria-disabled="true">' + T('ui.reward.confirm') + '</button></div></div>';
+    var m = member(sel) || { id: sel, name: nameOf(sel) }, art = unitArt({ id: sel, side: 'ally', isLeader: isLeader(m) }), pv = c.preview && c.preview[sel];
+    return '<div class="who-detail panel"><span class="wd-face">' + pic(art.list, '', m.name, art.fb) + '</span><div class="wd-body"><b class="wd-name">' + esc(whoNameOf(m, heavy)) + '</b>' +
+      '<span class="who-sub">' + moodFace(m) + A.glyph('maxhp') + esc(m.maxHp) + ' ' + IC.atk + esc(m.atk) + '</span>' +
+      (pv && pv.length ? previewHtml(pv) : '<span class="wd-none">' + T('ui.reward.noChange') + '</span>') +
+      '<button class="btn btn-primary wd-ok" data-act="pickTarget" data-id="' + esc(sel) + '" data-opt="t:' + esc(sel) + '">' + T('ui.reward.confirm') + '</button></div></div>';
+  }
   // 修复「三选一卡效果行消失」: flavour + one effect line for every choice card (A.cardFace; numbers bold by the **数字** rule)
-  function cardFaceHtml(o) { var f = A.cardFace(o); return (f.flavor ? '<span class="ch-text">' + esc(f.flavor) + '</span>' : '') + (f.eff ? '<span class="ch-eff">' + richText(f.eff) + '</span>' : ''); }
+  // 2026-11-14: a 生命上限 effect carries the heart-container icon ({i:maxhp}) — A.effLine only knows {i:hp}
+  function maxIcon(s, e) { return e && e.stat === 'maxHp' ? String(s || '').replace('{i:hp}', '{i:maxhp}') : s; }
+  function effIcon(e) { return maxIcon(A.effLine(e), e); }
+  function cardFaceHtml(o) { var f = A.cardFace(o); if (o && o.effect && o.effect.stat === 'maxHp' && f.eff) f.eff = String(f.eff).replace('{i:hp}', '{i:maxhp}'); return (f.flavor ? '<span class="ch-text">' + esc(f.flavor) + '</span>' : '') + (f.eff ? '<span class="ch-eff">' + richText(f.eff) + '</span>' : ''); }
   function bigCard(o, heavy, v, small) {
     var ic = A.cardIcon(o, heavy), item = o.effect && o.effect.type === 'item';
     return '<button class="choice big-card' + (heavy ? ' bad' : '') + (small ? ' small' : '') + '" data-act="pickCard" data-id="' + esc(o.id) + '" data-opt="card:' + esc(o.id) + '"' + (small ? ' disabled' : '') + '>' +
@@ -2454,7 +2642,7 @@
   // 修复「献祭浮字挡脸」: fragment slots come from A.sacFragSlots (px inside .mem-frags), none over her face or the info plate
   function memFrags(list) {
     return '<div class="mem-frags" aria-hidden="true">' + (list || []).slice(0, 8).map(function (s, i) {
-      var p = A.sacFragSlots()[i % 8], sz = [1.0, 0.8, 1.25, 0.9, 1.1, 0.75, 1.0, 0.85][i % 8];
+      var p = A.sacFragSlots()[i % 8], sz = [1.0, 0.85, 1.25, 0.9, 1.1, 0.85, 1.0, 0.9][i % 8];
       return '<span class="mem-frag" style="left:' + p.x + 'px;top:' + p.y + 'px;--s:' + sz + ';--d:' + (i * 0.015).toFixed(3) /* feedback-1112 #13: all in ≤ 0.3 s */ + 's;--t:' + (9 + (i % 3) * 2.5) + 's;--bx:' + A.sacFragDrift(i) + 'px">' + esc(s) + '</span>';
     }).join('') + '</div>';
   }
@@ -2740,7 +2928,7 @@
   // ---------- defeat epilogue: intro → each girl's fate → the leader → the advisor slips away → outro → black → title ----------
   var epi = { tok: 0 };
   SCREENS.gameOver = {
-    html: function (v) { return v.summary && v.summary.epilogue ? '' : endingHtml(v) + cheatLostBtn('go-cheat'); },
+    html: function (v) { return v.summary && v.summary.epilogue ? '' : endingHtml(v); }, // UI-CLEAN §2.12: 改判胜利 is in ☰
     after: function (v) { if (!(v.summary && v.summary.epilogue)) bindQuestionnaire(); },
     enter: function (v) { if (v.summary && v.summary.epilogue) playEpilogue(v.summary.epilogue); }
   };
@@ -2760,7 +2948,7 @@
     vnClear(); document.body.classList.add('epi-on');
     var bgs = A.scene(V === 'true' ? 'guild-dawn-full' : V ? 'dawn-exit' : 'game-over').map(function (c) { return 'url("' + esc(splitCand(c).src) + '")'; }).join(', ');
     cine('epi' + (V ? ' epi-win' + (V === 'true' ? ' epi-true' : '') : ''), '<div class="ep-bg" style=\'background-image:' + bgs + '\'></div><div class="ep-stand" id="epStand"></div><div class="ep-name" id="epName"></div><div class="ep-black"></div>' +
-      '<button class="btn-ghost ep-skip vn-pass" data-act="epiSkip">' + T('ui.epilogue.skip') + '</button>' + (V ? '' : cheatLostBtn('go-cheat')));
+      '<button class="btn-ghost ep-skip vn-pass" data-act="epiSkip">' + T('ui.epilogue.skip') + '</button>');
     try {
       if (!V) cue('gallery', null, 0);
       await epiWait(1200, t);
@@ -2838,7 +3026,7 @@
 
   // ---------- modal ----------
   function modal(html) { modalEl.innerHTML = '<div class="panel">' + html + '</div>'; modalEl.hidden = false; var b = modalEl.querySelector('[data-act="modalCancel"]'); if (b) b.focus(); }
-  function closeModal() { modalEl.hidden = true; modalEl.innerHTML = ''; }
+  function closeModal() { modalEl.hidden = true; modalEl.innerHTML = ''; modalEl.classList.remove('vn-pass', 'menu-open'); }
   // batch6 H2-1: the game never uses alert/confirm/prompt — overwriting a save asks in a game-styled panel
   function askOverwrite(act) {
     modal('<h2>' + T('ui.newRun.confirmTitle') + '</h2><p>' + bold(T(run ? 'ui.newRun.confirmCurrent' : 'ui.newRun.confirmExisting')) + '</p><p class="small dim">' + T('ui.newRun.noUndo') + '</p>' +
@@ -2848,7 +3036,7 @@
 
   // ---------- input ----------
   var H = {
-    home: function () { if (credits.kill) credits.kill(); if (PL && run) pl('event', 'home', PLM.snap(view)); closeModal(); vnClear(); epi.tok++; epi.vdone = null; document.body.classList.remove('epi-on', 'fx-top', 'end-hold'); setRain(0); run = null; screenKey = null; render(); },
+    home: function () { if (credits.kill) credits.kill(); setupOpen = false; if (PL && run) pl('event', 'home', PLM.snap(view)); closeModal(); vnClear(); epi.tok++; epi.vdone = null; document.body.classList.remove('epi-on', 'fx-top', 'end-hold'); setRain(0); run = null; screenKey = null; render(); },
     endHome: function () { // feedback-1112 #43: the run is over → back to the title menu, no new run
       try { localStorage.removeItem(KEY); } catch (e) { /* */ }
       if (stageEl.querySelector('.home-white')) return;
@@ -2858,19 +3046,28 @@
     },
     'new': function (d) { // batch6 H2-1: in-game confirm instead of window.confirm
       if (!(d && d.ok) && ((run && view && view.phase !== 'ending' && view.phase !== 'gameOver') || (!run && loadSave()))) { askOverwrite('new'); return; }
-      closeModal(); newGame(); },
+      closeModal(); if (run) H.home(); setupOpen = true; render(); var ni = $('leaderName'); if (ni && !TOUCH) ni.focus(); }, // UI-CLEAN §4: 团长设定 first
+    setupGo: function () { if (!setupOpen) return; setupOpen = false; newGame(); },
+    setupBack: function () { setupOpen = false; render(); },
     'continue': function () { vnClear(); run = loadSave(); screenKey = null; if (run && PL) { try { pl('resume', run.seed, E.view(DATA, run), Q.get('resume') === '1' && !view ? 'auto' : 'continue'); } catch (e) { /* */ } } render(); },
     pick: function (d) { var k = d.k; ui[k] = d.id; app.querySelectorAll('[data-k="' + k + '"]').forEach(function (b) { b.classList.toggle('sel', b.dataset.id === d.id); }); var cb = $('confirmBar'); if (cb) cb.hidden = false; },
-    soundPop: function (d, t) { au('init'); var p = t.parentNode.querySelector('.sound-pop'); if (p) p.hidden = !p.hidden; },
-    mute: function () { var m = !au('isMuted'); if (m && MUTE_Q) muteSession(); else au('setMuted', m); var b = document.querySelector('[data-act="mute"]'); if (b) b.classList.toggle('off', m); },
-    cheat: function () { var p = $('cheatPop'); if (p) p.hidden = !p.hidden; },
+    menuTab: function (d) { var i = +d.i || 0; menuTab = d.k || ''; modalEl.querySelectorAll('.mn-tab').forEach(function (b) { b.classList.toggle('on', +b.dataset.i === i); }); modalEl.querySelectorAll('.mn-page').forEach(function (p) { p.hidden = +p.dataset.i !== i; }); },
+    fguide: function () { closeModal(); fguideOpen(false); }, // ☰ 游戏组 「布阵说明」: straight to the pages
+    menu: function () { au('init'); if (modalEl.classList.contains('menu-open')) { closeModal(); return; } openMenu(); },
+    menuHome: function () { // UI-CLEAN §3: back to the title asks first while a run is going (the run stays saved)
+      if (!run || !view || view.phase === 'ending' || view.phase === 'gameOver') { H.home(); return; }
+      modal('<h2>' + T('ui.menu.homeAskTitle') + '</h2><p>' + T('ui.menu.homeAsk') + '</p><div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.rethink') + '</button><button class="btn btn-primary" data-act="home">' + T('ui.menu.home') + '</button></div>');
+      modalEl.classList.add('vn-pass'); var p = modalEl.querySelector('.panel'); if (p) p.classList.add('ask-modal');
+    },
+    mute: function () { var m = !au('isMuted'); au('init'); au('setMuted', m); var b = document.querySelector('[data-act="mute"]'); if (b) b.classList.toggle('off', m); },
+    cheat: function () { modal('<h2>' + T('ui.cheat.winAsk') + '</h2><div class="row center-row"><button class="btn btn-secondary" data-act="cheatNo">' + T('ui.cheat.never') + '</button><button class="btn btn-primary" data-act="cheatYes">' + T('ui.common.ok') + '</button></div>'); modalEl.classList.add('vn-pass'); },
     cheatKeys: function () {
-      if (!run) return; var nr;
+      closeModal(); if (!run) return; var nr;
       try { nr = E.act(DATA, run, { type: 'cheatKeys' }); } catch (e) { cheatKeysBroken = true; notice(T('ui.cheat.keysUnsupported')); render(); return; }
       run = nr; save(); pl('event', 'cheat', { what: 'keys' }); notice(T('ui.cheat.keysDone')); cue('bell', { act: actNo() }, 0);
       var tb = app.querySelector('.topbar'); if (tb && view) { view = E.view(DATA, run); tb.outerHTML = topbar(view, SCREENS[shownPhase] && SCREENS[shownPhase].plate ? SCREENS[shownPhase].plate(view) : null); }
     },
-    replayIntro: function () { playOpening(true); },
+    replayIntro: function () { closeModal(); playOpening(true); },
     randName: function () { var i = $('leaderName'); if (!i) return; i.value = randName(i.value); prefs.leaderName = i.value; lsSet(PKEY, prefs); },
     newKeys: function (d) { if (!(d && d.ok) && loadSave()) { askOverwrite('newKeys'); return; } closeModal(); newGame({ keys: true }); },
     fairyPoke: function (d, el) {
@@ -2900,7 +3097,7 @@
       var sc = view.selfCost || {}, scMap = {}; (sc.maxHp || []).forEach(function (x) { scMap[x.id] = x; });
       var rows = party().map(function (m) {
         var to = scMap[m.id] ? scMap[m.id].to : Math.max(3, Math.floor((m.maxHp || 0) * 0.5));
-        return '<tr><td>' + esc(m.name || T('ui.name.you')) + '</td><td class="num">' + IC.hp + ' ' + esc(m.maxHp) + ' → <b class="loss">' + to + '</b></td><td>' + (isLeader(m) ? '' : T('ui.selfSacrifice.moodCost', { cost: '<b class="loss">−2</b>' })) + '</td></tr>';
+        return '<tr><td>' + esc(m.name || T('ui.name.you')) + '</td><td class="num">' + A.glyph('maxhp') + ' ' + esc(m.maxHp) + ' → <b class="loss">' + to + '</b></td><td>' + (isLeader(m) ? '' : T('ui.selfSacrifice.moodCost', { cost: '<b class="loss">−2</b>' })) + '</td></tr>';
       }).join('');
       modal('<h2>' + T('ui.selfSacrifice.title') + '</h2><p>' + bold(T('ui.selfSacrifice.lead')) + '</p>' +
         '<div class="self-cost"><p class="sc-head">' + bold(T('ui.selfSacrifice.cost', { hpMult: '<b class="loss">×0.5</b>', mood: '<b class="loss">−2</b>' })) + '</p><table>' + rows + '</table></div>' +
@@ -2911,16 +3108,16 @@
       closeModal(); cue('sacrificeConfirm', null, 0);
       doAct({ type: 'sacrifice', mode: 'self' }, true, { farewellsViewed: (ui.viewed || []).slice() }, { pre: function (pv) { return selfSacrificeFx(pv.party); }, skipDark: ['self'] });
     },
-    cheatNo: function () { var p = $('cheatPop'); if (p) p.hidden = true; },
+    cheatNo: function () { closeModal(); },
     // v2.3 §H: a lost battle (battleResult / gameOver) re-scored as a win; the epilogue is cut and the run goes on
     cheatLost: function () {
-      if (!canCheatLost()) { notice(T('ui.cheat.lostUnsupported')); return; }
+      closeModal(); if (!canCheatLost()) { notice(T('ui.cheat.lostUnsupported')); return; }
       epi.tok++; anim.skip = true; flushWaits(); anim.token++; vnClear(); cineEl.className = 'cine'; cineEl.innerHTML = '';
       document.body.classList.remove('fx-top', 'epi-on'); setRain(0); ui.acted = 1;
       doAct({ type: 'cheatWin' });
     },
     cheatYes: function () {
-      var p = $('cheatPop'); if (p) p.hidden = true;
+      closeModal();
       anim.skip = true; flushWaits(); anim.token++; vnClear(); cineEl.className = 'cine'; cineEl.innerHTML = ''; document.body.classList.remove('fx-top');
       var prev = run, ok = false;
       try { E.act(DATA, run, { type: 'cheatWin' }); ok = true; } catch (e) { ok = false; }
@@ -2958,10 +3155,12 @@
       // v2.4 [8] the girl who wasn't picked leaves slowly (~1.2 s) after her line; the next round waits for it
       doAct({ type: 'hire', id: d.id, candidate: d.id }, true, null, { post: function () { return stages([[function () { app.querySelectorAll('.iv-side').forEach(function (el) { if (el.dataset.c !== d.id) { el.classList.remove('dim', 'speaking'); el.classList.add('leaving'); } }); }, 1300, 'noskip']]); } });
     },
+    ivSkip: function (d, t, e) { if (e) e.stopPropagation(); var sk = $('ivSkip'); if (!sk || sk.hidden || ui.ivReady) return; pl('event', 'ivSkip', { round: view && view.round }); vnSkipToMarker(); },
     ivReplay: function () { $('ivChoices').hidden = true; $('ivUnder').hidden = true; ivTalk(view); },
     move: function (d) { var i = +d.i, j = i + +d.d, o = ui.order, t = o[i]; if (j < 0 || j >= o.length) return; o[i] = o[j]; o[j] = t; ui.moves++; render(); },
     fight: function () { tracker.switches = ui.moves || 0; if (doAct({ type: 'setOrder', order: ui.order.slice() }, true)) doAct({ type: 'fight' }); },
-    speed: function (d) { prefs.speed = +d.s; lsSet(PKEY, prefs); app.querySelectorAll('[data-act="speed"]').forEach(function (b) { b.classList.toggle('on', +b.dataset.s === prefs.speed); }); },
+    speed: function (d) { setSpeed(+d.s); },
+    speedCycle: function () { setSpeed((prefs.speed || 1) % 3 + 1); },
     skip: function () { anim.skip = true; flushWaits(); },
     pContinue: function (d, t, e) { if (ui.acted || !app.querySelector('.pausebar') || !pauseReady(e)) return; ui.acted = 1; doAct({ type: 'continue' }, true); },
     pSkill: function () {
@@ -2982,12 +3181,22 @@
     pCancel: function () { pauseMode(null); },
     battleContinue: function (d, t, e) { if (ui.resActed || (e && e.isTrusted && ui.resultAt && nowMs() - ui.resultAt < 450)) return; ui.resActed = 1; if (!doAct({ type: 'continue' })) ui.resActed = 0; },
     pickCard: function (d) {
+      ui.who = null;
       var o = (view.options || []).filter(function (x) { return x.id === d.id; })[0];
       if (o && (o.needsTarget === false || (o.needsTarget == null && o.effect && o.effect.type === 'item'))) { doAct({ type: 'pickReward', card: o.id }, true); return; }
       ui.card = d.id; render();
     },
-    unpickCard: function () { ui.card = null; render(); },
-    pickTarget: function (d) { cue(view.phase === 'reward' ? 'reward' : 'debuff', null, 0); doAct({ type: view.phase === 'reward' ? 'pickReward' : 'pickDebuff', card: ui.card, target: d.id }, true); },
+    unpickCard: function () { ui.card = null; ui.who = null; render(); },
+    // 2026-11-14: switching heads = 换人. 试玩 #9: in place (the heads' ring + the one box), never a whole re-render — that
+    // rebuilt the box (and its 「确定」) on every pick, which flickered
+    whoSel: function (d) {
+      if (ui.who === d.id || ui.acted) return; ui.who = d.id;
+      var c = ui.card && (view.options || []).filter(function (o) { return o.id === ui.card; })[0], box = app.querySelector('.whos .who-detail');
+      if (!c || !box) { render(); return; }
+      app.querySelectorAll('.who-head').forEach(function (h) { var on = h.dataset.id === d.id; h.classList.toggle('on', on); h.setAttribute('aria-pressed', String(on)); });
+      var t = document.createElement('template'); t.innerHTML = whoDetailHtml(c, d.id, view.phase === 'debuff'); box.replaceWith(t.content.firstChild);
+    },
+    pickTarget: function (d) { if (!d.id || ui.acted) return; ui.acted = 1; cue(view.phase === 'reward' ? 'reward' : 'debuff', null, 0); if (!doAct({ type: view.phase === 'reward' ? 'pickReward' : 'pickDebuff', card: ui.card, target: d.id }, true)) ui.acted = 0; },
     nameTarget: function (d) { // batch6 H2-10 ①: portrait + floating words only
       if (d.id === 'leader' || ui.pending === d.id) return; var nx = A.sacFlow(ui.sac, 'pick', d.id); if (nx.step !== 'picked') return;
       ui.sac = nx; ui.pending = d.id; ui.fwDone = null; (ui.viewed = ui.viewed || []).push(d.id); vnClear(); render(); sacPickFloat(d.id);
@@ -3027,19 +3236,20 @@
     plCopy: function () { plExport(true); },
     epiSkip: function () { if (epi.vdone) epiWinEnd(epi.tok); else epiBlack(epi.tok); }
   };
-  var CLICK_CUE = { fairyPoke: 'none', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
+  var CLICK_CUE = { fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
     pCancel: 'cancel', fwBack: 'cancel', unpickCard: 'cancel', modalCancel: 'cancel', cheatNo: 'cancel', home: 'cancel',
     campChoose: 'none', campExplore: 'pick', campTrainPick: 'pick', campTrainBonus: 'confirm', viewHer: 'click', viewHerClose: 'cancel',
-    pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click', epiSkip: 'cancel' };
+    pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', whoSel: 'click', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click', epiSkip: 'cancel' };
   // battle cards during a pause: pick-then-place, or the item's target
   function battleCardClick(card) {
     if (!view || view.phase !== 'battle' || !card.classList.contains('ally') || ui.acted) return false;
-    var id = card.dataset.id;
-    if (ui.mode === 'itemTarget') { ui.acted = 1; pendingAnnounce = { title: ui.item.name, sub: nameOf(id) }; doAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, true); return true; }
+    // 2026-11-14: the engine's battle actions name a unit by its uid (a girl who switched sides has a uid ≠ her id)
+    var id = card.dataset.u || card.dataset.id, uName = (bUnits().filter(function (u) { return u.uid === id; })[0] || {}).name || nameOf(card.dataset.id);
+    if (ui.mode === 'itemTarget') { ui.acted = 1; pendingAnnounce = { title: ui.item.name, sub: uName }; doAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, true); return true; }
     if (ui.mode === 'move') {
       if (!ui.moveSel) { ui.moveSel = id; card.classList.add('sel'); return true; }
       if (ui.moveSel === id) { ui.moveSel = null; card.classList.remove('sel'); return true; }
-      var order = view.battle.allies.map(function (u) { return u.id; }); ui.acted = 1;
+      var order = view.battle.allies.map(function (u) { return u.uid != null ? u.uid : u.id; }); ui.acted = 1;
       doAct({ type: 'move', id: ui.moveSel, to: order.indexOf(id) }, true); return true;
     }
     return false;
@@ -3047,17 +3257,20 @@
   // sound popover: toggle, sliders, mute
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'leaderName') { prefs.leaderName = String(e.target.value || '').trim().slice(0, 8); lsSet(PKEY, prefs); return; } // v2.4 [4]
+    if (e.target && e.target.dataset && e.target.dataset.pref === 'autoCont') { // ☰ 游戏组: battle auto-continue (prefs.autoCont, default off)
+      prefs.autoCont = !!e.target.checked; lsSet(PKEY, prefs);
+      if (prefs.autoCont && !ui.mode) later(function () { if (!vnActive() && view && view.phase === 'battle' && app.querySelector('.pausebar')) autoContinue(); }, 500);
+      return;
+    }
     var k = e.target && e.target.dataset && e.target.dataset.snd; if (!k) return;
     var cur = au('getVolume') || { music: 0.35, sfx: 0.5 };
-    if (k === 'mute') { au('init'); au('setMuted', e.target.checked); document.querySelectorAll('[data-act="soundPop"]').forEach(function (b) { b.classList.toggle('off', e.target.checked); }); return; }
+    if (k === 'mute') { au('init'); au('setMuted', e.target.checked); return; }
     var val = Math.max(0, Math.min(1, (+e.target.value || 0) / 100));
     au('init'); au('setVolume', k === 'music' ? val : cur.music, k === 'sfx' ? val : cur.sfx);
     if (k === 'sfx') cue('click', null, 120);
   });
-  document.addEventListener('click', function (e) {
-    var pop = document.querySelector('.sound-pop:not([hidden])');
-    if (pop && !(e.target.closest && e.target.closest('.sound-ctl'))) pop.hidden = true;
-  }, true);
+  // ☰ menu: a click on the dark backdrop (outside the panel) closes it
+  modalEl.addEventListener('click', function (e) { if (e.target === modalEl && modalEl.classList.contains('menu-open')) closeModal(); });
   document.addEventListener('click', function (e) {
     var card = e.target.closest && e.target.closest('.bcard'); if (card && battleCardClick(card)) return;
     var t = e.target.closest && e.target.closest('[data-act]'); if (!t || t.disabled || !H[t.dataset.act]) return;
@@ -3081,10 +3294,14 @@
     var tag = e.target.tagName;
     if (e.key === 'Escape') {
       if (!modalEl.hidden) { closeModal(); return; }
+      var ivs = $('ivSkip'); if (ivs && !ivs.hidden) { H.ivSkip(); return; }
       if (view && view.phase === 'battle' && ui.mode) { pauseMode(null); return; }
       if (view && view.phase === 'sacrifice' && ui.pending) { H.fwBack(); return; }
+      if (view && (view.phase === 'reward' || view.phase === 'debuff') && ui.card) { H.unpickCard(); return; } // 「给谁」: Esc = 换一张 (back to the three cards)
+      if (!run && setupOpen && !e.isComposing && e.keyCode !== 229) { H.setupBack(); return; } // 团长设定: Esc = 返回 (never while an IME is composing the name)
       return;
     }
+    if (e.key === 'Enter' && e.target.id === 'leaderName' && setupOpen && modalEl.hidden) { e.preventDefault(); H.setupGo(); return; }
     if (e.key !== ' ' && e.key !== 'Enter') return;
     if (tag === 'TEXTAREA' || tag === 'INPUT' || !modalEl.hidden) return;
     if (vnActive()) { e.preventDefault(); vnAdvance(); return; } // dialogue first: Space / Enter = next line

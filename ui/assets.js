@@ -20,7 +20,8 @@
     slime: 'slime', goblin: 'goblin-captain', 'goblin-boss': 'goblin-captain', skeleton: 'skeleton-soldier', 'skeleton-archer': 'skeleton-archer',
     ghoul: 'crypt-ghoul', 'gate-guardian': 'stone-gate-guardian', 'tomb-minion': 'masked-spectator-a', 'bandit-officer': 'magic-thieves-officer',
     'bandit-chief': 'magic-thieves-chief', 'mercenary-blade': 'masked-spectator-b', 'mercenary-archer': 'masked-spectator-a',
-    'noble-guard': 'masked-spectator-b', 'masked-champion': 'blank-general'
+    'noble-guard': 'masked-spectator-b', 'masked-champion': 'blank-general',
+    'mercenary-guard': 'masked-spectator-b', 'mercenary-priest': 'masked-spectator-a' // 2026-11-14: stand-ins until their own art (art brief: mercenary guard, mercenary priest)
   };
   var ROLE_ICON = { tank: 'shield', adc: 'bow', healer: 'chalice', mage: 'staff', rogue: 'dagger' };
   var MOOD_ICON = { '-2': 'mood-minus-2', '-1': 'mood-minus-1', '0': 'mood-neutral', '1': 'mood-plus-1', '2': 'mood-plus-2' };
@@ -182,13 +183,32 @@
   // feedback-1113 (3rd batch) #4: every art URL carries ?v=ART_V. The dev server (python http.server) sends no Cache-Control,
   // so Chrome kept serving the old portraits from its heuristic cache after Codex replaced the files. Bump ART_V whenever
   // art is redrawn; the '#classes' suffix of a candidate stays after the query.
-  var ART_V = '20261113c'; // c: batch6 H2-8 高台 scene, H2-12/15 advisor enemy art
+  var ART_V = '20261114w'; // w: resized WebP copies in art/web/ (tools/make-web-art.mjs) put in front of the originals
+  // (was '20261113c': batch6 H2-8 高台 scene, H2-12/15 advisor enemy art)
   // (was '20261113b': v9 layered fairy animation, art/portraits/anim/)
   function ver(p) { if (typeof p !== 'string' || !/^\.\.\/(art|godot)\//.test(p) || p.indexOf('?') >= 0) return p; var i = p.indexOf('#'); return i < 0 ? p + '?v=' + ART_V : p.slice(0, i) + '?v=' + ART_V + p.slice(i); }
+  // 2026-11-14 memory (iPhone Safari): tools/make-web-art.mjs writes resized WebP copies of the big art to art/web/<same path>.webp
+  // and art/web/manifest.js (CHOOSER_WEBART.files = the originals that have one; ui/index.html loads it before this file).
+  // Every candidate list then tries the web copy first and the original right after it (an <img> that fails moves on), so a
+  // missing / stale copy only costs one failed request. ?fullart=1 in the page URL ignores the web copies (originals only).
+  // Single-path slots (icons) and node (no manifest) keep the originals.
+  var WEB_SET = null;
+  (function () {
+    var m = root.CHOOSER_WEBART, q = '';
+    try { q = (root.location && root.location.search) || ''; } catch (e) { q = ''; }
+    if (!m || !m.files || /[?&]fullart=1(&|$)/.test(q)) return;
+    WEB_SET = {}; m.files.forEach(function (f) { WEB_SET[f] = 1; });
+  })();
+  function webOf(p) { // '../art/x/y.png#cls' → '../art/web/x/y.webp#cls' when listed, else null
+    if (!WEB_SET || typeof p !== 'string' || p.indexOf(ART) !== 0) return null;
+    var i = p.search(/[?#]/), file = i < 0 ? p : p.slice(0, i), rest = i < 0 ? '' : p.slice(i), rel = file.slice(ART.length);
+    return WEB_SET[rel] ? ART + 'web/' + rel.replace(/\.png$/i, '.webp') + rest : null;
+  }
+  function withWeb(list) { var out = []; list.forEach(function (p) { var w = webOf(p); if (w) out.push(w); out.push(p); }); return out; }
   ['portrait', 'face', 'enemy', 'scene', 'icon', 'roleIcon', 'moodIcon', 'itemIcon', 'leaderBadge', 'relicIcon', 'campIcon', 'noble', 'nobleFace', 'crest'].forEach(function (k) {
-    var f = A[k]; A[k] = function () { var r = f.apply(null, arguments); return Array.isArray(r) ? r.map(ver) : ver(r); };
+    var f = A[k]; A[k] = function () { var r = f.apply(null, arguments); return Array.isArray(r) ? withWeb(r).map(ver) : ver(r); };
   });
-  A.ART_V = ART_V; A.ver = ver;
+  A.ART_V = ART_V; A.ver = ver; A.webOf = webOf; A.webArt = !!WEB_SET;
   // v9 B (art/discussion-v9-unify-fairy.md): 小铃 / 恶魔小铃 as layers — wings-NN → body → blink-NN, all on the same
   // 1086×1448 canvas (art/portraits/anim/<id>/README.md + animation.json). Pure parts here (node-tested: tests/fairy-anim.test.cjs);
   // app.js preloads every layer and only swaps the static portrait for the layers once all of them loaded — any failure keeps
@@ -200,8 +220,11 @@
   function fairyAnim(id) {
     var f = FAIRY_ANIM[id]; if (!f) return null;
     var dir = PORT + 'anim/' + id + '/', n = function (i) { return (i < 10 ? '0' : '') + i; }, w = [], i;
-    for (i = 1; i <= 6; i++) w.push(ver(dir + 'wings-' + n(i) + '.png'));
-    var body = ver(dir + 'body.png'), blink = [ver(dir + 'blink-01.png'), ver(dir + 'blink-02.png')];
+    for (i = 1; i <= 6; i++) w.push(dir + 'wings-' + n(i) + '.png');
+    var body = dir + 'body.png', blink = [dir + 'blink-01.png', dir + 'blink-02.png'];
+    // the layers are one set (one canvas): all web copies, or all originals — never a mix of two scales
+    var px = function (p) { return ver(useWeb ? webOf(p) : p); }, useWeb = w.concat([body], blink).every(function (p) { return !!webOf(p); });
+    w = w.map(px); body = px(body); blink = blink.map(px);
     return { id: id, wings: w, body: body, blink: blink, durations: f.durations.slice(),
       cycle: f.durations.reduce(function (a, b) { return a + b; }, 0), all: w.concat([body], blink) };
   }
@@ -417,7 +440,7 @@
   A.comboBeats = function (targets, uidOf) {
     var ts = (targets || []).filter(function (t) { return t && t.of > 1 && !t.miss && !t.capped && t.kind !== 'heal'; });
     if (ts.length < 2) return [];
-    var out = ts.map(function (t) { return { uid: uidOf ? uidOf(t) : t.uid, amount: t.amount || 0, crit: !!t.crit, hpAfter: t.hpAfter }; }).filter(function (b) { return b.uid != null; });
+    var out = ts.map(function (t) { return { uid: uidOf ? uidOf(t) : t.uid, amount: t.amount || 0, crit: !!t.crit, hpAfter: t.hpAfter, t: t }; }).filter(function (b) { return b.uid != null; });
     out.forEach(function (b, i) { b.last = i === out.length - 1; });
     return out.length > 1 ? out : [];
   };
@@ -477,8 +500,10 @@
     if (typeof o === 'string') return o === 'followBell';
     return o.id === 'followBell' || o.relic === 'bell' || o.itemId === 'bell' || (Array.isArray(o.grants) && o.grants.indexOf('bell') >= 0);
   };
+  // 试玩 #10: every bell symbol has a tip on hover / long press (ui.json bell.tip — cryptic on purpose)
+  A.bellTip = function () { return String(A.t('ui.bell.tip')).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   A.bellSvg = function (cls) {
-    return '<svg class="bell-mark' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" width="28" height="28" aria-label="' + A.t('ui.bell.canGetLabel') + '" role="img">' +
+    return '<svg class="bell-mark' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" width="28" height="28" aria-label="' + A.t('ui.bell.canGetLabel') + '" role="img" data-tip="' + A.bellTip() + '">' +
       '<path d="M12 2.5a1.4 1.4 0 0 1 1.4 1.4v.7a6.2 6.2 0 0 1 4.8 6.1v4.1l1.9 2.6a.8.8 0 0 1-.6 1.3H4.5a.8.8 0 0 1-.6-1.3l1.9-2.6v-4.1a6.2 6.2 0 0 1 4.8-6.1v-.7A1.4 1.4 0 0 1 12 2.5z" fill="currentColor"/>' +
       '<path d="M9.4 19.6a2.6 2.6 0 0 0 5.2 0z" fill="currentColor"/><path d="M8.2 9.4a4 4 0 0 1 2.4-2.6" stroke="#fff" stroke-opacity=".55" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>';
   };
@@ -486,8 +511,65 @@
   // html is ALREADY escaped. **x** → <b> (a number gets class sk-num: bold + accent colour); {key} → vars[key] in the same
   // bold, when vars has it (else left as written). Unmarked old text comes back unchanged.
   var NUMLIKE = /^[+\-−×x]?\s*\d/;
+  // ---- 2026-11-14 icons instead of words (user): code-drawn inline SVG glyphs, no text inside, no emoji. Paths from
+  // docs/mockups/icons.html. Style A / B / C is one class on <body> (icons-a | icons-b | icons-c, CSS .gi); the 威力 glyph is
+  // POWER_GLYPH (burst · star · flame · bolt). Text may carry {i:name} tokens; A.skillMarkup turns them into a glyph that
+  // keeps its keyword tip (data-tip, from keywords.json terms) — icons need no translation. Inner details (eyes, holes) are
+  // styled through inherited custom properties (--fxc / --fxw / --holec / --holes), never class hooks: they keep working
+  // if the glyphs ever move into <symbol> + <use> (a use shadow tree ignores outside class selectors).
+  var GLYPH_PATHS = {
+    hp: '<path d="M12 21s-7.5-4.6-9.6-9.4C.9 8.1 3 4.5 6.6 4.5c2.2 0 3.9 1.3 5.4 3.2 1.5-1.9 3.2-3.2 5.4-3.2 3.6 0 5.7 3.6 4.2 7.1C19.5 16.4 12 21 12 21z"/>',
+    // 2026-11-14 试玩 #6: 生命上限 = the heart container — the same heart with a plus cut out of it (current 生命 = the plain heart)
+    maxhp: '<path d="M12 21s-7.5-4.6-9.6-9.4C.9 8.1 3 4.5 6.6 4.5c2.2 0 3.9 1.3 5.4 3.2 1.5-1.9 3.2-3.2 5.4-3.2 3.6 0 5.7 3.6 4.2 7.1C19.5 16.4 12 21 12 21z"/><path style="fill:var(--holec);stroke:var(--holes,none)" d="M10.8 7.6h2.4v2.9h2.9v2.4h-2.9v2.9h-2.4v-2.9H7.9v-2.4h2.9z"/>',
+    face: '<circle cx="12" cy="12" r="9.5"/><path style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" d="M8.2 10.2q1-1.4 2 0M13.8 10.2q1-1.4 2 0M7.8 13.6q4.2 4.6 8.4 0"/>',
+    star: '<path d="M12 2.2l2.9 6.4 7 .7-5.3 4.7 1.6 6.9L12 17.3l-6.2 3.6 1.6-6.9L2.1 9.3l7-.7z"/>',
+    burst: '<path d="M12 1.5l2 6.2 5.4-3.6-2.6 5.9 6.4.9-5.9 2.7 4 5.1-6.2-1.8L12 22.5l-1.1-5.6-6.2 1.8 4-5.1-5.9-2.7 6.4-.9-2.6-5.9L10 7.7z"/>',
+    flame: '<path d="M12.2 2c.6 3.6 5.8 6.1 5.8 11.3A6 6 0 0 1 12 19.5a6 6 0 0 1-6-6.2c0-2.6 1.3-4.3 2.8-5.6.1 1.9.9 3.1 2.2 3.6-.6-3.4.3-6.6 1.2-9.3z"/><path style="fill:var(--holec);stroke:var(--holes,none)" d="M12 18.2a2.6 2.6 0 0 1-2.6-2.7c0-1.6 1.4-2.6 2.2-4 .5 1.8 3 2.4 3 4.2a2.6 2.6 0 0 1-2.6 2.5z"/>',
+    bolt: '<path d="M13.6 1.8L4.2 13.6h6.4l-1.3 8.6 9.5-12.1h-6.5z"/>',
+    block: '<path d="M12 2.2l8.2 3v6.2c0 5-3.6 9-8.2 10.9-4.6-1.9-8.2-5.9-8.2-10.9V5.2z"/>',
+    weak: '<path d="M15.5 2.5l-.5 3.4-5.6 5.6-2-2 5.6-5.6zM4.6 10.3l4.2 4.2-1.2 1.2-1-.8-2 2a1.3 1.3 0 0 1-1.9-1.9l2-2-.8-1z"/><path d="M17.5 12.5v6.2h-2.6l3.9 4 3.9-4h-2.6v-6.2z"/>',
+    tough: '<path d="M12 2.2l8.2 3v6.2c0 5-3.6 9-8.2 10.9-4.6-1.9-8.2-5.9-8.2-10.9V5.2z"/><path style="fill:var(--holec);stroke:var(--holes,none)" d="M10.6 7.5h2.8v3.2h3.2v2.8h-3.2v3.2h-2.8v-3.2H7.4v-2.8h3.2z"/>',
+    bonus: '<path d="M9.3 16.9l-1.4 1.4a3.4 3.4 0 0 1-4.8-4.8l3.2-3.2a3.4 3.4 0 0 1 4.8 0l.9.9-1.7 1.7-.9-.9a1 1 0 0 0-1.4 0l-3.2 3.2a1 1 0 0 0 1.4 1.4l1.4-1.4zM14.7 7.1l1.4-1.4a3.4 3.4 0 0 1 4.8 4.8l-3.2 3.2a3.4 3.4 0 0 1-4.8 0l-.9-.9 1.7-1.7.9.9a1 1 0 0 0 1.4 0l3.2-3.2a1 1 0 0 0-1.4-1.4l-1.4 1.4z"/><path d="M8.6 13.7l5.1-5.1 1.7 1.7-5.1 5.1z"/>',
+    level: '<path d="M12 2.5l8 6v3.6l-8-6-8 6V8.5zM12 9.6l8 6v3.6l-8-6-8 6v-3.6z"/>',
+    cover: '<circle cx="17.2" cy="6.2" r="2.8"/><path d="M12.6 21.5c0-4.2 2-7.3 4.6-7.3s4.6 3.1 4.6 7.3z"/><path d="M8.6 3.4l6.2 2.3v5.1c0 4.1-2.7 7.4-6.2 9-3.5-1.6-6.2-4.9-6.2-9V5.7z"/>',
+    sun: '<circle cx="12" cy="12" r="4.6"/><path d="M12 1.8l1.3 3.4h-2.6zM12 22.2l-1.3-3.4h2.6zM1.8 12l3.4-1.3v2.6zM22.2 12l-3.4 1.3v-2.6zM4.8 4.8l3.3 1.5-1.8 1.8zM19.2 19.2l-3.3-1.5 1.8-1.8zM19.2 4.8l-1.5 3.3-1.8-1.8zM4.8 19.2l1.5-3.3 1.8 1.8z"/>',
+    flower: '<path d="M12 2.5a3.4 3.4 0 0 1 3.2 4.6 3.4 3.4 0 0 1 4.4 5 3.4 3.4 0 0 1-2.5 5.8 3.4 3.4 0 0 1-5.1 3.6 3.4 3.4 0 0 1-5.1-3.6 3.4 3.4 0 0 1-2.5-5.8 3.4 3.4 0 0 1 4.4-5A3.4 3.4 0 0 1 12 2.5z"/><circle style="fill:var(--holec);stroke:var(--holes,none)" cx="12" cy="12.2" r="2.8"/>',
+    note: '<path d="M9 4.5l11-2.2v12.6a3 3 0 1 1-2.2-2.9V7.2L11.2 8.5v8.6a3 3 0 1 1-2.2-2.9z"/>',
+    bubble: '<path d="M12 3c5.2 0 9.2 3.4 9.2 7.6S17.2 18.2 12 18.2c-.9 0-1.8-.1-2.6-.3L4.6 21l1.3-4.4C4 15.2 2.8 13 2.8 10.6 2.8 6.4 6.8 3 12 3z"/><path style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" d="M8.3 10.6q3.7 3.8 7.4 0"/>',
+    daze: '<circle cx="12" cy="12" r="9.5"/><path style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" d="M12 12.2c0-.9.7-1.4 1.4-1.2.9.2 1.3 1.2.9 2.1-.6 1.2-2.3 1.4-3.3.6-1.3-1-1.3-3-.1-4.2 1.5-1.5 4-1.3 5.3.3 1.5 1.8 1.1 4.6-.8 6"/>',
+    coin: '<circle cx="12" cy="12" r="9.5"/><circle style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" cx="12" cy="12" r="6.3"/><path style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" d="M10 9.5l2-1.6 2 1.6M10 14.5l2 1.6 2-1.6"/>'
+  };
+  var POWER_GLYPH = 'bolt'; // 威力 (user 2026-11-14: bolt; also burst · star · flame) — not a sword: 威力 also sizes heals and 护甲
+  var MOOD_GLYPH = 'face'; // 心情: still being chosen (face · sun · flower · note · bubble) — one switch
+  // icon name → the keyword (keywords.json terms) whose tip it shows; every name here must have a glyph
+  A.GLYPHS = { hp: 'hp', maxhp: 'hp', /* its own tip: ui.json glyph.tip.maxhp */ mood: 'mood', power: 'power', block: 'block', weak: 'weak', tough: 'tough', bonus: 'bonus', level: 'level', cover: 'cover', coin: 'coin', daze: 'daze' };
+  var glyphPath = function (n) { return n === 'power' ? GLYPH_PATHS[POWER_GLYPH] : n === 'mood' ? GLYPH_PATHS[MOOD_GLYPH] : GLYPH_PATHS[n]; };
+  // 2026-11-14 试玩 #6: 生命 / 生命上限 tell the two hearts apart in their tips (ui.json glyph.tip.*, before the keyword's own tip)
+  var GLYPH_UI_TIP = { hp: 'ui.glyph.tip.hp', maxhp: 'ui.glyph.tip.maxhp' };
+  var glyphTip = function (n) {
+    if (GLYPH_UI_TIP[n]) { var u = A.t(GLYPH_UI_TIP[n]); if (u && u !== GLYPH_UI_TIP[n] && u !== GLYPH_UI_TIP[n].slice(3)) return u; }
+    var K = root.CHOOSER_DATA && root.CHOOSER_DATA.keywords, t = K && K.terms && K.terms[A.GLYPHS[n]]; return (t && t.tip) || '';
+  };
+  // 2026-11-14 试玩 #6/#7: stat change rows, each once. A 生命上限 change already says where 生命 went: drop the 生命 rows then.
+  A.statRows = function (list) {
+    list = (list || []).filter(Boolean); var hasMax = list.some(function (c) { return c.stat === 'maxHp'; }), seen = {};
+    return list.filter(function (c) {
+      if (hasMax && c.stat === 'hp') return false;
+      var k = c.stat + '|' + JSON.stringify(c.from) + '|' + JSON.stringify(c.to); if (seen[k]) return false; seen[k] = 1; return true;
+    });
+  };
+  // a glyph: <span class="gi gi-power" data-tip="…"><svg>…</svg></span>; tip false = no tip (inside a box that has its own)
+  A.glyph = function (name, tip) {
+    var p = A.GLYPHS[name] ? glyphPath(name) : null;
+    if (!p) return '';
+    var t = tip === false ? '' : typeof tip === 'string' ? tip : glyphTip(name);
+    return '<span class="gi gi-' + name + '"' + (t ? ' data-tip="' + String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }) + '"' : '') + ' aria-hidden="true"><svg viewBox="0 0 24 24">' + p + '</svg></span>';
+  };
+  A.ICON_TOKEN = /\{i:([a-z]+)\}/g;
+  A.iconize = function (html) { return String(html == null ? '' : html).replace(A.ICON_TOKEN, function (m, n) { return A.GLYPHS[n] ? A.glyph(n) : m; }); };
+  A.stripIcons = function (s) { return String(s == null ? '' : s).replace(A.ICON_TOKEN, ''); }; // plain-text contexts (tips, logs)
   A.skillMarkup = function (html, vars) {
-    var s = String(html == null ? '' : html);
+    var s = A.iconize(html);
     s = s.replace(/\*\*(.+?)\*\*/g, function (_, x) { return NUMLIKE.test(x) ? '<b class="sk-num">' + x + '</b>' : '<b>' + x + '</b>'; });
     if (vars) s = s.replace(/\{(\w+)\}/g, function (m, k) { return vars[k] != null && vars[k] !== '' ? '<b class="sk-num">' + String(vars[k]).replace(/[&<>"']/g, '') + '</b>' : m; });
     return s;
@@ -497,12 +579,14 @@
   // already at the top, which is how the line went missing). Returns { eff, flavor }: eff uses the **数字** rule (feed it
   // to richText / skillMarkup), flavor is the rest of the text. eff is never empty for a card with an effect or text.
   var EFF_STAT = { atk: 'ui.stat.atk', maxHp: 'ui.stat.maxHp', hp: 'ui.stat.hp', skillLv: 'ui.stat.skillLv', skillPower: 'ui.stat.skillLv' }; // text keys (looked up when used)
+  var EFF_ICON = { atk: 'power', maxHp: 'hp', hp: 'hp', skillLv: 'level', skillPower: 'level' };
   A.effLine = function (e) {
     if (!e) return '';
     if (e.text) return String(e.text);
-    if (e.type === 'skillUp') return A.t('ui.effect.skillUp');
-    var n = e.type === 'mood' ? A.t('ui.stat.mood') : EFF_STAT[e.stat] ? A.t(EFF_STAT[e.stat]) : e.stat || '';
-    var d = +e.delta || 0;
+    if (e.type === 'skillUp') return A.t('ui.effect.iconLine', { icon: '{i:level}', sign: '+', n: 1 });
+    var d = +e.delta || 0, ic = e.type === 'mood' ? 'mood' : EFF_ICON[e.stat];
+    if (ic) return A.t('ui.effect.iconLine', { icon: '{i:' + ic + '}', sign: d < 0 ? '−' : '+', n: Math.abs(d) }); // 2026-11-14: icon + number, the word lives in the tip
+    var n = EFF_STAT[e.stat] ? A.t(EFF_STAT[e.stat]) : e.stat || '';
     return n ? A.t('ui.effect.statLine', { stat: n, sign: d < 0 ? '−' : '+', n: Math.abs(d) }) : '';
   };
   function boldNums(s) { return /\*\*/.test(s) ? s : s.replace(/\d+(?:\.\d+)?%?/g, '**$&**'); }
@@ -616,7 +700,7 @@
     possessed: { happy: 'possessed-grin', smile: 'possessed-grin', special: 'possessed-grin', shock: 'possessed-flash' } };
   A.corruptExpr = function (cv, e) { if (e && e.indexOf(cv) === 0) return e; return (CORRUPT_NEAR[cv] && CORRUPT_NEAR[cv][e]) || (cv === 'vengeful' ? 'vengeful-sneer' : 'possessed-blank'); };
   // G1 #6 the gate-slam screen: the old low-res 16:9 gate picture first (the 468×395 key-moment next), the 1080p scene last
-  A.gateArt = function () { return [CELLS + 'moments-16x9/gate-seals.png', CELLS + 'key-moments/gate-seals.png', ART + 'scenes/sealing.png'].map(ver); };
+  A.gateArt = function () { return withWeb([CELLS + 'moments-16x9/gate-seals.png', CELLS + 'key-moments/gate-seals.png', ART + 'scenes/sealing.png']).map(ver); };
   // 2026-11-13 真结局发光: the status pill on a difficulty tier — locked / true ending (glows) / cleared / last death / untried
   A.dfBadge = function (t) {
     t = t || {};

@@ -21,7 +21,11 @@
 // Extras for tools/tests: trackFor(ctx), altFor(ctx), levelFor(ctx), play(trackId), stop(), setAct(n), state(), TRACKS, CUES.
 (function (root) {
   'use strict';
-  var STORE = 'chooser.audio.v2';
+  // 2026-11-14 试玩: the sound settings are kept per ?profile= (like saves): a fresh ?profile=try starts with sound ON.
+  // ?mute=1 (tests / screenshot runs) mutes this page only and never writes the setting, until the player toggles mute.
+  var QS = ''; try { QS = String((root.location && root.location.search) || ''); } catch (e) { /* */ }
+  var PROF = (/[?&]profile=([^&#]*)/.exec(QS) || [])[1] || ''; try { PROF = decodeURIComponent(PROF).replace(/[^\w-]/g, ''); } catch (e) { PROF = ''; }
+  var STORE = 'chooser.audio.v2' + (PROF ? '.' + PROF : ''), SESSION_MUTE = /[?&]mute=1(?:[&#]|$)/.test(QS), noSave = false;
   var TRACKS = ['guild-day', 'guild-hall', 'interview', 'battle-light', 'dread', 'battle-dark', 'sacrifice', 'camp-night', 'throne', 'dawn',
     'victory', 'victory-dark', 'defeat', 'themeSong'];
   // 2026-11-14 真结局片尾: 'themeSong' = the ending song 《写下你的名字》 at music/theme-song.mp3 (docs/THEME-SONG.md). Until the
@@ -58,7 +62,7 @@
 
   // ---------------- settings ----------------
   var S = { muted: false, music: MUSIC_DEFAULT, sfx: 0.5, v: 3 };
-  function save() { try { root.localStorage && root.localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) { /* ignore */ } }
+  function save() { if (noSave) return; try { root.localStorage && root.localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) { /* ignore */ } }
   try {
     var raw = root.localStorage && root.localStorage.getItem(STORE);
     if (raw) {
@@ -68,6 +72,7 @@
       if (!(o.v >= 3)) { if (+o.music === 0.6) S.music = MUSIC_DEFAULT; save(); }
     }
   } catch (e) { /* private mode etc. */ }
+  if (SESSION_MUTE) { S.muted = true; noSave = true; }
 
   var act = 1;          // act of the last scene(); colours the SFX palette
   var unlocked = false; // a user gesture has happened
@@ -668,6 +673,7 @@
     function schedule() {
       if (fire !== f || !ac) return;
       var horizon = ac.currentTime + 0.6;
+      if (f.next < ac.currentTime) f.next = ac.currentTime + 0.05; // 2026-11-14 perf: after a hidden / throttled tab, never a catch-up burst of nodes
       while (f.next < horizon) {
         var big = Math.random() < 0.12;
         if (big) { // a snap: bright pop + tiny low knock
@@ -747,7 +753,7 @@
   }
 
   function setMuted(b) {
-    S.muted = !!b; save();
+    S.muted = !!b; noSave = false; save(); // the player's own toggle always sticks (also after ?mute=1)
     decks.forEach(applyDeck);
     if (bus && ac) bus.gain.setTargetAtTime(S.muted ? 0 : S.sfx, ac.currentTime, 0.03);
   }
@@ -796,6 +802,7 @@
     cue: safe('cue', cue),
     setMuted: safe('setMuted', setMuted),
     isMuted: function () { return !!S.muted; },
+    store: function () { return STORE; },
     setVolume: safe('setVolume', setVolume),
     getVolume: function () { return { music: S.music, sfx: S.sfx }; },
     // tools / tests

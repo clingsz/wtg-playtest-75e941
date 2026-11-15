@@ -79,11 +79,11 @@
   const ROLE_LABELS = lazy(() => ({ tank: TX('role.tank'), adc: TX('role.adc'), healer: TX('role.healer'), mage: TX('role.mage'), rogue: TX('role.rogue') }));
   const FACTION_LABELS = lazy(() => ({ monster: TX('faction.monster'), undead: TX('faction.undead'), bandit: TX('faction.bandit'), noble: TX('faction.noble'), fallen: TX('faction.fallen') }));
   const STATUS_LABELS = lazy(() => ({ // fallback when data/keywords.json has no status entry
-    'slow-start': TX('status.slow-start'), guard: TX('status.guard'), formation: TX('status.formation'), clause: TX('status.clause'), luck: TX('status.luck'), smoke: TX('status.smoke'), drum: TX('status.drum'),
+    'slow-start': TX('status.slow-start'), weak: TX('status.weak'), tough: TX('status.tough'), shell: TX('status.shell'), formation: TX('status.formation'), clause: TX('status.clause'), luck: TX('status.luck'), smoke: TX('status.smoke'), drum: TX('status.drum'), daze: TX('status.daze'),
     'bond-high': TX('status.bond-high'), 'bond-low': TX('status.bond-low'), 'mood-low': TX('status.mood-low'), vengeful: TX('status.vengeful'), 'vengeful-high': TX('status.vengeful-high'), 'vengeful-low': TX('status.vengeful-low'),
-    possessed: TX('status.possessed'), debuffed: TX('status.debuffed'), veteran: TX('status.veteran'),
+    possessed: TX('status.possessed'), debuffed: TX('status.debuffed'),
   }));
-  const STATUS_TIPS = lazy(() => ({ veteran: TX('status.tip.veteran') })); // v2.4 fallback tips
+  const STATUS_TIPS = lazy(() => ({ weak: TX('status.tip.weak'), tough: TX('status.tip.tough'), shell: TX('status.tip.shell') })); // fallback tips
   const CLOSE = { friend: true, 'ex-partner': true };
   const BOSS_REFS0 = { 'goblin-boss': 1, 'gate-guardian': 1, 'bandit-chief': 1 };
   const BAG_MAX = 3;
@@ -108,16 +108,16 @@
   // rejectedHp / rejectedAtk (optional): the rejected girls who come back as enemies (vengeful) use these instead of hp / atk
   // DESIGN-skill-level: tiers 1–9 enemy hp ×1.1 (rounded) to pay for 技能等级 + 个人特点; 木头 unchanged
   const DIFFICULTIES = lazy(() => ([
-    { id: 0, name: TX('difficulty.name.0'), hp: 0.6, atk: 0, rest: 8, oneSacrifice: true, finalBossOnly: true, bellWound: false, diceTakes: 1, rejectedHp: 1.0, rejectedAtk: 3, enemyAssist: 0.15 }, // FEEDBACK-1112 #30: rejected girls 0.6 → 0.8 hp (sim 81% → ~77%) · SPEC-2026-11-13 E3: one girl per level L4–L7 → 1.0 hp, atk +3 (sim 83% → ~74%)
-    { id: 1, name: TX('difficulty.name.1'), hp: 0.66, atk: -1, rest: 8, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
-    { id: 2, name: TX('difficulty.name.2'), hp: 0.83, atk: -1, rest: 7, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
-    { id: 3, name: TX('difficulty.name.3'), hp: 0.88, atk: -1, rest: 6, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
-    { id: 4, name: TX('difficulty.name.4'), hp: 0.99, atk: -1, rest: 6, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
+    { id: 0, name: TX('difficulty.name.0'), hp: 0.6, atk: 0, rest: 5, oneSacrifice: true, finalBossOnly: true, bellWound: false, diceTakes: 1, rejectedHp: 1.0, rejectedAtk: 3, enemyAssist: 0.15, levelHp: { 4: 0.9, 5: 0.9, 6: 0.9, 7: 0.8, 11: 1.7 }, levelAtk: { 7: -1, 8: 1, 11: 1 } }, // FEEDBACK-1112 #30: rejected girls 0.6 → 0.8 hp (sim 81% → ~77%) · SPEC-2026-11-13 E3: one girl per level L4–L7 → 1.0 hp, atk +3 (sim 83% → ~74%)
+    { id: 1, name: TX('difficulty.name.1'), hp: 0.66, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
+    { id: 2, name: TX('difficulty.name.2'), hp: 0.83, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
+    { id: 3, name: TX('difficulty.name.3'), hp: 0.88, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
+    { id: 4, name: TX('difficulty.name.4'), hp: 0.99, atk: -1, rest: 5, diceTakes: 1, oneSacrifice: true, enemyAssist: 0.15 },
     { id: 5, name: TX('difficulty.name.5'), hp: 0.77, atk: 0, rest: 5, diceTakes: 2, enemyAssist: 0.1 },
     { id: 6, name: TX('difficulty.name.6'), hp: 0.88, atk: 0, rest: 5, diceTakes: 2, enemyAssist: 0.1 },
     { id: 7, name: TX('difficulty.name.7'), hp: 0.99, atk: 0, rest: 5, diceTakes: 2, enemyAssist: 0.1 },
     { id: 8, name: TX('difficulty.name.8'), hp: 1.1, atk: 0, rest: 5, diceTakes: 2, enemyAssist: 0.08 },
-    { id: 9, name: TX('difficulty.name.9'), hp: 1.27, atk: 0, rest: 4, diceTakes: 2, enemyAssist: 0.08 },
+    { id: 9, name: TX('difficulty.name.9'), hp: 1.27, atk: 0, rest: 5, diceTakes: 2, enemyAssist: 0.08 },
   ]));
   const DIFF_BLURB = lazy(() => ([TX('difficulty.blurb.0'), TX('difficulty.blurb.1'), TX('difficulty.blurb.2'), TX('difficulty.blurb.3'), TX('difficulty.blurb.4'),
     TX('difficulty.blurb.5'), TX('difficulty.blurb.6'), TX('difficulty.blurb.7'), TX('difficulty.blurb.8'), TX('difficulty.blurb.9')]));
@@ -163,21 +163,28 @@
     const level = cleared ? 0 : m.tierLast[t] || 0;
     return { tier: t, name: d.name, level, cleared, text: cleared ? TX('difficulty.rankCleared', { name: d.name }) : TX('difficulty.rankLevel', { name: d.name, level }) };
   }
+  let OPEN_TIERS = 1; // 2026-11-14 playtest: only 木头 is open (the other tiers need a re-tune — BACKLOG); raise to open more (tests: E.setOpenTiers)
   function difficultyView(data, run) {
     const m = run.meta, fz = dig(linesV2(data), 'fairy', 'difficulty') || {};
     const get = (k) => (fz[k] != null ? fz[k] : DIFF_TEXT()[k]);
     return {
-      tiers: DIFFICULTIES().map((d) => ({ id: d.id, name: d.name, locked: d.id > m.unlocked, cleared: !!m.tierCleared[d.id], trueEnd: !!m.tierTrue[d.id], last: m.tierLast[d.id] || 0,
+      tiers: DIFFICULTIES().map((d) => ({ id: d.id, name: d.name, locked: d.id > m.unlocked || d.id >= OPEN_TIERS, cleared: !!m.tierCleared[d.id], trueEnd: !!m.tierTrue[d.id], last: m.tierLast[d.id] || 0,
         text: DIFF_BLURB()[d.id] || '' })),
       unlocked: m.unlocked, rank: rankOf(m),
       ask: asList(get('ask')).map((r) => (typeof r === 'string' ? { speaker: 'fairy', text: r } : r)),
-      locked: asList(get('locked')).map((r) => (typeof r === 'string' ? { speaker: 'fairy', expr: 'special', text: r } : r)),
+      locked: m.unlocked >= OPEN_TIERS ? [{ speaker: 'fairy', expr: 'special', text: TX('difficulty.lockedPlaytest') }]
+        : asList(get('locked')).map((r) => (typeof r === 'string' ? { speaker: 'fairy', expr: 'special', text: r } : r)),
       picked: asList(get('picked')).map((r) => (typeof r === 'string' ? { speaker: 'fairy', text: r } : r)),
     };
   }
   // ---------- v2.4 constants ----------
-  const VETERAN_CUT = 2, MIN_DAMAGE = 1;
-  const WARD_CUT = 1, LUCKY_BONUS = 0.3; // G2 #8 (legacy flow kinds, unused by the advisors since 第六批 H1-1): ward — each ally's first hit taken each battle −1 · lucky — our first bonus roll each round +30%
+  const MIN_DAMAGE = 1;
+  // DESIGN-2026-11-14-block (用户拍板 第二轮): 护甲 sits on top of hp for one round — cleared when its owner's side starts its phase
+  //  (unless kept), cleared between waves, 0 at the start of every battle. 虚弱 = the afflicted's 威力 −1 · 坚韧 = −1 per hit taken.
+  const FLAWLESS_MOOD_CAP = 1, STEW_CARD = 'guild-stew';
+  const SMOKE_MISS = 0.4, CLAUSE_DAZE_N = 2; // 试玩反馈 2026-11-14 晚 #4 烟雾弹: each enemy hit misses 40% · #22 附加条款: two random enemies 发呆 this round
+  const VETERAN_BLOCK = 1, ENEMY_GUARD_BLOCK = 3, FORMATION_BLOCK = 2, BOSS_FORMATION_BLOCK = 3, SHELL_BLOCK = 6, REST_BLOCK = 1;
+  const LUCKY_BONUS = 0.3; // G2 #8 (legacy flow kinds, unused by the advisors since 第六批 H1-1): ward — each ally's first hit taken each battle −1 · lucky — our first bonus roll each round +30%
   const EXPLORE_N = 2, EXPLORE_N_OUTLANDER = 3;
   const TEA_HP = 1; // 第六批 H1-1 (用户已选): 露西安「热茶」 rest +1 hp each · 妮可塔「幸运星」 (flow fortune): reward picks 4 instead of 3
   const BAG_FULL_TIP = lazy(() => (TX('item.bagFull')));
@@ -504,24 +511,34 @@
   }
   // stored as skill.power = upgrades taken (old saves read as-is); level = power + 1, capped
   const SKILL_LV_MAX = 4;
-  const CRIT_RATE = [0.2, 0.35, 0.5, 0.65], CRIT_X = 2; // hunters (aim): crit chance by level, crit = ×2
-  const GUARD_LV = [{ cut: 1, cover: 0 }, { cut: 1, cover: 1 }, { cut: 2, cover: 1 }, { cut: 2, cover: 2 }]; // self + allies behind her
-  const HEAL_LV = [{ plus: 0, n: 1 }, { plus: 1, n: 1 }, { plus: 1, n: 2 }, { plus: 2, n: 2 }];
+  // DESIGN-2026-11-14-three-factors (用户拍板): 威力 = how big one hit / heal share / block share is; 技能等级 = how many;
+  // 加成 = how often (pseudo-random, see comboRoll). A pulled-in action gets 威力 +1 (CHAIN_POWER), not +depth.
+  const CRIT_RATE = [0.3, 0.6, 0.9, 1], CRIT_X = 2, CRIT_X_MAX = 2.5; // hunters (aim): Lv1–3 crit 30/60/90% ×2 · Lv4 鹰眼 every arrow ×2.5
+  const CHAIN_POWER = 1, COMBO_PITY = Infinity; // 加成: plain chance (用户 2026-11-14: no pity — it nearly doubled the real rate); set a number to bring the pity back
+  const SPARK_TARGETS = [2, 3, 4, Infinity]; // 法师: Lv1 2 targets, +1 per level, Lv4 everyone
+  // 试玩反馈 2026-11-14 晚 #17: levels add ONLY targets; damage is 威力 alone — main 威力, the others ⌊威力/2⌋ (lv kept for callers)
+  const sparkMain = (p, lv) => p; // eslint-disable-line no-unused-vars
+  const sparkSplash = (p, lv) => Math.floor(p / 2); // eslint-disable-line no-unused-vars
+  // 牧师 per heal share: 'half' = ⌈威力/2⌉ (chosen 2026-11-14 by sim, see DESIGN-2026-11-14-block 实施记录) · 'minus2' = max(1, 威力 − 2)
+  // 试玩反馈 2026-11-14 晚 (用户): the priest was too weak — 'full' = each share heals the full 威力
+  const HEAL_FORMULA = 'full';
+  const healShare = (p) => (HEAL_FORMULA === 'full' ? Math.max(1, p) : HEAL_FORMULA === 'minus2' ? Math.max(1, p - 2) : Math.ceil(Math.max(1, p) / 2));
+  const GUARD_LV = [{ self: 1, cover: 0 }, { self: 1, cover: 1 }, { self: 2, cover: 1 }, { self: 2, cover: 2 }]; // 2026-11-14 护甲: shares of 威力 for herself + allies behind her (掩护, one share each)
+  const HEAL_LV = [{ n: 1 }, { n: 2 }, { n: 2, over: true }, { n: 3, over: true, cleanse: true }]; // shares; Lv3+ overflow → 护甲, Lv4 净化
   function lvOf(sk) { return clamp(1 + ((sk && sk.power) || 0), 1, SKILL_LV_MAX); }
   function hitsOf(sk) { return sk && sk.kind === 'backstab' ? lvOf(sk) + 1 : 1; } // rogues: 连击 2..5 hits (SPEC-11-13 F: one blow, many hits = 连击)
   function lvLine(kind, lv) { // the plain words for one level: 「暴击率 35%」
     const i = clamp(lv, 1, SKILL_LV_MAX) - 1;
     switch (kind) {
       // 第六批 H1-3: say what this level does, with its own numbers (no vague "per level" wording, no 「+0」)
-      case 'guard': { const g = GUARD_LV[i]; return g.cover ? TX('skill.lv.guardCover', { cut: g.cut, cover: g.cover }) : TX('skill.lv.guard', { cut: g.cut }); }
-      case 'aim': return TX('skill.lv.aim', { pct: Math.round(CRIT_RATE[i] * 100) });
+      case 'guard': { const g = GUARD_LV[i]; return g.cover ? TX('skill.lv.guardCover', { self: g.self, cover: g.cover }) : TX('skill.lv.guard', { self: g.self }); }
+      case 'aim': return i >= SKILL_LV_MAX - 1 ? TX('skill.lv.aimMax', { x: CRIT_X_MAX }) : TX('skill.lv.aim', { pct: Math.round(CRIT_RATE[i] * 100) });
       case 'backstab': return TX('skill.lv.backstab', { n: i + 2 });
-      case 'spark': return i ? TX('skill.lv.spark', { plus: i }) : TX('skill.lv.sparkNone');
-      case 'heal': { const h = HEAL_LV[i]; return h.plus ? TX('skill.lv.healPlus', { n: h.n, plus: h.plus }) : TX('skill.lv.heal', { n: h.n }); }
+      case 'spark': return SPARK_TARGETS[i] === Infinity ? TX('skill.lv.sparkAll') : TX('skill.lv.spark', { n: SPARK_TARGETS[i] });
+      case 'heal': { const h = HEAL_LV[i]; return h.cleanse ? TX('skill.lv.healCleanse', { n: h.n }) : h.over ? TX('skill.lv.healOver', { n: h.n }) : TX('skill.lv.heal', { n: h.n }); }
       default: return '';
     }
   }
-  const boldNums = (t) => String(t).replace(/[+-]?\d+%?/g, (m) => `**${m}**`); // 第六批 H1-3: 「暴击率 **35%**」
   // the whole ladder, for a chip's hover tip
   const lvLadder = (kind) => [1, 2, 3, 4].map((l) => TX('skill.lvLadderItem', { lv: l, text: lvLine(kind, l) })).join(TX('list.semi'));
   // ---------- DESIGN-skill-level §2: 个人特点 (perks), damage-only, allies only ----------
@@ -536,23 +553,28 @@
   // what she does on her own turn, with her real numbers (enemy = she stands on the enemy side)
   function actionTextFor(skill, atk, enemy, role) {
     if (!skill) return null;
-    const lv = lvOf(skill), i = lv - 1;
+    const lv = lvOf(skill), i = enemy ? 0 : lv - 1;
     const d = rawAmount(skill.kind, atk, enemy);
     // v2.3 §A[19]: hunters (adc) aim at the rightmost, a skill marked random at anyone
     const where = skill.random || skill.target === 'random' || (enemy && skill.kind === 'aim') ? 0 : role === 'adc' ? 1 : 2; // v2.4 [18]: random / rightmost / leftmost
     const foe = enemy ? [TX('skill.target.party.random'), TX('skill.target.party.rightmost'), TX('skill.target.party.leftmost')][where]
       : [TX('skill.target.enemy.random'), TX('skill.target.enemy.rightmost'), TX('skill.target.enemy.leftmost')][where];
-    const tag = enemy ? '' : TX('skill.action.lvTag', { lv, boldNums: boldNums(lvLine(skill.kind, lv)) }); // ** = bold in the UI's richText · 第六批 H1-3: the level's numbers are bold
+    const tag = enemy ? '' : TX('skill.action.lvTag', { lv }); // 2026-11-14 keyword style: the numbers are in the line itself
     switch (skill.kind) {
-      case 'guard': return enemy ? TX('skill.action.guardEnemy', { foe, dmg: d })
-        : TX('skill.action.guard', { foe, dmg: d, lvTag: tag });
-      case 'aim': return enemy ? TX('skill.action.aimEnemy', { foe, dmg: d }) : TX('skill.action.aim', { foe, dmg: d, critX: CRIT_X, critDmg: d * CRIT_X, lvTag: tag });
-      case 'backstab': { const n = hitsOf(skill); return enemy ? TX('skill.action.backstabEnemy', { n, dmg: d, lvTag: tag }) : TX('skill.action.backstab', { n, dmg: d, lvTag: tag }); }
-      case 'spark': return enemy ? TX('skill.action.sparkEnemy', { dmg: d, lvTag: tag }) : i ? TX('skill.action.sparkLv', { dmg: d + i, plus: i, lvTag: tag }) : TX('skill.action.spark', { dmg: d, lvTag: tag });
-      case 'heal': { const h = HEAL_LV[enemy ? 0 : i], who = enemy ? (h.n > 1 ? TX('skill.healWho.enemyMany', { n: h.n }) : TX('skill.healWho.enemyOne')) : (h.n > 1 ? TX('skill.healWho.many', { n: h.n }) : TX('skill.healWho.one'));
-        const hv = { who, heal: d + h.plus, plus: h.plus, foe, dmg: d, lvTag: tag };
-        return enemy ? TX('skill.action.healEnemy', hv) : h.plus ? TX('skill.action.healPlus', hv) : TX('skill.action.heal', hv); }
-      default: return TX('skill.action.default', { foe, dmg: d });
+      case 'guard': { if (enemy) return TX('skill.action.guardEnemy', { foe, dmg: d, block: ENEMY_GUARD_BLOCK });
+        const g = GUARD_LV[i], pw = Math.max(1, atk);
+        return g.cover ? TX('skill.action.guardCover', { foe, dmg: d, block: pw * g.self, cover: g.cover, give: pw, lvTag: tag }) : TX('skill.action.guard', { foe, dmg: d, block: pw * g.self, lvTag: tag }); }
+      case 'aim': if (enemy) return TX('skill.action.aimEnemy', { foe, dmg: d });
+        return i >= SKILL_LV_MAX - 1 ? TX('skill.action.aimMax', { foe, critDmg: Math.floor(d * CRIT_X_MAX), lvTag: tag })
+          : TX('skill.action.aim', { foe, dmg: d, pct: Math.round(CRIT_RATE[i] * 100), critDmg: d * CRIT_X, lvTag: tag });
+      case 'backstab': return enemy ? TX('skill.action.backstabEnemy', { n: 2, dmg: d }) : TX('skill.action.backstab', { n: hitsOf(skill), dmg: d, lvTag: tag });
+      case 'spark': if (enemy) return TX('skill.action.sparkEnemy', { dmg: d });
+        return SPARK_TARGETS[i] === Infinity ? TX('skill.action.sparkAll', { dmg: sparkMain(d, lv), splash: sparkSplash(d, lv), lvTag: tag })
+          : sparkSplash(d, lv) > 0 ? TX('skill.action.spark', { n: SPARK_TARGETS[i], dmg: sparkMain(d, lv), splash: sparkSplash(d, lv), lvTag: tag }) : TX('skill.action.sparkOne', { dmg: sparkMain(d, lv), lvTag: tag });
+      case 'heal': { const h = HEAL_LV[i];
+        const hv = { n: h.n, heal: healShare(Math.max(1, atk)), foe, dmg: d, lvTag: tag };
+        return enemy ? TX('skill.action.healEnemy', hv) : h.cleanse ? TX('skill.action.healCleanse', hv) : h.over ? TX('skill.action.healOver', hv) : TX('skill.action.heal', hv); }
+      default: return enemy && skill.vary ? TX('skill.action.defaultRange', { foe, dmg: d, max: d + skill.vary }) : TX('skill.action.default', { foe, dmg: d });
     }
   }
   // SPEC-11-13 F (rounds 2–3): the kill call for one action — n foes downed by it; 2+ only (no First Blood), Chinese only
@@ -975,6 +997,9 @@
         if (step.phase === 'reward' && bagFull(run)) pool = pool.filter((c) => !(c.effect && c.effect.type === 'item')); // v2.4 [24]
         const n = step.phase === 'reward' && (leaderHas(run, 'extra-option') || advisorFlow(data, run) === 'fortune') ? 4 : 3; // H1-1 妮可塔「幸运星」: 4, never 5 with both
         run.options = rngSample(run, pool.map((c) => c.id), n);
+        // 试玩反馈 2026-11-14 晚 #21: while a girl is down (心情 ≤ −1) the stew is always on the table
+        if (step.phase === 'reward' && !run.options.includes(STEW_CARD) && pool.some((c) => c.id === STEW_CARD)
+          && run.party.some((id) => !isLeader(id) && run.members[id] && run.members[id].mood <= -1)) run.options[run.options.length - 1] = STEW_CARD;
       }
       if (step.phase === 'sacrifice') {
         run.sacrificeModes = step.modes;
@@ -1122,7 +1147,7 @@
   }
 
   // feedback-1112 #7: after the gate slams shut (L3), the leader answers the noble.
-  //  refuse → the noble curses her: leader hp ×0.5 (floor, min 1), then she has to go on anyway · accept → 2 random girls mood −1
+  //  refuse → the noble's guards beat her down: leader hp → 1, then she has to go on anyway · accept → 2 random girls mood −1
   const SEAL_OPTIONS = lazy(() => ([{ id: 'refuse', text: TX('sacrifice.seal.refuse'), note: TX('sacrifice.seal.refuseNote') /* 第六批 H1-5 */ }, { id: 'accept', text: TX('sacrifice.seal.accept'), note: TX('sacrifice.seal.acceptNote') }]));
   function sealChoice(data, run, a, ev) {
     const c = a.choice;
@@ -1134,9 +1159,9 @@
     if (c === 'refuse') {
       const L = run.members[LEADER_ID];
       if (L) {
-        const from = hpOf(L), to = Math.max(1, Math.floor(from / 2));
+        const from = hpOf(L), to = 1; // 试玩反馈 2026-11-14 晚 #12: refusing gets the leader beaten down to 1 hp (was ×0.5)
         L.hp = to;
-        ev.push({ kind: 'sealCurse', id: LEADER_ID, hpBefore: from, hpAfter: to }); // the UI shows it on the story's curse line
+        ev.push({ kind: 'sealCurse', id: LEADER_ID, hpBefore: from, hpAfter: to, text: TX('story.sealBeaten', { hp: to }) }); // the UI shows it on the story's curse line
         run.queue.unshift({ story: 'sealRefuse', ctx: { hpFrom: from, hpTo: to } });
       } else run.queue.unshift({ story: 'sealRefuse' });
     } else {
@@ -1158,10 +1183,12 @@
       chooseDifficulty(data, run, a, ev) {
         const d = Math.floor(+a.difficulty);
         if (!DIFFICULTIES()[d]) fail('bad difficulty');
-        if (d > run.meta.unlocked) fail('difficulty locked');
+        if (d > run.meta.unlocked || d >= OPEN_TIERS) fail('difficulty locked');
         run.difficulty = d;
         useRun(run);
-        for (const l of difficultyView(data, run).picked) ev.push(lineEvent(data, run, Object.assign({}, l, { text: String(l.text).replace(/\{tier\}/g, DIFFICULTIES()[d].name) }), {}, 'fairy', { key: 'difficulty' }));
+        const said = difficultyView(data, run).picked.slice();
+        said.splice(1, 0, { speaker: 'fairy', expr: 'happy', text: [TX('difficulty.quip.0'), TX('difficulty.quip.1'), TX('difficulty.quip.2'), TX('difficulty.quip.3'), TX('difficulty.quip.4'), TX('difficulty.quip.5'), TX('difficulty.quip.6'), TX('difficulty.quip.7'), TX('difficulty.quip.8'), TX('difficulty.quip.9')][d] }); // 2026-11-14 user: a per-tier quip where she half-lets-slip the doll plan
+        for (const l of said) ev.push(lineEvent(data, run, Object.assign({}, l, { text: String(l.text).replace(/\{tier\}/g, DIFFICULTIES()[d].name) }), {}, 'fairy', { key: 'difficulty' }));
         advance(data, run, ev);
       },
     },
@@ -1484,7 +1511,7 @@
   function restPreview(data, run) {
     return run.party.filter((id) => run.members[id]).map((id) => {
       const m = run.members[id], hp0 = hpOf(m), hp = Math.min(m.maxHp, hp0 + restAmount(data, run));
-      return { id, name: nameOf(data, id), amount: Math.max(0, hp - hp0), hp, maxHp: m.maxHp, full: hp0 >= m.maxHp };
+      return { id, name: nameOf(data, id), amount: Math.max(0, hp - hp0), hp, maxHp: m.maxHp, full: hp0 >= m.maxHp, block: hp0 >= m.maxHp ? REST_BLOCK : 0 };
     });
   }
   // G2 #10: odd campfires offer rest / explore, even ones rest / train. The bell night and the rules night keep every option.
@@ -1511,9 +1538,14 @@
       const healed = [], heals = restPreview(data, run); // 2026-11-13 休息回血提示: the same numbers the camp card showed
       for (const id of run.party) {
         const m = run.members[id], before = statsOf(m, isLeader(id));
+        if (hpOf(m) >= m.maxHp) m.restBlock = REST_BLOCK; // 2026-11-14 满血休息: +1 护甲 into the next battle's round 1 (no 蓝血)
         m.hp = Math.min(m.maxHp, hpOf(m) + restAmount(data, run));
         if (m.hp !== before.hp) healed.push({ id, from: before.hp, to: m.hp });
         statChange(data, run, ev, id, before, 'rest');
+      }
+      { // 试玩反馈 2026-11-14 晚 #21: a quiet night by the fire — the lowest-mood girl (first in order on ties) +1
+        const girls = run.party.filter((id) => !isLeader(id) && run.members[id] && run.members[id].mood < 2);
+        if (girls.length) { const low = girls.reduce((b, id) => (run.members[id].mood < run.members[b].mood ? id : b), girls[0]); const d = {}; addMood(d, low, 1); applyMoods(data, run, ev, d); }
       }
       if (advisorFlow(data, run) === 'tea') { const a = advisorData(data, run), f = flowOf(a); // H1-1: she names it, so the extra +1 has a cause
         ev.push({ kind: 'advisorFlow', flow: 'tea', speaker: a.id, speakerId: a.id, name: a.name, expr: 'happy', text: TX('camp.tea', { skill: f.name, hp: TEA_HP }) });
@@ -1586,7 +1618,13 @@
     const P = trainingPool(data);
     const okFor = (b) => !isLeader(id) || ((b.effect || {}).type !== 'mood' && (b.downside || {}).type !== 'mood'); // the leader has no mood
     const nPool = P.normal.filter(okFor), sPool = P.special.filter(okFor);
-    const bonuses = rngSample(run, nPool.length ? nPool : P.normal, 2).map((b) => Object.assign(clone(b), { special: false }))
+    // growth-and-relics §9.1/§9.4 (试玩反馈 2026-11-14 晚): card 1 is ALWAYS a skill-level card (对练 / 复盘; a maxed skill shows
+    // as 威力 +1 via skillUpAs), card 2 another normal card that is not skillUp, card 3 a special card (a cost that buys more)
+    const isSU = (b) => b && b.effect && b.effect.type === 'skillUp';
+    const nAll = nPool.length ? nPool : P.normal, suPool = nAll.filter(isSU), restPool = nAll.filter((b) => !isSU(b));
+    const first = suPool.length ? rngSample(run, suPool, 1) : [];
+    const second = rngSample(run, restPool.length ? restPool : nAll.filter((b) => !first.includes(b)), first.length ? 1 : 2);
+    const bonuses = first.concat(second).map((b) => Object.assign(clone(b), { special: false }))
       .concat(rngSample(run, sPool.length ? sPool : P.special, 1).map((b) => Object.assign(clone(b), { special: true })));
     Object.assign(C, { trainee: id, talkId: talk.talkId, talk: talk.lines, bonuses, step: 'train-bonus' });
   }
@@ -1603,6 +1641,7 @@
     const b = C.bonuses.find((x) => x.id === bonusId) || fail('bonus not offered: ' + bonusId);
     const id = C.trainee, before = statsOf(run.members[id], isLeader(id)), d = {};
     applyBonusEff(data, run, id, b.effect, d);
+    applyBonusEff(data, run, id, b.extra, d); // 试玩反馈 2026-11-14 晚 #7: a card with a cost buys a second effect
     applyBonusEff(data, run, id, b.downside, d);
     ev.push({ kind: 'train', id, name: nameOf(data, id), bonusId: b.id, label: b.label, special: !!b.special, text: `${nameOf(data, id)}：${b.label}` });
     applyMoods(data, run, ev, d);
@@ -1649,7 +1688,7 @@
     if (C.step === 'train-pick') v.train = { candidates: run.party.slice() };
     if (C.trainee) {
       v.train = { member: C.trainee, name: nameOf(data, C.trainee), talkId: C.talkId || null, talk: clone(C.talk || []), picked: C.picked || null,
-        bonuses: (C.bonuses || []).map((b) => Object.assign(clone(b), { preview: { [C.trainee]: previewFor(data, run, C.trainee, [b.effect, b.downside], 0) } })) };
+        bonuses: (C.bonuses || []).map((b) => Object.assign(clone(b), { preview: { [C.trainee]: previewFor(data, run, C.trainee, [b.effect, b.extra, b.downside], 0) } })) };
     }
     // flat aliases for the current step (what the UI acts on): items / candidates / bonuses
     if (C.step === 'explore' && v.explore) v.items = v.explore.offer;
@@ -1933,7 +1972,7 @@
             const u = { ref: c.id, candidate: true, name: c.name, role: c.role, faction: 'fallen', corruption: 'vengeful', grudge,
               maxHp: c.hp + bh, atk: c.atk + ba, skill: Object.assign({ power: 0 }, clone(c.skill)) };
             if (grudge === 'high') { u.maxHp += 2; u.atk += 1; } // §2.2 grudge high: stronger, crueller
-            else { u.atk = Math.max(1, u.atk - 1); u.flashbackFirst = true; } // grudge low: hesitates once
+            else { u.weak = 1; u.flashbackFirst = true; } // grudge low: hesitates once, 虚弱 (威力 −1; was atk −1 before 2026-11-14)
             if (c.combo) u.combo = clone(c.combo);
             units.push(u);
             intro.push({ id: c.id, key: 'enemyIntroRejected', v2: ['vengeful', grudge, 'intro'] });
@@ -1983,10 +2022,13 @@
       const front = [];
       for (const e of pads) {
         if (e.padTo !== 'party') continue;
-        const t = data.enemies.find((x) => x.id === e.enemy);
-        if (!t) continue; // tolerated while content lands; validate-data flags unknown ids
+        const t0 = data.enemies.find((x) => x.id === e.enemy);
+        if (!t0) continue; // tolerated while content lands; validate-data flags unknown ids
         const b = e.buff || {};
-        while (units.length + front.length < run.party.length) {
+        // 试玩反馈 2026-11-14 晚 #13: squad = a mixed mercenary squad (guard / priest / archer …), filled in this order, cycling
+        const sq = (Array.isArray(e.squad) ? e.squad : []).map((id) => data.enemies.find((x) => x.id === id)).filter(Boolean);
+        for (let k = 0; units.length + front.length < run.party.length; k++) {
+          const t = sq.length ? sq[k % sq.length] : t0;
           front.push({ ref: t.id, padded: true, name: t.name, faction: t.faction, maxHp: t.hp + (b.hp || 0), atk: t.atk + (b.atk || 0), skill: Object.assign({ power: 0 }, t.skill) });
         }
       }
@@ -1998,6 +2040,10 @@
         u.maxHp = Math.max(1, Math.round(u.maxHp * (rj && df.rejectedHp != null ? df.rejectedHp : df.hp)));
         if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct));
         u.atk = Math.max(1, u.atk + (rj && df.rejectedAtk != null ? df.rejectedAtk : df.atk));
+        // 试玩反馈 2026-11-14 晚 (木头 curve): per-level enemy hp ×levelHp[L] / atk +levelAtk[L] — tier-only, other tiers untouched
+        const lh = df.levelHp && df.levelHp[run.level], la = df.levelAtk && df.levelAtk[run.level];
+        if (lh) { u.maxHp = Math.max(1, Math.round(u.maxHp * lh)); if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct)); }
+        if (la) u.atk = Math.max(1, u.atk + la);
       }
       if (df) for (const u of all) { // 2026-11-13: every enemy ×ENEMY_HP_MUL (ceil), after the tier numbers — the party always eats the first enemy round (untiered = v2.4 numbers, untouched)
         const pct = u.startHp != null ? u.startHp / u.maxHp : null;
@@ -2035,10 +2081,11 @@
   }
   function unitStatuses(data, B, u) {
     const ids = [];
-    if (u.guard) ids.push('guard');
+    if (u.weak > 0) ids.push('weak'); // 2026-11-14: 虚弱 / 坚韧 (护甲 is shown on the hp bar, not as a chip)
+    if (u.tough > 0) ids.push('tough');
+    if (Array.isArray(u.traits) && u.traits.includes('shell')) ids.push('shell');
     if (u.side === 'ally') {
       if (u.slowStart && u.acts < (u.slowStart === 2 ? 2 : 1)) ids.push('slow-start');
-      if (u.veteran) ids.push('veteran');
       if (!u.noMood && u.mood <= -2) ids.push('mood-low');
       if (u.bond === 'high') ids.push('bond-high'); else if (u.bond === 'low') ids.push('bond-low');
       if ((u.debuffs || []).length) ids.push('debuffed');
@@ -2046,7 +2093,8 @@
     } else {
       if (u.corruption) ids.push(u.corruption);
       if (u.corruption === 'vengeful' && u.grudge) ids.push('vengeful-' + u.grudge);
-      if (B && B.mods) for (const k of ['smoke', 'clause']) if (B.mods[k]) ids.push(k);
+      if (B && B.mods && B.mods.smoke) ids.push('smoke');
+      if (u.dazed) ids.push('daze'); // 试玩反馈 2026-11-14 晚: 附加条款 → this enemy 发呆 this round (keyword / icon 'daze')
     }
     return ids.map((id) => statusChip(data, id));
   }
@@ -2054,7 +2102,8 @@
     const v = { id: u.ref, uid: u.id, side: u.side, name: u.name, role: u.role || null, hp: u.hp, maxHp: u.maxHp, atk: u.atk,
       keywords: keywordsFor(data, u.skill, u.combo), skillName: u.skill ? u.skill.name : null, comboName: u.combo ? u.combo.name : null,
       actionText: actionTextFor(u.skill, u.atk, u.side === 'enemy', u.role), bonusText: bonusTextFor(u.combo, u.side === 'ally' && u.bond === 'high' ? 0.1 : 0, u.side === 'enemy'),
-      statuses: unitStatuses(data, B, u) };
+      statuses: unitStatuses(data, B, u), block: u.block || 0 };
+    if (u.side === 'ally' && u.perk && u.perk.id === 'anvil' && u.block > 1) v.blockKeep = Math.floor(u.block / 2); // 铁砧不卸: kept at the next clear
     if (u.side === 'ally') { v.mood = u.noMood ? null : u.mood; if (isLeader(u.id)) v.isLeader = true; if (u.skill) v.skillLv = lvOf(u.skill); v.perkText = perkText(u.perk); }
     else { v.faction = u.faction; v.boss = !!(u.advisorBoss || u.boss); if (u.padded) v.padded = true; if (u.advisorBoss) { v.advisorBoss = true; v.advisorId = u.ref; } }
     if (u.waveBoss) v.waveBoss = true;
@@ -2082,13 +2131,14 @@
   const frenzyMult = (round) => (round >= FRENZY_FROM ? Math.pow(2, Math.min(30, round - FRENZY_FROM + 1)) : 1);
   const HEAL_CAP_X = 2; // total healing one unit can receive in a battle = 2 × maxHp
   // DESIGN-skill-level: our hunters' aim = atk (the old +1 became the crit); enemy archers keep atk + 1
-  const rawAmount = (kind, a, enemy) => (kind === 'aim' ? a + (enemy ? 1 : 0) : kind === 'backstab' ? Math.max(1, a - 1) : kind === 'spark' ? (a >= 4 ? 2 : 1) : a);
+  // the main hit for 威力 a (enemy archers keep +1; an enemy spark — the fairy's bell — keeps the old flat 1/2 to everyone)
+  const rawAmount = (kind, a, enemy) => (kind === 'aim' ? a + (enemy ? 1 : 0) : kind === 'backstab' ? Math.max(1, a - 1) : kind === 'spark' ? (enemy ? (a >= 4 ? 2 : 1) : a) : a);
 
   function allyUnit(data, run, id, idx) {
     const m = run.members[id];
     const c = cand(data, id);
     const u = { id, ref: id, name: nameOf(data, id), side: 'ally', role: m.role || c.role || null, maxHp: m.maxHp, hp: clamp(hpOf(m), 1, m.maxHp), atk: m.atk, skill: clone(m.skill),
-      mood: m.mood || 0, bond: m.bond || null, slot: idx, slowStart: m.statuses.includes('slow-start') ? (m.slowX2 ? 2 : true) : false, acts: 0, guard: false, damage: 0, healing: 0, debuffs: [], taken: 0, kills: 0, maxChain: 0, actions: 0 };
+      mood: m.mood || 0, bond: m.bond || null, slot: idx, slowStart: m.statuses.includes('slow-start') ? (m.slowX2 ? 2 : true) : false, acts: 0, block: 0, damage: 0, healing: 0, debuffs: [], taken: 0, kills: 0, maxChain: 0, actions: 0 };
     if (isLeader(id)) u.noMood = true;
     const pk = perkOf(data, run, id);
     if (pk) u.perk = clone(pk); // DESIGN-skill-level §2
@@ -2125,16 +2175,13 @@
       for (const u of B.allies) u.hp = Math.min(u.hp, Math.ceil(u.maxHp * WOUND_PCT)); // v2.3: hp carries over, the wound only lowers it
       B.pre.push({ kind: 'wounded', allies: B.allies.map((u) => ({ uid: u.id, hp: u.hp, maxHp: u.maxHp })), text: TX('battle.wounded') });
     }
-    if (leaderHas(run, 'veteran')) { // v2.4 [5] 退伍老兵: she opens every battle behind her shield, and the first hit she takes is −2
+    if (leaderHas(run, 'veteran')) { // 2026-11-14 护甲: 退伍老兵 = +1 护甲 at the start of round 1 (after the ally clear, so it covers round 1)
       const L = B.allies.find((u) => isLeader(u.id));
-      if (L) { L.guard = true; L.openGuard = true; L.veteran = true; B.pre.push({ kind: 'veteran', uid: L.id, text: TX('battle.veteranGuard', { name: L.name }) }); }
+      if (L) { L.openBlock = (L.openBlock || 0) + VETERAN_BLOCK; L.openVeteran = true; }
     }
-    const fk = advisorFlow(data, run); // G2 #8: the advisor's team passive
-    if (fk === 'ward') {
-      for (const u of B.allies) u.ward = true;
-      const a = advisorData(data, run), f = flowOf(a);
-      B.pre.push({ kind: 'line', speaker: a.id, speakerId: a.id, name: a.name, expr: 'calm', key: 'advisorFlow', flow: 'ward', text: TX('battle.ward', { skill: f.name, cut: WARD_CUT }) });
-    }
+    // 2026-11-14 满血休息: a member who rested at full hp carries +1 护甲 into this battle's round 1 (then it is spent)
+    for (const u of B.allies) { const m = run.members[u.id]; if (m && m.restBlock > 0) { u.openBlock = (u.openBlock || 0) + m.restBlock; m.restBlock = 0; } }
+    const fk = advisorFlow(data, run); // G2 #8: the advisor's team passive (ward is gone since 2026-11-14 护甲)
     if (fk === 'lucky') B.lucky = true;
     // 2026-11-14: the first sacrificed girl comes back (L8) — the leader talks to her; if he wrote her name, he freezes in round 1
     const rf = run.returned && run.returned.first, rs = rf && (run.sacrificed || []).find((x) => x.id === rf);
@@ -2187,27 +2234,48 @@
       return out;
     }
     const sum = (bs) => bs.reduce((s, b) => s + b.amount, 0);
-    // DESIGN-skill-level §1: the biggest shield over t — her own, or a guard standing in front of her who covers her
-    function guardCut(t) {
-      let cut = t.guard ? (t.guardCut || 1) : 0;
-      for (const g of t.side === 'ally' ? B.allies : B.enemies) if (g !== t && g.guard && g.hp > 0 && (g.cover || []).includes(t.id)) cut = Math.max(cut, g.guardCut || 1);
-      return cut;
+    // ---- 2026-11-14 护甲 (block) ----
+    // src = { name, skill }: who / what gave it — 试玩反馈 2026-11-14 晚 #14: the log says 「伊芙【盾击】：护甲 +2」
+    function gainBlock(t, n, from, later, src) { // later: inside an action — the event follows the action entry
+      if (!(n > 0) || !t || t.hp <= 0) return 0;
+      t.block = (t.block || 0) + n;
+      if (from && t.side === 'ally') { const bf = t.blockFrom || (t.blockFrom = {}); bf[from] = (bf[from] || 0) + n; } // @stats
+      const e = { kind: 'block', round: B.round, side: t.side, uid: t.id, id: t.ref, amount: n, total: t.block, from: from || null,
+        text: !src ? TX('battle.blockGain', { name: t.name, n }) : src.name === t.name || !src.name ? TX('battle.blockGainSelf', { name: t.name, skill: src.skill, n })
+          : TX('battle.blockGainBy', { src: src.name, skill: src.skill, name: t.name, n }) };
+      if (src) e.source = src.skill;
+      if (later) pending.push(e); else push(e);
+      return n;
     }
+    function dropBlock(t) { if (t && t.block > 0) { t.block = 0; t.blockFrom = null; } }
+    // her block absorbs up to dmg; returns what it took (credited to whoever gave the block, oldest share first)
+    function absorb(t, dmg) {
+      const a = Math.min(t.block || 0, dmg);
+      if (!(a > 0)) return 0;
+      t.block -= a;
+      if (t.side === 'ally') creditBlock(t, a); // @stats
+      return a;
+    }
+    // @stats: credit absorbed block to whoever gave it (oldest share first), read only by the credits
+    function creditBlock(t, a) {
+      let left = a;
+      const bf = t.blockFrom || {};
+      for (const k of Object.keys(bf)) { const x = Math.min(bf[k], left); if (x > 0) { tallyBlock(B, k, x); bf[k] -= x; left -= x; } if (!(bf[k] > 0)) delete bf[k]; }
+      if (left > 0) tallyBlock(B, t.id, left);
+    }
+    // 伊芙「挺身」: an ally behind a living Eve is hit through Eve's block first; Eve loses no hp
+    const shieldOf = (t) => (t.side !== 'ally' ? null : B.allies.find((g) => g !== t && g.hp > 0 && (g.block || 0) > 0 && g.perk && g.perk.id === 'stepIn' && B.allies.indexOf(g) < B.allies.indexOf(t)) || null);
     function hit(u, t, amount, crit) {
       const tr = { uid: t.id, id: t.ref, amount: 0, hpAfter: t.hp, kind: 'damage' };
-      if (u.side === 'enemy' && B.mods.smoke) { tr.miss = true; return tr; } // §2.5 smoke: every enemy attack misses
-      let dmg = amount * (crit ? CRIT_X : 1) * (B.mult || 1); // §C frenzy multiplies every hit before the flat reductions; a crit first
-      const gc = guardCut(t);
-      const gPre = dmg; // @stats
-      if (gc) dmg = Math.max(0, dmg - gc);
-      if (gc && t.side === 'ally') tallyBlock(B, t, gc, gPre - dmg); // @stats
-      if (t.guard && t.perk && t.perk.id === 'dent' && amount > 0) t.dents = (t.dents || 0) + 1; // 玛尔塔「凹痕」
-      if (t.side === 'ally' && B.mods.formation) dmg = Math.max(0, dmg - 1); // §2.6 audrey: damage taken −1 this round
-      if (enemyFormation(t)) dmg = Math.max(0, dmg - 1);
-      if (t.side === 'enemy' && B.emods && B.emods.formation) dmg = Math.max(0, dmg - 1); // #36 the boss's 列阵 this round
-      if (t.veteran && dmg > 0) { t.veteran = false; dmg = Math.max(0, dmg - VETERAN_CUT); tr.veteran = true; } // v2.4 [5]: the first hit each battle
-      if (t.ward && t.side === 'ally' && amount > 0) { t.ward = false; dmg = Math.max(0, dmg - WARD_CUT); tr.ward = true; } // G2 #8 flow ward (legacy)
-      if (amount > 0) dmg = Math.max(MIN_DAMAGE, dmg); // v2.4 [13]: a connecting hit always deals at least 1 (smoke / soft-heart misses never get here)
+      if (u.side === 'enemy' && B.mods.smoke && rngNext(run) < SMOKE_MISS) { tr.miss = true; return tr; } // 试玩反馈 2026-11-14 晚 #4 烟雾弹: each enemy hit misses SMOKE_MISS of the time
+      let dmg = Math.floor(amount * (crit ? (typeof crit === 'number' ? crit : CRIT_X) : 1)) * (B.mult || 1); // §C frenzy multiplies every hit before the block; a crit first
+      if (t.tough > 0 && dmg > 0) { dmg = Math.max(0, dmg - t.tough); tr.tough = t.tough; } // 坚韧: −1 per hit taken (rare)
+      let blocked = 0;
+      const eve = dmg > 0 ? shieldOf(t) : null;
+      if (eve) { const a = absorb(eve, dmg); if (a > 0) { blocked += a; dmg -= a; tr.shieldBy = eve.id; tr.shieldAmt = a; } }
+      if (dmg > 0) { const a = absorb(t, dmg); blocked += a; dmg -= a; if (a > 0 && t.perk && t.perk.id === 'dent') t.dents = (t.dents || 0) + 1; } // 玛尔塔「凹痕」: her block took a hit
+      if (blocked > 0) { tr.blocked = blocked; tr.blockAfter = t.block || 0; }
+      if (amount > 0 && !blocked) dmg = Math.max(MIN_DAMAGE, dmg); // v2.4 [13]: a connecting hit deals at least 1 — unless block soaked part of it (fully soaked = 0)
       if (t.side === 'enemy' && B.enemyCombat === 'clause' && !B.clauseUsed && dmg >= t.hp && t.hp > 0) {
         B.clauseUsed = true;
         dmg = t.hp - 1;
@@ -2220,6 +2288,8 @@
       }
       dmg = Math.min(dmg, t.hp);
       t.hp -= dmg;
+      if (t.hp <= 0) dropBlock(t); // 试玩反馈 2026-11-14 晚 #15: block never outlives its unit
+      if (tr.blocked) tr.blockAfter = t.block || 0;
       if (t.side === 'ally' && dmg > 0) u.hurtSeq = B.seq || 0; // 伊芙「赎罪」 remembers who hurt us
       u.damage = (u.damage || 0) + dmg; // v2.3 §B9 stats, both sides
       t.taken = (t.taken || 0) + dmg;
@@ -2443,6 +2513,7 @@
       let killed = 0;
       for (const tr of targets) {
         const t = foes.find((x) => x.id === tr.uid);
+        if (t && t.hp <= 0) dropBlock(t);
         if (t && t.hp <= 0 && !t.downLogged) {
           t.downLogged = true;
           killed += 1;
@@ -2510,6 +2581,7 @@
         if (!u.noMood && u.mood <= -2 && n % 2 === 0) return 'mood';
         return null;
       }
+      if (u.dazed) return 'clause'; // 试玩反馈 2026-11-14 晚 #22 附加条款: she was picked to 发呆 this round
       if (u.skipRounds && B.round <= u.skipRounds) return 'memory';
       if (u.hesitate) return 'hesitate';
       return null;
@@ -2557,17 +2629,8 @@
       if (!free && u.side === 'enemy' && u.special === 'copyDebuff' && u.hp > 0) copyDebuff(u);
       const mine = u.side === 'ally' ? B.allies : B.enemies;
       const foes = u.side === 'ally' ? B.enemies : B.allies;
-      // v2.4 [5]: the veteran's opening guard survives her own first action (so it covers the first enemy phase)
-      const dropGuard = () => { if (u.openGuard) u.openGuard = false; else u.guard = false; };
       if (!free) {
-        dropGuard();
         u.acts += 1;
-        if (u.side === 'enemy' && B.mods.clause) { // §2.6 lucienne: the first enemy action this round is void
-          B.mods.clause = false;
-          const cb = advA && combatOf(advA);
-          push({ kind: 'cancel', round: rnd, side: u.side, actor: u.id, actorId: u.ref, text: TX('battle.clauseCancel', { clause: (cb && cb.name) || TX('battle.clauseName'), name: u.name }) });
-          return null;
-        }
         if (u.side === 'ally' && B.emods && B.emods.clause) { // #36 the boss's 附加条款: our first action this round is void
           B.emods.clause = false;
           const cb = advA && combatOf(advA);
@@ -2586,12 +2649,13 @@
         if (why === 'regret') l8Beat('regret', u);
         if (why) {
           if (why === 'hesitate') u.hesitate -= 1;
-          const text = why === 'hesitate' ? TX('battle.skip.hesitate', { name: u.name })
+          if (why === 'clause') u.dazed = false;
+          const text = why === 'clause' ? TX('battle.skip.clause', { name: u.name }) : why === 'hesitate' ? TX('battle.skip.hesitate', { name: u.name })
             : why === 'memory' ? TX('battle.skip.memory', { name: u.name }) : why === 'regret' ? TX('battle.skip.regret', { name: u.name }) : TX('battle.skip.idle', { name: u.name });
           push({ kind: 'daze', round: rnd, side: u.side, actor: u.id, actorId: u.ref, reason: why, text });
           return null;
         }
-      } else dropGuard();
+      }
       const sk = u.skill, ally = u.side === 'ally', li = ally ? lvOf(sk) - 1 : 0; // DESIGN-skill-level: enemies are always Lv1
       const pk = ally && u.perk ? u.perk : null, pid = pk ? pk.id : null, pn = pk ? (pk.n || 1) : 0;
       B.seq = (B.seq || 0) + 1; // this battle's action counter (crit hash, 赎罪)
@@ -2600,9 +2664,10 @@
       if (u.focus) { const f = af.find((x) => x.id === u.focus); if (f) af = [f].concat(af.filter((x) => x !== f)); } // turncoats go for the fairy
       if (!af.length) return null;
       let targets = [], heal = false, healAmt = 0, text, bon = [], soft = null, pflat = [];
-      const plus = sk.kind === 'spark' && ally ? li : 0; // 法师: every level, each enemy takes 1 more
-      const base = rawAmount(sk.kind, u.atk, !ally) + plus;
-      const amountFor = (t) => { const b = atkBonuses(u, t); return { b, amt: rawAmount(sk.kind, u.atk + sum(b), !ally) + plus + (k || 0) }; };
+      const base = rawAmount(sk.kind, u.atk, !ally);
+      // 威力 for this action: atk + bonuses − 虚弱, +1 when pulled in by 加成 (three-factors 用户拍板 #3)
+      const powerFor = (t) => { const b = atkBonuses(u, t), a = u.atk + sum(b); return { b, p: Math.max(Math.min(1, a), a - (u.weak || 0)) + (k ? CHAIN_POWER : 0) }; }; // 虚弱 never takes 威力 below 1
+      const amountFor = (t) => { const r = powerFor(t); return { b: r.b, p: r.p, amt: rawAmount(sk.kind, r.p, !ally) }; };
       // §2 个人特点: flat per-hit damage on target t (hit i of n); each entry is shown as a bonus
       const perkFlat = (t, i, n, fallback) => {
         const out = [];
@@ -2623,6 +2688,7 @@
       // §4 crit: our hunters only; the roll is a hash, never the main rng
       const critOf = (t, i) => {
         if (!ally || sk.kind !== 'aim') return false;
+        if (li >= SKILL_LV_MAX - 1) return CRIT_X_MAX; // Lv4 鹰眼: every arrow, ×2.5
         if (pid === 'breath' && !u.breathDone) { u.breathDone = true; return true; } // 阿雾「屏息」: her first arrow each battle
         let rate = CRIT_RATE[li];
         if (pid === 'markup' && t.hp < t.maxHp) rate += pn;
@@ -2634,30 +2700,40 @@
         if (hurt.length) {
           // §C per-battle heal cap: prefer the lowest-hp ally still below her cap; if every hurt ally is capped, the heal is wasted
           const room = (x) => HEAL_CAP_X * x.maxHp - (x.healedIn || 0);
-          const hl = HEAL_LV[li];
-          const r = amountFor(null);
+          const hl = ally ? HEAL_LV[li] : HEAL_LV[0];
+          const r = powerFor(null);
           bon = r.b;
-          const raw = B.mult > 1 ? Math.floor((r.amt + hl.plus) / 2) : r.amt + hl.plus; // §C healing halved in frenzy
-          let left = hurt.slice(), refund = 0;
+          const share = healShare(r.p);
+          const raw = B.mult > 1 ? Math.floor(share / 2) : share; // §C healing halved in frenzy
+          let refund = 0;
           heal = true;
-          for (let n = 0; n < hl.n && left.length; n++) { // 牧师 Lv3+: the next-lowest hurt ally too (healing never multi-hits)
+          // three-factors §3.4: hl.n shares, each to whoever is lowest right then (the same ally may get several);
+          // Lv3+: what a share cannot heal becomes 护甲 on her (葛蕾「回本」 turns it into damage instead)
+          for (let n = 0; n < hl.n; n++) {
+            const left = alive(mine).filter((x) => x.hp < x.maxHp);
+            if (!left.length) break;
             const open = left.filter((x) => room(x) > 0);
             const pool = open.length ? open : left;
             const t = pool.reduce((b, x) => (x.hp < b.hp ? x : b), pool[0]);
-            left = left.filter((x) => x !== t);
             const capped = room(t) <= 0;
             const amt = capped ? 0 : Math.max(0, Math.min(raw, t.maxHp - t.hp, room(t)));
-            if (!capped && pid === 'refund') refund += raw - amt; // 葛蕾「回本」: the overflow becomes damage
+            const over = capped ? 0 : raw - amt;
+            if (over > 0 && pid === 'refund') refund += over; // 葛蕾「回本」: the overflow becomes damage
+            else if (over > 0 && hl.over) gainBlock(t, over, u.id, true, { name: u.name, skill: sk.name });
             t.hp += amt;
             t.healedIn = (t.healedIn || 0) + amt;
             u.healing += amt;
             healAmt += amt;
             if (pid === 'vigil' && amt > 0) { t.vigil = pn; t.vigilFrom = u.id; } // 塞西「守夜」
+            const prev = targets.find((x) => x.uid === t.id);
+            if (prev && !capped) { prev.amount += amt; prev.hpAfter = t.hp; continue; }
             const tr = { uid: t.id, id: t.ref, amount: amt, hpAfter: t.hp, kind: 'heal' };
             if (capped) tr.capped = true;
             targets.push(tr);
             if (n === 0 && capped && hl.n === 1) text = TX('battle.healCapped', { name: u.name, target: t.name });
+            if (capped) break;
           }
+          if (hl.cleanse) { const c = alive(mine).find((x) => (x.debuffs || []).length || x.slowStart || (!x.noMood && x.mood < 0) || x.weak > 0); if (c) { cleanse(c); c.weak = 0; pending.push({ kind: 'cleanse', round: rnd, uid: c.id, by: u.id, text: TX('battle.healCleanse', { name: c.name }) }); } } // Lv4 净化
           if (!text) text = TX('battle.heal', { name: u.name, skill: sk.name, targets: listSeq(targets.map((tr) => TX('battle.healItem', { target: mine.find((x) => x.id === tr.uid).name, amount: tr.amount, hp: tr.hpAfter }))) });
           if (refund > 0 && alive(foes).length) {
             const t = alive(foes)[0], tr = hit(u, t, refund);
@@ -2676,23 +2752,29 @@
         const fallback = sk.kind === 'heal';
         bon = amountFor(front).b;
         // one hit on t (hit i of n): perks, crit, then the target's own reductions in hit()
-        const hitOne = (t, i, n) => {
+        const hitOne = (t, i, n, adj) => {
           const pf = perkFlat(t, i, n, fallback);
           if (i === 0 && t === front) pflat = pf;
           const crit = critOf(t, i);
-          const tr = hit(u, t, amountFor(t).amt + sum(pf), crit);
+          const a0 = amountFor(t).amt + (!ally && sk.vary ? Math.floor(hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, seq, i, 7) * (sk.vary + 1)) : 0); // 试玩反馈 #3: 史莱姆 1–2
+          const tr = hit(u, t, Math.max(0, adj ? adj(a0) : a0) + sum(pf), crit);
           if (crit) tr.crit = true;
           if (n > 1) tr.hit = i + 1;
           return tr;
         };
         // §D soft heart also applies to each target of a multi-target skill (once per ally per battle)
-        const softOrHit = (t, i, n) => {
+        const softOrHit = (t, i, n, adj) => {
           if (soft === t) return { uid: t.id, id: t.ref, amount: 0, hpAfter: t.hp, kind: 'damage', miss: true, soft: true };
           if (!soft && softHeart(u, t)) { soft = t; return { uid: t.id, id: t.ref, amount: 0, hpAfter: t.hp, kind: 'damage', miss: true, soft: true }; }
-          return hitOne(t, i, n);
+          return hitOne(t, i, n, adj);
         };
         if (sk.kind === 'spark') {
-          targets = af.map((t) => softOrHit(t, 0, 1));
+          // 法师 (three-factors, 用户 2026-11-14 final): Lv1 2 targets, +1 per level, main = leftmost, splash left→right.
+          // main 威力 + Lv · others ⌊威力/2⌋ + (Lv − 1) · max level: the same, but on everyone. An enemy spark (the bell) hits everyone flat.
+          const nT = ally ? SPARK_TARGETS[li] : Infinity, lv = li + 1;
+          const list = af.slice(0, nT).filter((t, j) => !ally || j === 0 || sparkSplash(amountFor(t).amt, lv) > 0);
+          targets = list.map((t, j) => softOrHit(t, 0, 1, !ally ? null : j === 0 ? (a) => sparkMain(a, lv) : (a) => sparkSplash(a, lv)));
+          for (const tr of targets) if (tr.uid !== list[0].id) tr.splash = true;
           if (pid === 'prep') u.prepDone = true;
           text = TX('battle.spark', { name: u.name, skill: sk.name, hits: targets.map((r) => TX('battle.sparkHit', { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount })).join(TX('list.comma')) });
         } else if (sk.kind === 'backstab') {
@@ -2717,7 +2799,8 @@
         } else {
           targets = [hitOne(front, 0, 1)];
           { const hv = { name: u.name, skill: sk.name, verb: KIND_VERB()[sk.kind] || TX('skill.verb.attack'), target: front.name, dmg: targets[0].amount, hp: front.hp };
-          text = targets[0].crit ? TX('battle.hitCrit', hv) : TX('battle.hit', hv); }
+          text = targets[0].crit ? TX('battle.hitCrit', hv) : TX('battle.hit', hv);
+          if (targets[0].blocked) text += TX('battle.blockAbsorb', { n: targets[0].blocked }); }
           const other = u.side === 'enemy' && hasTrait0(u, 'twinShot') ? alive(foes).filter((x) => x !== front) : [];
           if (other.length) { // feedback-1112 #34 连弩: a second bolt at another random ally
             const t2 = rngPick(run, other);
@@ -2725,12 +2808,15 @@
             text += TX('battle.twinShot', { target: t2.name, dmg: targets[1].amount, hp: t2.hp });
           }
         }
-        if (sk.kind === 'guard') { // 战士: the shield (and, from Lv2, the allies right behind her) until her next action
-          const g = ally ? GUARD_LV[li] : GUARD_LV[0];
-          u.guard = true;
-          u.guardCut = g.cut;
-          const at = mine.indexOf(u);
-          u.cover = mine.slice(at + 1).filter((x) => x.hp > 0).slice(0, g.cover).map((x) => x.id);
+        if (sk.kind === 'guard' && u.hp > 0) { // 盾击 (2026-11-14 护甲): 威力 per share — herself, then (掩护) the nearest living allies behind her
+          const src = { name: u.name, skill: sk.name };
+          if (!ally) gainBlock(u, ENEMY_GUARD_BLOCK, u.id, true, src);
+          else {
+            const g = GUARD_LV[li], pw = Math.max(1, powerFor(front).p); // 用户 2026-11-14: the same 威力 as the hit, temporary bonuses (mood / 怀表 / …) included
+            gainBlock(u, pw * g.self, u.id, true, src);
+            const at = mine.indexOf(u);
+            for (const x of mine.slice(at + 1).filter((y) => y.hp > 0).slice(0, g.cover)) gainBlock(x, pw, u.id, true, src);
+          }
         }
         if (pid === 'dent') u.dents = 0;
         if (u.vigil) { u.vigil = 0; u.vigilFrom = null; }
@@ -2742,7 +2828,11 @@
       let bonuses = bon;
       if (atkPart !== sum(bon)) bonuses = atkPart ? [{ from: u.id, label: listSeq(bon.map((b) => b.label)), amount: atkPart }] : [];
       if (pflat.length) bonuses = bonuses.concat(pflat); // §2 个人特点 (first hit / first target)
-      if (k) bonuses = bonuses.concat([{ from: from || u.id, label: TX('battle.bonus.chain', { k }), amount: k }]);
+      if (u.weak > 0 && !heal) { // 虚弱: what it really took off (威力 never drops below 1 — 用户 2026-11-14: say so when it did nothing)
+        const a0 = u.atk + sum(bon), drop = a0 - Math.max(Math.min(1, a0), a0 - u.weak);
+        bonuses = bonuses.concat([drop > 0 ? { from: u.id, label: TX('status.weak'), amount: -drop } : { from: u.id, label: TX('status.weakNone'), amount: 0, noEffect: true }]);
+      }
+      if (k) bonuses = bonuses.concat([{ from: from || u.id, label: TX('battle.bonus.chain', { k }), amount: CHAIN_POWER }]); // 加成: 威力 +1
       if (k) text += TX('battle.chainSuffix', { k });
       const mult = B.mult || 1;
       if (mult > 1 && !heal && !soft) { // §C: the frenzy share of the first hit, so base + bonuses still add up
@@ -2826,7 +2916,10 @@
       if (!targets.length) return;
       const chance = comboChance(u);
       if (u.side === 'ally' && B.lucky) B.luckyRound = B.round; // G2 #8: the lucky bonus is spent on the first roll of the round
-      if (rngNext(run) >= chance) return;
+      // 加成 is pseudo-random (three-factors 用户拍板 #2): ours never miss more than COMBO_PITY times in a row — the next roll fires
+      const roll = rngNext(run), pity = u.side === 'ally' && (u.comboMiss || 0) >= COMBO_PITY;
+      if (roll >= chance && !pity) { if (u.side === 'ally') u.comboMiss = (u.comboMiss || 0) + 1; return; }
+      if (u.side === 'ally') u.comboMiss = 0;
       for (const t of targets) {
         if (ps.count >= MAX_CHAIN || !alive(foes).length || t.hp <= 0 || ps.triggered.includes(t.id)) continue;
         ps.triggered.push(t.id);
@@ -3005,7 +3098,8 @@
     function loadWave() {
       const w = B.waves[B.wi];
       if (B.enemies.length) B.gone = (B.gone || []).concat(B.enemies.map(statRow)); // v2.3 §B9: earlier waves keep their stats
-      B.enemies = w.units.map((u) => Object.assign({ side: 'enemy', acts: 0, guard: false, damage: 0, healing: 0, taken: 0, kills: 0, maxChain: 0, actions: 0 }, clone(u)));
+      for (const a of B.allies) if (a.block > 0) { a.block = 0; a.blockFrom = null; } // 2026-11-14 护甲: a new wave starts from 0 (kept block too)
+      B.enemies = w.units.map((u) => Object.assign({ side: 'enemy', acts: 0, block: 0, damage: 0, healing: 0, taken: 0, kills: 0, maxChain: 0, actions: 0 }, clone(u)));
       if (w.phase2) { // §4.5: she gets back up, and calls the girls back
         push({ kind: 'phase2', round: B.round, wave: B.wi + 1, resummoned: B.enemies.filter((u) => u.resummoned).map((u) => u.ref),
           lines: fairyLines(data, 'phase2').map((raw) => resolveLine(data, run, raw, {}, 'fairy-demon')), text: TX('battle.fairyStands') });
@@ -3072,11 +3166,37 @@
       if (st.links > 0 && st.starter) st.starter.maxChain = Math.max(st.starter.maxChain || 0, st.max);
       if (st.links > 0) push({ kind: 'chainEnd', chainId: st.chainId, side: st.side, depth: st.max, links: st.links, total: st.total });
     }
+    // 2026-11-14 护甲: the first thing a side's phase does — its block goes (玛尔塔「铁砧不卸」 keeps half, rounded down;
+    // 硬壳 tops up to SHELL_BLOCK), then the start-of-round gains: round 1's opening block (退伍老兵 / 满血休息),
+    // 奥德丽「列阵」 (our side, the round it was used)
+    function startPhaseBlock(side, arr) {
+      const cleared = [];
+      for (const u of arr) {
+        if (!(u.block > 0)) { u.blockFrom = null; continue; }
+        const keep = u.side === 'ally' && u.perk && u.perk.id === 'anvil' && u.hp > 0 ? Math.floor(u.block / 2) : 0;
+        if (keep > 0 && u.blockFrom) { const f = keep / u.block; for (const k of Object.keys(u.blockFrom)) u.blockFrom[k] = Math.floor(u.blockFrom[k] * f); } // @stats
+        if (!(keep > 0)) u.blockFrom = null;
+        cleared.push({ uid: u.id, from: u.block, to: keep });
+        u.block = keep;
+      }
+      if (cleared.length) push({ kind: 'blockClear', round: B.round, side, units: cleared });
+      for (const u of alive(arr)) {
+        if (side === 'enemy' && hasTrait0(u, 'shell') && (u.block || 0) < SHELL_BLOCK) gainBlock(u, SHELL_BLOCK - (u.block || 0), u.id, false, { name: u.name, skill: STATUS_LABELS().shell });
+        if (side === 'ally' && u.openBlock > 0) {
+          const n = u.openBlock; u.openBlock = 0;
+          const vet = u.openVeteran;
+          if (u.openVeteran) { u.openVeteran = false; push({ kind: 'veteran', round: B.round, uid: u.id, text: TX('battle.veteranGuard', { name: u.name }) }); }
+          gainBlock(u, n, u.id, false, { name: u.name, skill: vet ? TX('battle.blockSrc.veteran') : TX('camp.rest.label') });
+        }
+      }
+      if (side === 'ally' && B.mods.formation) { const cb = advA && combatOf(advA); for (const u of alive(arr)) gainBlock(u, FORMATION_BLOCK, 'advisor', false, { name: advA ? advA.name : '', skill: (cb && cb.name) || STATUS_LABELS().formation }); }
+    }
     // RULES-v1 §1: one side acts slot 1→n.
     function runPhase(side) {
       const arr = side === 'ally' ? B.allies : B.enemies;
       const ps = { count: 0, triggered: [] };
       push({ kind: 'phase', round: B.round, side, text: TX('battle.phase', { round: B.round, side: SIDE_LABEL()[side] }) });
+      startPhaseBlock(side, arr);
       if (side === 'ally' && B.l8 && B.wi === 0) l8Beat(B.round === 1 ? 'open' : B.round === 2 ? 'sorry' : null); // 2026-11-14 (after 「第 1 回合」: the ≤6 pre-battle lines stay)
       let outcome = null;
       if (side === 'ally' && B.round === 1 && B.wi === 0 && leaderHas(run, 'first-strike') && arr.length && arr[0].hp > 0) {
@@ -3111,14 +3231,24 @@
     // feedback-1112 #36: the advisor boss casts her own advisor skill on the player every round (on top of her passive)
     //  列阵 formation → enemies take −1 per hit this round · 附加条款 clause → our first action this round is void
     //  好运 luck → every enemy hit +1 this round
+    // 试玩反馈 2026-11-14 晚 #22 附加条款 (our advisor): CLAUSE_DAZE_N random living enemies 发呆 (skip) this round
+    function clauseDaze() {
+      const picked = rngSample(run, alive(B.enemies), CLAUSE_DAZE_N);
+      if (!picked.length) return;
+      for (const u of picked) u.dazed = true;
+      const cb = advA && combatOf(advA);
+      push({ kind: 'clauseDaze', round: B.round, status: 'daze', units: picked.map((u) => u.id),
+        text: TX('battle.clauseDaze', { clause: (cb && cb.name) || TX('battle.clauseName'), names: listSeq(picked.map((u) => u.name)) }) });
+    }
     function bossSkill() {
       B.emods = {};
       const boss = B.enemies.find((u) => u.advisorBoss && u.hp > 0);
       const cb = boss && advA && combatOf(advA);
       if (!cb) return;
       B.emods[cb.kind] = true;
-      const what = BOSS_SKILL_TEXT()[cb.kind] || cb.text;
+      const what = cb.kind === 'formation' ? TX('battle.bossSkill.formation', { n: BOSS_FORMATION_BLOCK }) : BOSS_SKILL_TEXT()[cb.kind] || cb.text;
       push({ kind: 'advisorSkill', enemy: true, round: B.round, actor: boss.id, uid: boss.id, advisorId: advA.id, skill: cb.kind, name: cb.name, text: `${advA.name}：「${cb.name}」——${what}` });
+      if (cb.kind === 'formation') for (const u of alive(B.enemies).slice(0, 2)) gainBlock(u, BOSS_FORMATION_BLOCK, boss.id, false, { name: boss.name, skill: cb.name }); // 2026-11-14 护甲: front two +3
     }
     // One round = ally phase + enemy phase. A wave cleared mid-round ends the round; the next wave enters
     // at the start of the next round (never mid-chain).
@@ -3134,6 +3264,7 @@
       B.mult = frenzyMult(B.round - (B.waveStart || 1) + 1);
       if (B.mult > 1) push({ kind: 'frenzy', round: B.round, mult: B.mult, text: TX('battle.frenzy', { mult: B.mult }) });
       bossSkill();
+      if (B.mods.clause) clauseDaze();
       let outcome = runPhase('ally');
       if (!outcome) outcome = runPhase('enemy');
       if (outcome === 'lose') end(false);
@@ -3142,6 +3273,7 @@
       if (!B.over && B.round >= maxRounds) end(false);
       B.mods = {};
       B.emods = {};
+      for (const u of B.enemies) if (u.dazed) u.dazed = false;
       B.lastRound = R;
       return R;
     }
@@ -3162,7 +3294,7 @@
         for (const l of B.pre) push(l);
         B.pre = [];
       }
-      for (const t of B.enemies) if (t.hp > 0) t.hp = 0;
+      for (const t of B.enemies) { if (t.hp > 0) t.hp = 0; t.block = 0; t.blockFrom = null; }
       B.cheating = true; downs(B.enemies.map((t) => ({ uid: t.id })), B.enemies); B.cheating = false;
       Object.assign(ce, { wave: B.wi + 1, waveCount: B.waveCount });
       if (B.wi + 1 < B.waveCount) {
@@ -3242,13 +3374,11 @@
 
   // ---- 2026-11-14 片尾人物数据亮点: whole-run tallies, read only by the credits (ui/credits.js pickHighlights) ----
   const braveOf = (run) => { const L = statOf(run, LEADER_ID); return L.brave || (L.brave = {}); };
-  // damage a shield took off a hit, credited to whoever held the shield (her own, or the guard covering her)
-  function tallyBlock(B, t, cut, n) {
-    if (!(n > 0)) return;
-    let g = t.guard && (t.guardCut || 1) === cut ? t : null;
-    if (!g) g = B.allies.find((x) => x !== t && x.guard && x.hp > 0 && (x.cover || []).includes(t.id) && (x.guardCut || 1) === cut) || t;
+  // damage 护甲 took off a hit, credited to whoever gave that block (2026-11-14: blockFrom)
+  function tallyBlock(B, id, n) {
+    if (!(n > 0) || !id) return;
     const T = B.tally || (B.tally = {});
-    T[g.id] = (T[g.id] || 0) + n;
+    T[id] = (T[id] || 0) + n;
   }
   // what she did in this battle, read back off its log (the fight itself is untouched)
   function tallyLog(run, B, id, S, win) {
@@ -3341,6 +3471,14 @@
           }
           ev.push(...moodEv);
         }
+      }
+      // 试玩反馈 2026-11-14 晚 #21 (mood was too scarce): a win where nobody fell lifts every girl below 心情 1 by +1
+      const fd = {}, flawless = !B.allies.some((u) => !u.turned && u.hp <= 0);
+      if (flawless) {
+        const lift = run.party.filter((id) => !isLeader(id) && run.members[id] && run.members[id].mood < FLAWLESS_MOOD_CAP);
+        for (const id of lift) addMood(fd, id, 1);
+        if (lift.length) ev.push({ kind: 'line', speaker: 'narrator', name: '', expr: null, key: 'flawlessMood', text: TX('battle.flawlessMood') });
+        applyMoods(data, run, ev, fd);
       }
       advisorGuide(data, run, ev, 'afterWin');
     }
@@ -3625,7 +3763,7 @@
     return v;
   }
 
-  const ChooserEngine = { createRun, view, act, simulateBattle, metaUpdate, metaDolls, dollLedger, rankOf, killCallFor, get DIFFICULTIES() { return DIFFICULTIES().map((d) => Object.assign({}, d)); }, version: 3,
+  const ChooserEngine = { setOpenTiers: (n) => { OPEN_TIERS = Math.max(1, Math.floor(+n) || 1); }, get openTiers() { return OPEN_TIERS; }, createRun, view, act, simulateBattle, metaUpdate, metaDolls, dollLedger, rankOf, killCallFor, get DIFFICULTIES() { return DIFFICULTIES().map((d) => Object.assign({}, d)); }, version: 3,
     t, setLocale, getLocale: () => I18N.locale, i18n: { pickLocale, localizeData, setText: (tb) => { I18N.text = tb || null; }, get missing() { return I18N.missing; }, get strict() { return I18N.strict; }, set strict(v) { I18N.strict = !!v; }, get loadCalls() { return I18N.loadCalls; } } };
   I18N.loading = false;
   if (typeof window !== 'undefined' && typeof root.T !== 'function') root.T = t; // the UI's shared lookup (docs/I18N.md)

@@ -90,7 +90,17 @@
     if (step.type !== 'one' || step.e.kind === 'darkTransition') return false;
     return !!dimContent(evs, step.i);
   }
-  var api = { planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
+  // 2026-11-14 伤害数字「先飞后结算」: ONE number per hit. It leaves the attacker as the attack's full amount (hp damage + what
+  // the block took, 伊芙's included) and on arrival turns into what really reached the hp. absorbed > 0 → it visibly changes
+  // (5 → 2, the badge cracks); fully absorbed → 0, a shield clank, no red number. A heal just pops (+n). A miss / capped → null.
+  function hitNum(t) {
+    if (!t || t.miss || t.capped) return null;
+    var dealt = Math.max(0, t.amount || 0);
+    if (t.kind === 'heal') return { heal: true, full: dealt, dealt: dealt, absorbed: 0, from: '+' + dealt, to: '+' + dealt, changes: false, clank: false };
+    var absorbed = Math.max(0, t.blocked || 0), full = dealt + absorbed;
+    return { heal: false, full: full, dealt: dealt, absorbed: absorbed, from: '−' + full, to: dealt > 0 ? '−' + dealt : '0', changes: absorbed > 0, clank: absorbed > 0 && dealt === 0 };
+  }
+  var api = { hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.RoundPlan = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
