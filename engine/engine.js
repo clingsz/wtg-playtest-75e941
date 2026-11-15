@@ -800,10 +800,11 @@
   // ---------- v2.2 §2 meta memory across runs (the UI stores it; the engine only reads it) ----------
   const META0 = () => ({ runs: 0, wins: 0, trueWins: 0, deaths: 0, lastLevel: 0, lastOutcome: null, lastIdentity: null, lastClass: null,
     lastSacrificed: [], lastRejected: [], lastGrudges: 0, seenTrue: false, dollsGiven: 0, dollsSaved: 0, // 2026-11-14 玩偶总账 (all runs, all tiers)
+    fluoSpentLast: 0, fluoSpentTotal: 0, // 2026-11-14 芙洛 remembers your money
     unlocked: 0, tierLast: {}, tierCleared: {}, tierTrue: {} }); // v2.5 difficulty: highest unlocked tier, per-tier last death level / cleared · 2026-11-13: per-tier true ending reached
   function normMeta(m) {
     const o = Object.assign(META0(), m && typeof m === 'object' ? clone(m) : {});
-    for (const k of ['runs', 'wins', 'trueWins', 'deaths', 'lastLevel', 'lastGrudges', 'dollsGiven', 'dollsSaved']) o[k] = Number.isFinite(+o[k]) ? Math.max(0, Math.floor(+o[k])) : 0;
+    for (const k of ['runs', 'wins', 'trueWins', 'deaths', 'lastLevel', 'lastGrudges', 'dollsGiven', 'dollsSaved', 'fluoSpentLast', 'fluoSpentTotal']) o[k] = Number.isFinite(+o[k]) ? Math.max(0, Math.floor(+o[k])) : 0;
     for (const k of ['lastSacrificed', 'lastRejected']) o[k] = Array.isArray(o[k]) ? o[k].filter((x) => typeof x === 'string' && x) : [];
     o.seenTrue = !!o.seenTrue;
     o.unlocked = Number.isFinite(+o.unlocked) ? clamp(Math.floor(+o.unlocked), 0, DIFFICULTIES().length - 1) : 0;
@@ -836,6 +837,8 @@
     m.lastSacrificed = fates.filter((f) => f.fate === 'sacrificed').map((f) => f.name);
     m.lastRejected = fates.filter((f) => f.fate === 'rejected').map((f) => f.name);
     m.lastGrudges = fates.filter((f) => f.fate === 'rejected' && f.grudge === 'high').length;
+    const spent = Number.isFinite(+s.shopSpent) ? Math.max(0, Math.floor(+s.shopSpent)) : 0; // 2026-11-14 芙洛
+    m.fluoSpentLast = spent; m.fluoSpentTotal += spent;
     return m;
   }
   // 2026-11-14 玩偶总账 (docs/BACKLOG「真真结局」): who this run handed to 小铃 as a doll, and who it got back. Pure, reads
@@ -924,6 +927,7 @@
     if (run.bellLevel === undefined) run.bellLevel = null;
     if (!Array.isArray(run.relics)) run.relics = []; // v2.3
     if (!run.stats) run.stats = {};
+    if (!Number.isFinite(run.gold)) run.gold = 0; // 2026-11-14 金币: saves from before the shop have none
     for (const id of Object.keys(run.members || {})) { const m = run.members[id]; if (m && m.hp == null) m.hp = m.maxHp; }
     run.version = 3;
   }
@@ -945,6 +949,7 @@
       relics: [], stats: {}, camp: null, // v2.3
       leaderName: normName(opts && opts.leaderName) || defaultLeaderName(seed), // v2.4 [4]
       difficulty: null, // v2.5: null = untiered (tests, old saves); set by opts.difficulty or the 'difficulty' phase
+      gold: shopEco(data).startGold, shopSpent: 0, // 2026-11-14 金币 + 芙洛的店
     };
     if (opts && opts.difficulty != null) run.difficulty = clamp(Math.floor(+opts.difficulty) || 0, 0, DIFFICULTIES().length - 1);
     useRun(run);
@@ -1008,6 +1013,7 @@
           events.push({ kind: 'bell', level: run.level });
           for (const raw of storyLines(data, run, 'bellEvent') || []) events.push(lineEvent(data, run, raw, {}, 'narrator', { key: 'bell' }));
         } else { run.camp.night = run.campNight = (run.campNight || 0) + 1; campfire(data, run, events); if (!run.sealNight) advisorGuide(data, run, events, 'beforeFight'); } // E1+: no advisor small talk on the rules night · G2 #10: count the night
+        shopOpen(data, run); // 2026-11-14: before L3 / L6 / L9 芙洛 turns up (not a campfire action)
       }
       if (step.phase === 'reward' || step.phase === 'debuff') {
         let pool = step.phase === 'reward' ? data.cards.rewards : data.cards.debuffs;
@@ -1274,6 +1280,8 @@
       campExplore(data, run, a, ev) { campExplore(data, run, a.itemId, a.drop, ev); },
       campTrainPick(data, run, a, ev) { campTrainPick(data, run, a.id, ev); },
       campTrainBonus(data, run, a, ev) { campTrainBonus(data, run, a.bonusId, ev); },
+      shopBuy(data, run, a, ev) { shopBuy(data, run, a, ev); }, // 2026-11-14 芙洛的店: { itemId, target? }
+      shopLeave(data, run, a, ev) { shopLeave(data, run, ev); },
       followBell(data, run, a, ev) { // §4.3 key three: no rest; the next battle starts wounded (not on 木头: bellWound false)
         if (!run.bell) fail('there is no bell to follow here');
         if (run.camp && run.camp.step !== 'choose') fail('the camp choice is already made');
@@ -1756,6 +1764,184 @@
     if (C.step === 'train-pick') v.candidates = v.train.candidates;
     if (C.step === 'train-bonus' && v.train) v.bonuses = v.train.bonuses;
     return v;
+  }
+
+  // ---------- 2026-11-14 金币 + 提灯货郎·芙洛的店 (MVP; docs/DESIGN-2026-11-14-gold-and-shop.md 「实施记录（MVP）」, data/shop.json) ----------
+  // run.gold (old saves: 0) · a win pays winBase + winPerLevel × level (+ 提灯人偶) · before L3 / L6 / L9 she turns up at the
+  // night (run.shop, inside the prep phase): it never uses the campfire action, and 「出发」 just leaves her behind. Her stock
+  // and her lines are picked with hashRand(seed, level, …) — the run rng is never touched, so every seeded run stays the same.
+  const SHOP_ECO0 = { startGold: 10, winBase: 8, winPerLevel: 2, shopLevels: [3, 6, 9], tiers: { 1: 10, 2: 18, 3: 32, 4: 56, 5: 100 } };
+  const shopEco = (data) => Object.assign({}, SHOP_ECO0, (data.shop && data.shop.economy) || {});
+  const shopItems = (data) => (data.shop && Array.isArray(data.shop.items) ? data.shop.items : []);
+  const shopItem = (data, id) => shopItems(data).find((x) => x.id === id) || null;
+  const goldOf = (run) => (Number.isFinite(run.gold) ? run.gold : 0);
+  const tierGold = (data, t) => shopEco(data).tiers[t] || Math.round(10 * Math.pow(10, (t - 1) / 4));
+  const FLUO = 'fluo';
+  function gainGold(run, n, src, ev) {
+    if (!(n > 0)) return;
+    run.gold = goldOf(run) + n;
+    ev.push({ kind: 'gold', n, src, gold: run.gold }); // no text: the reward / formation screens show the purse
+  }
+  // a win: the base by level, plus each 提灯人偶 (relic winGold) worn by someone still in the party
+  function winGold(data, run) {
+    const e = shopEco(data);
+    let n = e.winBase + e.winPerLevel * (run.level || 0);
+    for (const it of shopItems(data)) {
+      const fx = it.effect || {};
+      if (fx.type === 'relic' && fx.winGold) n += fx.winGold * run.party.filter((id) => run.members[id] && (run.members[id].tokens || []).includes(fx.tokenName)).length;
+    }
+    return n;
+  }
+  const FLUO_TEXT = { // her lines, data/text/zh/engine.json shop.fluo.* (literal keys: tests/i18n checks every TX key)
+    greetFirst: () => TX('shop.fluo.greetFirst'), greetFirstAsk: () => TX('shop.fluo.greetFirstAsk'), greetBack: () => TX('shop.fluo.greetBack'),
+    slipSpent: (v) => TX('shop.fluo.slipSpent', v), slipDolls: () => TX('shop.fluo.slipDolls'), slipRuns: (v) => TX('shop.fluo.slipRuns', v),
+    lv3: () => TX('shop.fluo.lv3'), lv6: () => TX('shop.fluo.lv6'), lv6Tease: () => TX('shop.fluo.lv6Tease'), lv9: () => TX('shop.fluo.lv9'), rich: () => TX('shop.fluo.rich'),
+    buy1: () => TX('shop.fluo.buy1'), buy2: () => TX('shop.fluo.buy2'), buyMaster: () => TX('shop.fluo.buyMaster'), buyDoll: () => TX('shop.fluo.buyDoll'),
+    poor: () => TX('shop.fluo.poor'), moodLow: () => TX('shop.fluo.moodLow'),
+    leaveNone: () => TX('shop.fluo.leaveNone'), leaveBought: () => TX('shop.fluo.leaveBought'), leaveLast: () => TX('shop.fluo.leaveLast'),
+  };
+  const SHOP_WHY = { poor: () => TX('shop.why.poor'), bagFull: () => TX('shop.why.bagFull'), maxed: () => TX('shop.why.maxed'), needLv3: () => TX('shop.why.needLv3'),
+    mood: () => TX('shop.why.mood'), noMood: () => TX('shop.why.noMood'), has: () => TX('shop.why.has') };
+  const fluoLine = (key, expr, vars) => ({ speaker: FLUO, speakerId: FLUO, name: TX('names.fluo'), expr, text: FLUO_TEXT[key](vars) });
+  // her opening (1–3 lines): the first shop of a run greets by the meta (a returning player gets one slip of the tongue,
+  // always about money / dolls); every shop then says its level line
+  function fluoIntro(data, run) {
+    const out = [], M = run.meta || {}, first = !Object.keys(run.shopsSeen || {}).some((k) => +k < run.level);
+    if (first) {
+      if (!(M.runs > 0)) out.push(fluoLine('greetFirst', 'calm'), fluoLine('greetFirstAsk', 'sly'));
+      else {
+        out.push(fluoLine('greetBack', 'calm'));
+        if (M.fluoSpentLast > 0) out.push(fluoLine('slipSpent', 'shock', { n: M.fluoSpentLast }));
+        else if (M.dollsGiven > 0) out.push(fluoLine('slipDolls', 'shock'));
+        else out.push(fluoLine('slipRuns', 'shock', { n: M.runs + 1 }));
+      }
+    }
+    const lv = { 3: ['lv3', 'sly'], 6: ['lv6', 'sly'], 9: ['lv9', 'calm'] }[run.level];
+    if (lv) out.push(fluoLine(lv[0], lv[1]));
+    if (run.level === 6 && out.length < 3) out.push(fluoLine('lv6Tease', 'sly')); // she tells you to save up for the 100-gold lesson
+    if (goldOf(run) >= 80 && out.length < 3) out.push(fluoLine('rich', 'special'));
+    return out.slice(0, 3);
+  }
+  function shopOpen(data, run) {
+    const eco = shopEco(data);
+    if (!shopItems(data).length || !eco.shopLevels.includes(run.level)) return;
+    if (!run.shopsSeen) run.shopsSeen = {};
+    if (run.shopsSeen[run.level]) return; // the quiet prep after following the bell is the same night
+    const bought = run.shopBought || [];
+    const pick = (slot, k) => {
+      const pool = shopItems(data).filter((it) => it.slot === slot && !(slot === 'relic' && bought.includes(it.id)));
+      return pool.length ? pool[Math.floor(hashRand(run.seed, run.level, k) * pool.length)].id : null;
+    };
+    const offers = shopItems(data).filter((it) => it.slot === 'train').map((it) => it.id)
+      .concat([pick('extra', 1), pick('supply', 2), pick('relic', 3)])
+      .concat(shopItems(data).filter((it) => it.slot === 'special' && (it.levels || []).includes(run.level) && !bought.includes(it.id)).map((it) => it.id))
+      .filter(Boolean);
+    run.shop = { level: run.level, open: true, offers, sold: [], spent: 0, line: null, lines: [] };
+    run.shop.lines = fluoIntro(data, run);
+    run.shopsSeen[run.level] = true;
+  }
+  const shopHere = (run) => (run.shop && run.shop.level === run.level && run.phase === 'prep' ? run.shop : null);
+  // what this item costs member id (null id: an untargeted item), or why it can't be bought: { price, tier, reason }
+  // reasons: poor · bagFull · maxed · needLv3 · mood · noMood · has
+  function shopQuote(data, run, it, id) {
+    const p = it.price || {}, fx = it.effect || {}, m = id ? run.members[id] : null;
+    let tier = p.tier || 1, reason = null;
+    if (m) {
+      const lv = lvOf(m.skill), leader = isLeader(id);
+      if (p.by === 'power') { if (m.atk >= 5) reason = 'maxed'; tier = clamp(m.atk, 1, 4); }
+      else if (p.by === 'level') { if (lv >= (fx.capLv || 3)) reason = 'maxed'; tier = clamp(lv + 1, 2, 3); }
+      if (fx.type === 'skillUp' && fx.fromLv && lv !== fx.fromLv) reason = 'needLv3';
+      else if (fx.type === 'skillUp' && fx.needMood != null && !leader && m.mood < fx.needMood) reason = 'mood';
+      if (fx.type === 'mood' && leader) reason = 'noMood';
+      else if (fx.type === 'mood' && m.mood >= 2) reason = 'maxed';
+      if (fx.type === 'relic' && (m.tokens || []).includes(fx.tokenName)) reason = 'has';
+    }
+    if (fx.type === 'item' && bagFull(run)) reason = 'bagFull';
+    const price = tierGold(data, tier);
+    if (!reason && price > goldOf(run)) reason = 'poor';
+    return { price, tier, reason };
+  }
+  // the effects shopApply would give member m, as previewFor reads them (「给谁」 shows the change under each face)
+  function shopEffs(it, m) {
+    const fx = it.effect || {};
+    if (fx.type === 'stat' || fx.type === 'skillUp' || fx.type === 'mood') return [fx];
+    if (fx.type !== 'relic') return [];
+    return [{ type: 'token' }].concat((fx.stats || []).map((s) => ({ type: 'stat', stat: s.stat, delta: s.delta })))
+      .concat(fx.skillUp && m && lvOf(m.skill) < (fx.capLv || SKILL_LV_MAX) ? [{ type: 'skillUp' }] : []);
+  }
+  function shopApply(data, run, it, id, ev) {
+    const fx = it.effect || {}, d = {};
+    if (fx.type === 'item') { run.items.push(fx.item); return; }
+    if (fx.type === 'teamHeal') {
+      for (const pid of run.party) { const m = run.members[pid], before = statsOf(m, isLeader(pid)); m.hp = Math.min(m.maxHp, hpOf(m) + fx.n); statChange(data, run, ev, pid, before, 'shop:' + it.id); }
+      return;
+    }
+    const m = run.members[id], before = statsOf(m, isLeader(id));
+    const grow = (stat, delta) => m.growth.push({ source: 'shop:' + it.id, stat, delta, level: run.level });
+    if (fx.type === 'stat') { statEff(m, fx); grow(fx.stat, fx.delta); }
+    else if (fx.type === 'skillUp') { const su = skillUpAs(m); statEff(m, fx); grow(su.stat, su.delta); }
+    else if (fx.type === 'mood') addMood(d, id, fx.delta);
+    else if (fx.type === 'relic') {
+      if (!m.tokens.includes(fx.tokenName)) m.tokens.push(fx.tokenName);
+      addMood(d, id, 1);
+      for (const s of fx.stats || []) { statEff(m, { type: 'stat', stat: s.stat, delta: s.delta }); grow(s.stat, s.delta); }
+      if (fx.skillUp && lvOf(m.skill) < (fx.capLv || SKILL_LV_MAX)) { statEff(m, { type: 'skillUp' }); grow('skillLv', 1); }
+    }
+    applyMoods(data, run, ev, d);
+    statChange(data, run, ev, id, before, 'shop:' + it.id);
+  }
+  const SHOP_BUY_LINE = { 'master-lesson': ['buyMaster', 'special'], 'doll-charm': ['buyDoll', 'sly'] };
+  function shopBuy(data, run, a, ev) {
+    const S = shopHere(run);
+    if (!S || !S.open) fail('the shop is not open');
+    const it = shopItem(data, a.itemId);
+    if (!it || !S.offers.includes(it.id)) fail('not on sale here: ' + a.itemId);
+    if (S.sold.includes(it.id)) fail('sold out: ' + it.id);
+    const id = it.needsTarget ? a.target : null;
+    if (it.needsTarget && !run.party.includes(id)) fail('shopBuy needs a party target');
+    const q = shopQuote(data, run, it, id);
+    if (q.reason) { // greyed in the UI; a stray tap changes nothing but her line
+      ev.push({ kind: 'tip', reason: q.reason, itemId: it.id, target: id, text: SHOP_WHY[q.reason]() });
+      S.line = q.reason === 'poor' ? fluoLine('poor', 'calm') : q.reason === 'mood' ? fluoLine('moodLow', 'calm') : S.line;
+      return;
+    }
+    run.gold = goldOf(run) - q.price;
+    S.spent += q.price;
+    run.shopSpent = (run.shopSpent || 0) + q.price;
+    S.sold.push(it.id);
+    (run.shopBought || (run.shopBought = [])).push(it.id);
+    ev.push({ kind: 'shopBuy', itemId: it.id, name: it.name, target: id, targetName: id ? nameOf(data, id) : null, price: q.price, gold: run.gold, level: run.level,
+      note: id ? TX('shop.boughtFor', { item: it.name, name: nameOf(data, id), n: q.price }) : TX('shop.bought', { item: it.name, n: q.price }) });
+    shopApply(data, run, it, id, ev);
+    const bl = SHOP_BUY_LINE[it.id];
+    S.line = bl ? fluoLine(bl[0], bl[1]) : hashRand(run.seed, run.level, 7, S.sold.length) < 0.5 ? fluoLine('buy1', 'happy') : fluoLine('buy2', 'special');
+  }
+  function shopLeave(data, run, ev) {
+    const S = shopHere(run);
+    if (!S || !S.open) fail('the shop is not open');
+    S.open = false;
+    S.line = S.spent ? (run.level === shopEco(data).shopLevels.slice(-1)[0] ? fluoLine('leaveLast', 'sly') : fluoLine('leaveBought', 'happy')) : fluoLine('leaveNone', 'sad');
+    ev.push({ kind: 'shopLeave', level: run.level, spent: S.spent, gold: goldOf(run) });
+    ev.push(Object.assign({ kind: 'line', key: 'fluoLeave' }, S.line));
+  }
+  function shopView(data, run) {
+    const S = shopHere(run);
+    if (!S) return null;
+    const offers = S.offers.map((oid) => {
+      const it = shopItem(data, oid) || { id: oid, name: oid, text: '' };
+      const sold = S.sold.includes(oid);
+      const o = { id: oid, name: it.name, text: it.text, flavor: it.flavor || '', kind: it.kind || null, needsTarget: !!it.needsTarget, sold, effect: clone(it.effect || {}) };
+      if (it.needsTarget) {
+        o.targets = run.party.map((id) => { const q = shopQuote(data, run, it, id); return { id, name: nameOf(data, id), price: q.price, tier: q.tier, ok: !q.reason, reason: q.reason, preview: previewFor(data, run, id, shopEffs(it, run.members[id]), 0) }; });
+        const ok = o.targets.filter((t) => t.ok), poor = o.targets.filter((t) => t.reason === 'poor');
+        const pool = ok.length ? ok : poor.length ? poor : o.targets;
+        const best = pool.reduce((b, t) => (t.price < b.price ? t : b), pool[0]);
+        Object.assign(o, { price: best.price, tier: best.tier, affordable: ok.length > 0, reason: ok.length ? null : best.reason, varies: new Set(o.targets.map((t) => t.price)).size > 1 });
+      } else { const q = shopQuote(data, run, it, null); Object.assign(o, { price: q.price, tier: q.tier, affordable: !q.reason, reason: q.reason }); }
+      if (sold) { o.affordable = false; o.reason = 'sold'; }
+      return o;
+    });
+    return { open: !!S.open, level: S.level, gold: goldOf(run), spent: S.spent, offers, lines: clone(S.lines || []), line: S.line ? clone(S.line) : null, bagFull: bagFull(run) };
   }
 
   // ---------- cards ----------
@@ -3583,6 +3769,7 @@
         applyMoods(data, run, ev, fd);
       }
       advisorGuide(data, run, ev, 'afterWin');
+      gainGold(run, winGold(data, run), 'win', ev); // 2026-11-14 金币
     }
     let comment = null;
     if (win && run.advisorPresent) {
@@ -3732,6 +3919,7 @@
       branch: run.branch, history: clone(run.history),
       epilogue: run.outcome === 'defeat' ? defeatEpilogue(data, run) : run.outcome === 'victory' || run.outcome === 'true' ? victoryEpilogue(data, run) : null, // v2.4 [26]
       cheated: !!run.cheated,
+      gold: goldOf(run), shopSpent: run.shopSpent || 0, // 2026-11-14 金币 (meta: 芙洛 remembers what you spent)
     };
     if (out.epilogue && run.outcome === 'defeat' && run.level === 11) // §4.5 lost in the noble chamber: the normal epilogue plus her line
       out.epilogue.fairy = fairyLines(data, 'win').map((raw) => resolveLine(data, run, raw, {}, 'fairy-demon'));
@@ -3799,6 +3987,7 @@
       advisorMood: run.advisorMood, events: clone(run.lastEvents),
       keys: clone(run.keys || KEYS0()), // §4: the UI shows only the ones obtained
       relics: (run.relics || []).map((id) => { const r = relicDef(data, id); return { id, name: r.name, text: r.text }; }), // v2.3: no bag slot
+      gold: goldOf(run), // 2026-11-14 金币 (the UI shows it only where items are)
       difficulty: diffOf(run) ? { id: run.difficulty, name: diffOf(run).name } : null, // v2.5
     };
     switch (run.phase) {
@@ -3840,7 +4029,7 @@
         v.sided = run.sided[run.interviewRound] || null;
         break;
       }
-      case 'prep': v.levelTitle = ''; Object.assign(v, prepInfo(data, run)); v.campfire = run.campfire ? { talkId: run.campfire.talkId } : null; v.bell = !!run.bell; v.bellWound = tierRule(run, 'bellWound') !== false; v.wounded = !!run.wounded; v.camp = campView(data, run); v.skillArmed = !!run.skillArmed; break; // 叙事节奏 2026-11-13: the night never names the next level
+      case 'prep': v.levelTitle = ''; Object.assign(v, prepInfo(data, run)); v.campfire = run.campfire ? { talkId: run.campfire.talkId } : null; v.bell = !!run.bell; v.bellWound = tierRule(run, 'bellWound') !== false; v.wounded = !!run.wounded; v.camp = campView(data, run); v.skillArmed = !!run.skillArmed; v.shop = shopView(data, run); break; // 叙事节奏 2026-11-13: the night never names the next level
       case 'battle': v.battle = battleView(data, run); break;
       case 'battleResult': v.battle = clone(run.battle); break;
       case 'reward': case 'debuff': {

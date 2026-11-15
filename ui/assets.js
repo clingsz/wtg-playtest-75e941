@@ -11,6 +11,7 @@
   var CANDIDATES = ['marta', 'eve', 'rico', 'awu', 'cecy', 'greta', 'viola', 'xiaoman', 'crow', 'kiki'];
   var ADVISORS = ['audrey', 'lucienne', 'nicota'];
   var FAIRIES = ['fairy', 'fairy-demon']; // v2.2 小铃: a small floating chibi (fills ~60% of her frame)
+  var MERCHANTS = ['fluo']; // 2026-11-14 提灯货郎·芙洛 (art/discussion-v10-fluo.md): portrait + alpha, six faces incl. sly
   // expressions the content may use that have no face of their own yet → the nearest drawn one
   var EXPR_NEAR = { determined: 'calm', hollow: 'sad', angry: 'upset', cry: 'sad', smile: 'happy', surprised: 'shock', 'vengeful-sneer': 'upset', 'vengeful-rage': 'upset',
     'vengeful-tears': 'sad', 'possessed-grin': 'special', 'possessed-blank': 'calm', 'possessed-flash': 'sad' };
@@ -84,6 +85,7 @@
   function isCand(id) { return CANDIDATES.indexOf(id) >= 0; }
   function isAdv(id) { return ADVISORS.indexOf(id) >= 0; }
   function isFairy(id) { return FAIRIES.indexOf(id) >= 0; }
+  function isMerchant(id) { return MERCHANTS.indexOf(id) >= 0; }
   // the standing cut-out of anyone. opts.variant: 'base' | 'vengeful' | 'possessed' | 'boss' | 'worn'
   function portrait(id, opts) {
     var o = opts || {}, v = o.variant || 'base';
@@ -91,7 +93,7 @@
       var lw = v === 'worn' ? [ALPHA + 'leader-worn.png', PORT + 'leader-worn.png#masked'] : [];
       return lw.concat([ALPHA + 'leader.png', PORT + 'leader.png#masked']); // → crest placeholder
     }
-    if (isFairy(id)) return [ALPHA + id + '.png', PORT + id + '.png#masked'];
+    if (isFairy(id) || isMerchant(id)) return [ALPHA + id + '.png', PORT + id + '.png#masked'];
     if (isAdv(id)) {
       if (v === 'boss') return [ALPHA + id + '-boss.png', CUT + id + '-boss.png', PORT + id + '-boss.png#masked', CELLS + 'advisors-v2/' + id + '-boss.png#masked'];
       return [ALPHA + id + '.png', CUT + id + '.png', PORT + id + '.png#masked', CELLS + 'advisors-v2/' + id + '-bright.png#masked'];
@@ -113,8 +115,9 @@
   var BASE6 = ['calm', 'happy', 'upset', 'sad', 'shock', 'special'];
   var DARK6 = ['vengeful-sneer', 'vengeful-rage', 'vengeful-tears', 'possessed-grin', 'possessed-blank', 'possessed-flash'];
   var LEADER6 = ['calm', 'happy', 'determined', 'sad', 'shock', 'hollow'];
+  var FLUO6 = ['calm', 'happy', 'sly', 'shock', 'sad', 'special'];
   var LEADER_NEAR = { upset: 'sad', special: 'determined', angry: 'determined', cry: 'sad', smile: 'happy', surprised: 'shock' };
-  function drawn(id) { return id === 'leader' ? LEADER6 : isCand(id) ? BASE6.concat(DARK6) : isAdv(id) || isFairy(id) ? BASE6 : []; }
+  function drawn(id) { return isMerchant(id) ? FLUO6 : id === 'leader' ? LEADER6 : isCand(id) ? BASE6.concat(DARK6) : isAdv(id) || isFairy(id) ? BASE6 : []; }
   function near(id, e) {
     var d = drawn(id); if (d.indexOf(e) >= 0) return e;
     var n = id === 'leader' ? LEADER_NEAR[e] : EXPR_NEAR[e];
@@ -153,7 +156,7 @@
 
   var A = {
     CANDIDATES: CANDIDATES, ADVISORS: ADVISORS, FAIRIES: FAIRIES, drawnFaces: drawn, isFairy: isFairy, endingScene: endingScene, SCENES: SCENES, STORY_SCENE: STORY_SCENE, LEVEL_SCENE: LEVEL_SCENE,
-    isCandidate: isCand, isAdvisor: isAdv,
+    isCandidate: isCand, isAdvisor: isAdv, MERCHANTS: MERCHANTS, isMerchant: isMerchant,
     portrait: portrait, face: face, enemy: enemy, scene: scene, sceneFor: sceneFor, icon: icon,
     roleIcon: function (role) { return ROLE_ICON[role] ? icon(ROLE_ICON[role]) : null; },
     moodIcon: function (mood) { return icon(MOOD_ICON[String(Math.max(-2, Math.min(2, mood | 0)))] || 'mood-neutral'); },
@@ -183,7 +186,7 @@
   // feedback-1113 (3rd batch) #4: every art URL carries ?v=ART_V. The dev server (python http.server) sends no Cache-Control,
   // so Chrome kept serving the old portraits from its heuristic cache after Codex replaced the files. Bump ART_V whenever
   // art is redrawn; the '#classes' suffix of a candidate stays after the query.
-  var ART_V = '20261114w'; // w: resized WebP copies in art/web/ (tools/make-web-art.mjs) put in front of the originals
+  var ART_V = '20261114f'; // f: 芙洛 (fluo) portrait + faces · (was '20261114w': resized WebP copies in art/web/ (tools/make-web-art.mjs) put in front of the originals)
   // (was '20261113c': batch6 H2-8 高台 scene, H2-12/15 advisor enemy art)
   // (was '20261113b': v9 layered fairy animation, art/portraits/anim/)
   function ver(p) { if (typeof p !== 'string' || !/^\.\.\/(art|godot)\//.test(p) || p.indexOf('?') >= 0) return p; var i = p.indexOf('#'); return i < 0 ? p + '?v=' + ART_V : p.slice(0, i) + '?v=' + ART_V + p.slice(i); }

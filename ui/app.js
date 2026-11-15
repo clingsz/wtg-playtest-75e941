@@ -162,6 +162,7 @@
     if (id == null || NO_NAME[id]) return '';
     if (id === 'leader') { var lm = member('leader'); return (lm && lm.name) || (run && run.leaderName) || T('ui.name.leader'); }
     if (A.isFairy(id)) return T('ui.name.fairy');
+    if (A.isMerchant && A.isMerchant(id)) return T('ui.name.fluo'); // 2026-11-14 芙洛
     var m = member(id); if (m) return m.name;
     var u = bUnits().filter(function (x) { return x.id === id || x.uid === id; })[0]; if (u) return u.name;
     var c = cand(id); if (c) return c.name;
@@ -257,7 +258,7 @@
   }
   function faceList(id, expr, variant) {
     if (id === 'leader') return A.face('leader', expr || 'calm', { variant: variant });
-    if (A.isCandidate(id) || A.isAdvisor(id) || A.isFairy(id)) return A.face(id, expr || 'calm', { variant: variant });
+    if (A.isCandidate(id) || A.isAdvisor(id) || A.isFairy(id) || (A.isMerchant && A.isMerchant(id))) return A.face(id, expr || 'calm', { variant: variant });
     return A.enemy(id);
   }
   function standList(id, variant) { return A.portrait(id, { variant: variant === 'flash' ? 'base' : variant }); }
@@ -904,7 +905,7 @@
     var items = showItems(v), pl8 = '';
     if (TOPBAR_PLATE) pl8 = '<span class="tb-plate"' + (v.difficulty ? ' data-tip="' + esc(T('ui.topbar.difficultyTip') + ' ' + T('ui.topbar.difficulty', { name: v.difficulty.name })) + '"' : '') + '>' + (custom != null ? custom : plate(levelText(v))) + '</span>';
     return '<header class="topbar">' + pl8 + '<span class="spacer"></span>' +
-      (items ? teamBtn(v) + bagChip(v.items, v.relics || (v.run && v.run.relics)) + advisorChip(v.advisor) : '') + (items || v.bell ? keysChip(v.keys) : '') +
+      (items ? teamBtn(v) + bagChip(v.items, v.relics || (v.run && v.run.relics)) + goldChip(v) + advisorChip(v.advisor) : '') + (items || v.bell ? keysChip(v.keys) : '') +
       (extra || '') + menuBtn() + '</header>';
   }
   // ---------- ☰ menu (UI-CLEAN §3): one button in the same top-right spot on every screen, one panel in #modal ----------
@@ -1057,7 +1058,7 @@
       el.querySelectorAll('.stand').forEach(function (s) { if (plan.gone.indexOf(s.dataset.k) >= 0) { s.classList.add('gone', 'noble-out'); setTimeout(function () { s.remove(); }, 500); } });
       return;
     }
-    if (!id || (!A.isCandidate(id) && !A.isAdvisor(id) && !A.isFairy(id) && id !== 'leader')) { el.querySelectorAll('.stand').forEach(function (s) { s.classList.add('dim'); }); return; }
+    if (!id || (!A.isCandidate(id) && !A.isAdvisor(id) && !A.isFairy(id) && !(A.isMerchant && A.isMerchant(id)) && id !== 'leader')) { el.querySelectorAll('.stand').forEach(function (s) { s.classList.add('dim'); }); return; }
     var variant = variantFor(id, l), k = id + ':' + (variant === 'flash' ? 'base' : variant), cur = el.querySelector('.stand[data-k="' + k + '"]');
     var tf = !!(l && l.fx === 'transform'); // §6 the fairy turns: the old stand burns out white while the demon fades in
     el.querySelectorAll('.stand').forEach(function (s) { if (s !== cur) { s.classList.add(tf ? 'to-demon' : 'gone'); setTimeout(function () { s.remove(); }, tf ? 1700 : 500); } });
@@ -1544,6 +1545,68 @@
     return '<button class="btn btn-secondary arm-skill' + (v.skillArmed ? ' on' : '') + '" data-act="armSkill" aria-pressed="' + (v.skillArmed ? 'true' : 'false') + '" data-tip="' + esc(T('ui.formation.armTip', { name: a.combat.name, text: a.combat.text })) + '">' +
       '<span class="pb-ic face">' + pic(A.face(a.id, 'calm'), '', '', '') + '</span>' + T(v.skillArmed ? 'ui.formation.armOn' : 'ui.formation.armOff', { name: a.combat.name }) + '</button>';
   }
+  // ---------- 2026-11-14 金币 + 提灯货郎·芙洛的店 (engine view.shop / view.gold; docs/DESIGN-2026-11-14-gold-and-shop.md 实施记录) ----------
+  // The shop is a step of the night: while view.shop.open the prep screen is her shop (the campfire talk plays first; the camp
+  // choice waits untouched). Gold shows only where items do (formation / reward / shop), never in battle.
+  function goldHtml(n, cls) { return '<span class="gold-chip' + (cls ? ' ' + cls : '') + '" tabindex="0" data-tip="' + esc(T('ui.shop.goldTip')) + '">' + A.glyph('coin', false) + '<b class="gc-n">' + esc(n) + '</b></span>'; }
+  function goldChip(v) { return v && v.gold != null && v.phase !== 'battle' && v.phase !== 'battleResult' ? goldHtml(v.gold) : ''; }
+  function shopIcon(o) { var e = o.effect || {}; return A.icon(A.cardIcon({ effect: e.type === 'relic' ? { type: 'token' } : e })); }
+  function shopSay(S) { // her intro (tap the bubble for the next line), then her latest reply
+    var ls = S.lines || [], i = Math.min(ui.shopLine || 0, Math.max(0, ls.length - 1));
+    var l = S.line || ls[i] || null, more = !S.line && i < ls.length - 1;
+    if (!l) return '';
+    return '<button class="shop-say panel' + (more ? ' more' : '') + '" data-act="shopLine"' + (more ? ' data-tip="' + esc(T('ui.shop.tapLine')) + '"' : '') + '>' +
+      '<span class="ss-face">' + pic(A.face('fluo', l.expr || 'calm'), '', l.name || '', '') + '</span><span class="ss-body"><b>' + esc(l.name || T('ui.name.fluo')) + '</b><q>' + esc(l.text) + '</q></span></button>';
+  }
+  function shopPrice(o) { return '<span class="sc-price">' + A.glyph('coin', false) + '<b>' + esc(o.price) + '</b>' + (o.varies ? '<small>' + T('ui.shop.from') + '</small>' : '') + '</span>'; }
+  function shopCard(o, small) {
+    var off = o.sold || !o.affordable, why = o.sold ? T('ui.shop.soldOut') : o.reason ? T('engine.shop.why.' + o.reason) : '';
+    return '<button class="choice shop-card k-' + esc(o.kind || 'x') + (o.sold ? ' sold' : '') + (off ? ' off' : '') + (small ? ' small' : '') + '" data-act="shopPick" data-id="' + esc(o.id) + '" data-opt="shop:' + esc(o.id) + '"' +
+      (off ? ' aria-disabled="true"' : '') + ' data-tip="' + esc((o.flavor || '') + (why ? ' ' + why : '')) + '"' + (small ? ' disabled' : '') + '>' +
+      '<span class="ch-head"><img src="' + esc(shopIcon(o)) + '" alt=""></span><b class="ch-name">' + esc(o.name) + '</b>' + cardFaceHtml({ text: o.text }) + /* the effect line (bold numbers) */
+      (o.sold ? '<span class="sc-sold">' + T('ui.shop.soldOut') + '</span>' : shopPrice(o)) + '</button>';
+  }
+  function shopHtml(v) {
+    var S = v.shop, offers = S.offers || [], c = ui.shopPick ? offers.filter(function (o) { return o.id === ui.shopPick && !o.sold; })[0] : null, main;
+    if (!c) main = '<div class="shop-offers">' + offers.map(function (o) { return shopCard(o); }).join('') + '</div>';
+    else { // 「给谁？」: a head per member with HER price; greyed heads say why
+      var heads = (c.targets || []).map(function (t) {
+        var m = member(t.id) || { id: t.id, name: t.name }, art = unitArt({ id: t.id, side: 'ally', isLeader: isLeader(m) }), sel = ui.shopWho === t.id;
+        var why = t.ok ? '' : T('engine.shop.why.' + t.reason);
+        return '<button class="who-head shop-who' + (sel ? ' on' : '') + (t.ok ? '' : ' has') + '" data-act="shopWho" data-id="' + esc(t.id) + '" data-opt="sw:' + esc(t.id) + '"' + (t.ok ? '' : ' aria-disabled="true" data-tip="' + esc(why) + '"') + '>' +
+          '<span class="wh-face">' + pic(art.list, '', m.name, art.fb) + '</span><b>' + esc(whoNameOf(m, false)) + '</b><span class="sw-price">' + A.glyph('coin', false) + esc(t.price) + '</span>' + (t.ok ? '' : '<small class="sw-why">' + esc(why) + '</small>') + '</button>';
+      }).join('');
+      var t0 = (c.targets || []).filter(function (t) { return t.id === ui.shopWho && t.ok; })[0], detail;
+      if (!t0) detail = '<div class="who-detail panel wd-empty"><div class="wd-body"><b class="wd-name">' + T('ui.reward.pickWhoPrompt') + '</b><button class="btn btn-primary wd-ok" disabled aria-disabled="true">' + T('ui.shop.buy') + '</button></div></div>';
+      else {
+        var m0 = member(t0.id) || { id: t0.id, name: t0.name }, a0 = unitArt({ id: t0.id, side: 'ally', isLeader: isLeader(m0) });
+        detail = '<div class="who-detail panel"><span class="wd-face">' + pic(a0.list, '', m0.name, a0.fb) + '</span><div class="wd-body"><b class="wd-name">' + esc(whoNameOf(m0, false)) + '</b>' +
+          (t0.preview && t0.preview.length ? previewHtml(t0.preview) : '<span class="wd-none">' + T('ui.reward.noChange') + '</span>') +
+          '<button class="btn btn-primary wd-ok" data-act="shopBuy" data-id="' + esc(c.id) + '" data-who="' + esc(t0.id) + '" data-opt="buy:' + esc(c.id) + '">' + T('ui.shop.buy') + ' ' + A.glyph('coin', false) + esc(t0.price) + '</button></div></div>';
+      }
+      main = heading(T('ui.shop.forWhom'), c.varies ? T('ui.shop.forWhomSub') : '') + '<div class="picked">' + shopCard(c, true) + '<button class="btn-ghost back" data-act="shopBack">' + T('ui.shop.back') + '</button></div>' +
+        '<div class="whos"><div class="who-heads">' + heads + '</div>' + detail + '</div>';
+    }
+    return '<div class="shop-wrap" id="shopWrap"><div class="shop-fluo" aria-hidden="true">' + pic(A.portrait('fluo'), 'stand-img', '', '') + '</div>' +
+      '<div class="shop-side"><h2 class="shop-title">' + T('ui.shop.title') + '</h2>' + shopSay(S) + '</div>' +
+      '<div class="shop-main">' + main + '</div>' +
+      '<div class="shop-foot">' + bagChip(v.items, null) + goldHtml(S.gold, 'big') + '<button class="btn btn-primary btn-lg" data-act="shopLeave">' + T('ui.shop.leave') + '</button></div></div>';
+  }
+  var SHOP_H = {
+    shopLine: function () { if (view && view.shop && !view.shop.line) { ui.shopLine = (ui.shopLine || 0) + 1; render(); } },
+    shopPick: function (d, t) {
+      var o = ((view && view.shop && view.shop.offers) || []).filter(function (x) { return x.id === d.id; })[0];
+      if (!o || ui.acted) return;
+      if (o.sold || !o.affordable) { pulse(t, 'nope', 400); return; } // greyed: a small shake, the tip says why
+      if (o.needsTarget) { ui.shopPick = o.id; ui.shopWho = null; render(); return; }
+      ui.acted = 1; cue('reward', null, 0); if (!doAct({ type: 'shopBuy', itemId: o.id }, true)) ui.acted = 0;
+    },
+    shopWho: function (d, t) { if (t && t.classList.contains('has')) { pulse(t, 'nope', 400); return; } ui.shopWho = d.id; render(); },
+    shopBack: function () { ui.shopPick = null; ui.shopWho = null; render(); },
+    shopBuy: function (d) { if (!d.id || !d.who || ui.acted) return; ui.acted = 1; cue('reward', null, 0); if (!doAct({ type: 'shopBuy', itemId: d.id, target: d.who }, true)) ui.acted = 0; },
+    shopLeave: function () { if (ui.acted) return; ui.acted = 1; if (!doAct({ type: 'shopLeave' }, true)) ui.acted = 0; }
+  };
+
   SCREENS.prep = {
     plate: function (v) { return plate(T(campStep(v) === 'done' ? 'ui.camp.plateDone' : 'ui.camp.plate')); }, // 叙事节奏 2026-11-13: the night never names the next level; the scene intro comes after 「出发」
     html: function (v) {
@@ -1554,6 +1617,7 @@
           '<button class="bigchoice btn btn-primary" data-act="stayFire" data-opt="bell:stay"><span>' + T('ui.camp.bell.stay') + '</span><q>' + T('ui.camp.bell.stayDown') + '</q></button></div></div>';
       }
       if (ui.talking == null) ui.talking = !v.bell && campLines(v).length > 0 && !replayed['camp:' + (run.history || []).length]; // G2 #12: the bell night plays its own talk (enter) — talking mode here hid #bellChoices for good
+      if (!ui.talking && v.shop && v.shop.open) return shopHtml(v); // 2026-11-14 芙洛的店: after the talk, before the camp choice
       var wd = woundedNow(v), n = ui.order.length, cards = ui.order.map(function (id, i) { return memberCard(member(id), i, n, { drag: true, moves: true, wounded: wd, orderNo: true }); }).join('');
       var foes = ''; for (var i = 0; i < Math.min(v.enemyCount || 0, 7); i++) foes += '<span class="foe-ghost">?</span>';
       var cs = campStep(v);
@@ -3326,7 +3390,8 @@
     plCopy: function () { plExport(true); },
     epiSkip: function () { if (epi.vdone) epiWinEnd(epi.tok); else epiBlack(epi.tok); }
   };
-  var CLICK_CUE = { fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
+  Object.keys(SHOP_H).forEach(function (k) { H[k] = SHOP_H[k]; }); // 2026-11-14 芙洛的店
+  var CLICK_CUE = { shopPick: 'none', shopBuy: 'none', shopLeave: 'cancel', shopWho: 'click', shopBack: 'cancel', shopLine: 'click', fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
     pCancel: 'cancel', fwBack: 'cancel', unpickCard: 'cancel', modalCancel: 'cancel', cheatNo: 'cancel', home: 'cancel',
     campChoose: 'none', unitInfo: 'click', campExplore: 'pick', campTrainPick: 'pick', campTrainBonus: 'confirm', viewHer: 'click', viewHerClose: 'cancel',
     pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', whoSel: 'click', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click', epiSkip: 'cancel' };

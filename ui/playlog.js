@@ -62,6 +62,7 @@
     if (nv.level && nv.level !== (pv && pv.level)) out.push({ k: 'levelStart', lv: nv.level });
     (nv.events || []).forEach(function (e) {
       if (e && e.kind === 'sacrifice') out.push(clean({ k: 'sacrifice', mode: small(e.mode), ids: small(e.ids) }));
+      if (e && e.kind === 'shopBuy') out.push(clean({ k: 'shopBuy', lv: num(e.level), item: small(e.itemId), to: small(e.target), price: num(e.price), gold: num(e.gold) })); // 2026-11-14 芙洛的店: one per purchase
     });
     var pk = (pv && pv.keys) || {}, nk = nv.keys || {};
     Object.keys(nk).forEach(function (k) { if (nk[k] && !pk[k]) out.push({ k: 'key', key: clip(k, 20) }); });

@@ -1990,3 +1990,51 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .tipnum { pointer-events: auto; cursor: help; }
 .up-how .up-k { display: inline-block; margin-right: var(--sp-2); font-size: var(--fs-label); color: var(--c-gold-hi); }
 .tip:has(.settle-act) { max-width: 760px; }
+/* 2026-11-14 金币 + 提灯货郎·芙洛的店 (app.js shopHtml / goldChip). No text under --fs-s; every tap target ≥ --hit-min. */
+.gold-chip { display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--hit-min); padding: 0 var(--sp-3); border-radius: var(--r-pill); border: 1px solid var(--c-gold-lo); background: rgba(24,18,34,.85); color: var(--c-gold-hi); }
+.gold-chip .gi { width: 30px; height: 30px; }
+.gold-chip .gi svg { fill: #e8b84a; }
+.gold-chip .gc-n { font: 700 var(--fs-m) var(--font-num); font-variant-numeric: tabular-nums; }
+.gold-chip.big { min-height: 64px; padding: 0 var(--sp-4); }
+.gold-chip.big .gi { width: 40px; height: 40px; }
+.gold-chip.big .gc-n { font-size: var(--fs-l); }
+.shop-wrap { position: absolute; inset: 0; background: radial-gradient(ellipse at 18% 70%, rgba(255,176,80,.22), transparent 55%), linear-gradient(180deg, rgba(10,8,16,.55), rgba(8,6,12,.82)); }
+.shop-fluo { position: absolute; left: 0; bottom: 0; width: 640px; height: 860px; pointer-events: none; animation: fadeIn .8s both; }
+.shop-fluo .stand-img, .shop-fluo img { width: 100%; height: 100%; object-fit: contain; object-position: bottom center; filter: drop-shadow(0 0 28px rgba(255,170,70,.25)); }
+.shop-side { position: absolute; left: var(--sp-6); top: 96px; width: 600px; display: flex; flex-direction: column; gap: var(--sp-3); z-index: 2; }
+.shop-title { margin: 0; font: 400 var(--fs-xl) var(--font-display); letter-spacing: .14em; color: var(--c-gold-hi); text-shadow: 0 3px 10px #000; }
+.shop-say { display: flex; align-items: flex-start; gap: var(--sp-3); min-height: var(--hit-min); padding: var(--sp-3) var(--sp-4); text-align: left; border-radius: var(--r-2); border: 1px solid var(--c-line); background: rgba(16,12,22,.9); color: var(--c-ink); cursor: pointer; }
+.shop-say .ss-face { flex: none; width: 88px; height: 88px; border-radius: 50%; overflow: hidden; border: 1px solid var(--c-gold); }
+.shop-say .ss-face img { width: 100%; height: 100%; object-fit: cover; }
+.shop-say .ss-body { display: flex; flex-direction: column; gap: var(--sp-1); }
+.shop-say b { font: 400 var(--fs-s) var(--font-display); letter-spacing: .1em; color: var(--c-gold-hi); }
+.shop-say q { font-size: var(--fs-m); line-height: 1.5; quotes: '「' '」'; }
+.shop-say.more q::after { content: ' ▸'; color: var(--c-gold); }
+.shop-main { position: absolute; left: 700px; right: var(--sp-6); top: 96px; bottom: 150px; }
+.shop-offers { display: flex; flex-wrap: wrap; gap: var(--sp-4); justify-content: center; align-content: flex-start; }
+.shop-card { width: 340px; min-height: 340px; justify-content: flex-start; padding: var(--sp-4); }
+.shop-card .ch-head { height: 120px; }
+.shop-card .ch-head img { height: 100%; width: auto; }
+.shop-card .ch-name { font: 400 var(--fs-l) var(--font-display); letter-spacing: .08em; }
+.shop-card .ch-eff { font-size: var(--fs-m); line-height: 1.4; }
+.shop-card.k-relic { box-shadow: inset 0 0 0 2px rgba(201,164,106,.6); }
+.shop-card.k-special { box-shadow: inset 0 0 0 3px #e8b84a, 0 0 30px rgba(232,184,74,.35); }
+.shop-card .sc-price { margin-top: auto; display: inline-flex; align-items: center; gap: var(--sp-1); font: 700 var(--fs-l) var(--font-num); color: #f3cf74; }
+.shop-card .sc-price .gi { width: 34px; height: 34px; }
+.shop-card .sc-price .gi svg { fill: #e8b84a; }
+.shop-card .sc-price small { font-size: var(--fs-s); color: var(--c-ink-2); }
+.shop-card .sc-sold { margin-top: auto; font: 400 var(--fs-m) var(--font-display); letter-spacing: .2em; color: var(--c-ink-2); }
+.shop-card.off { filter: saturate(.35) brightness(.7); }
+.shop-card.off .sc-price { color: #9a5a3c; } /* 买不起: dull rust, not pink */
+.shop-card.sold { opacity: .55; }
+.shop-card.small:disabled { opacity: 1; filter: none; cursor: default; }
+.shop-card.nope, .shop-who.nope { animation: dfNope .4s; }
+.shop-main .heading { position: absolute; left: 0; right: 0; top: 0; }
+.shop-main .picked { left: 0; top: 110px; }
+.shop-main .whos { left: 380px; right: 0; top: 110px; }
+.shop-who .sw-price { display: inline-flex; align-items: center; gap: 2px; font: 700 var(--fs-m) var(--font-num); color: #f3cf74; }
+.shop-who .sw-price .gi { width: 26px; height: 26px; }
+.shop-who .sw-price .gi svg { fill: #e8b84a; }
+.shop-who .sw-why { font-size: var(--fs-s); color: #c08a6a; max-width: 160px; }
+.shop-who.has { filter: saturate(.3) brightness(.75); }
+.shop-foot { position: absolute; right: var(--sp-6); bottom: var(--sp-5); display: flex; align-items: center; gap: var(--sp-4); }
