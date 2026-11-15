@@ -1599,12 +1599,10 @@
   function goldHtml(n, cls) { return '<span class="gold-chip' + (cls ? ' ' + cls : '') + '" tabindex="0" data-tip="' + esc(T('ui.shop.goldTip')) + '">' + A.glyph('coin', false) + '<b class="gc-n">' + esc(n) + '</b></span>'; }
   function goldChip(v) { return v && v.gold != null && v.phase !== 'battle' && v.phase !== 'battleResult' ? goldHtml(v.gold) : ''; }
   function shopIcon(o) { var e = o.effect || {}; return A.icon(A.cardIcon({ effect: e.type === 'relic' ? { type: 'token' } : e })); }
-  function shopSay(S) { // her intro (tap the bubble for the next line), then her latest reply
-    var ls = S.lines || [], i = Math.min(ui.shopLine || 0, Math.max(0, ls.length - 1));
-    var l = S.line || ls[i] || null, more = !S.line && i < ls.length - 1;
-    if (!l) return '';
-    return '<button class="shop-say panel' + (more ? ' more' : '') + '" data-act="shopLine"' + (more ? ' data-tip="' + esc(T('ui.shop.tapLine')) + '"' : '') + '>' +
-      '<span class="ss-face">' + pic(A.face('fluo', l.expr || 'calm'), '', l.name || '', '') + '</span><span class="ss-body"><b>' + esc(l.name || T('ui.name.fluo')) + '</b><q>' + esc(l.text) + '</q></span></button>';
+  function shopSay(S) { // 2026-11-15: her intro plays as a VN beat before the shop; the side box only says her latest reply (or a short idle line)
+    var l = S.line || { speaker: 'fluo', name: T('ui.name.fluo'), expr: 'calm', text: T('ui.shop.idle') };
+    return '<div class="shop-say panel">' +
+      '<span class="ss-face">' + pic(A.face('fluo', l.expr || 'calm'), '', l.name || '', '') + '</span><span class="ss-body"><b>' + esc(l.name || T('ui.name.fluo')) + '</b><q>' + esc(l.text) + '</q></span></div>';
   }
   function shopPrice(o) { return '<span class="sc-price">' + A.glyph('coin', false) + '<b>' + esc(o.price) + '</b>' + (o.varies ? '<small>' + T('ui.shop.from') + '</small>' : '') + '</span>'; }
   function shopCard(o, small) {
@@ -1614,10 +1612,42 @@
       '<span class="ch-head"><img src="' + esc(shopIcon(o)) + '" alt=""></span><b class="ch-name">' + esc(o.name) + '</b>' + cardFaceHtml({ text: o.text }) + /* the effect line (bold numbers) */
       (o.sold ? '<span class="sc-sold">' + T('ui.shop.soldOut') + '</span>' : shopPrice(o)) + '</button>';
   }
-  // 2026-11-15 user: the shop night opens with a lantern-bell jingle (叮玲玲), then 芙洛 steps in
-  function shopRing(v) { var S = v && v.shop; if (!S || !S.open) return; var k = (run && run.seed) + ':' + S.level; if (ui.shopRung === k) return; ui.shopRung = k; cue('shopBell', null, 0); }
+  // 2026-11-15 user: the shop night opens with a lantern-bell jingle (叮玲玲), then 芙洛 steps in as a story beat: her stand
+  // enters like any speaker, her intro lines (view.shop.lines) play one click each in the dialogue box, then 「看看货」/「不用了」.
+  // UI state only (module-level, keyed by seed + level, survives the re-render after each purchase; a reload plays it again):
+  // fluoIntro[k] = 'play' (lines queued) → 'ask' (the two buttons) → 'shop' (her shop screen). Never blocks shopLeave.
+  var fluoIntro = {};
+  function shopKey(v) { return (run && run.seed) + ':' + (v && v.shop && v.shop.level); }
+  function shopRing(v) { var k = 'ring:' + shopKey(v); if (fluoIntro[k]) return; fluoIntro[k] = 1; cue('shopBell', null, 0); }
+  function shopIntroLines(v) {
+    var ls = ((v.shop && v.shop.lines) || []).map(function (l) { var o = normLine(l); if (o) { o.speakerId = o.speakerId || 'fluo'; o.name = o.name || T('ui.name.fluo'); o.vnClass = 'camp'; } return o; }).filter(Boolean);
+    var last = ls[ls.length - 1];
+    if (!last || !/[？?]\s*$/.test(last.text)) ls.push({ speaker: 'fluo', speakerId: 'fluo', name: T('ui.name.fluo'), expr: 'happy', text: T('ui.shop.ask'), vnClass: 'camp' }); // she ends on the question the buttons answer
+    return ls;
+  }
+  function shopIntroHtml(v) {
+    var ask = fluoIntro[shopKey(v)] === 'ask';
+    var stand = ask ? '<div class="stand at-right v-base" data-k="fluo:base">' + pic(standList('fluo', 'base'), 'stand-img', '', '') + '</div>' : ''; // a re-render while she asks keeps her on screen
+    return '<div class="camp-wrap shop-intro" id="campWrap"><div class="stand-layer" id="stand">' + stand + '</div>' +
+      '<div class="bell-choices shop-ask" id="shopAsk"' + (ask ? '' : ' hidden') + '>' +
+      '<button class="bigchoice btn btn-secondary" data-act="shopLeave" data-opt="shop:no"><span>' + T('ui.shop.askNo') + '</span></button>' +
+      '<button class="bigchoice btn btn-primary" data-act="shopLook" data-opt="shop:look"><span>' + T('ui.shop.askLook') + '</span></button></div></div>';
+  }
+  function shopIntroShowAsk(v) {
+    fluoIntro[shopKey(v)] = 'ask';
+    var c = $('shopAsk'); if (!c) { render(); return; }
+    c.hidden = false; var b = c.querySelector('.btn-primary'); if (b) b.focus({ preventScroll: true });
+  }
+  function shopIntroMaybe(v) { // called from SCREENS.prep.after while the intro screen is up
+    var k = shopKey(v), st = fluoIntro[k];
+    if (st === 'play' && !vnActive()) { shopIntroShowAsk(v); return; } // the queue was cleared under it (menu, home…): straight to the buttons
+    if (st) return;
+    fluoIntro[k] = 'play'; vn.cls = 'camp';
+    ui.onSpeak = function (id, l) { if (id !== undefined) standShow(id, l); };
+    sayFx(stages([[function () { shopRing(v); }, 900]])); // 叮玲玲 first (a click skips the wait)
+    say(shopIntroLines(v), function () { ui.onSpeak = null; vn.cls = ''; if (view && view.shop && view.shop.open && fluoIntro[k] === 'play') shopIntroShowAsk(view); });
+  }
   function shopHtml(v) {
-    shopRing(v);
     var S = v.shop, offers = S.offers || [], c = ui.shopPick ? offers.filter(function (o) { return o.id === ui.shopPick && !o.sold; })[0] : null, main;
     if (!c) main = '<div class="shop-offers">' + offers.map(function (o) { return shopCard(o); }).join('') + '</div>';
     else { // 「给谁？」: a head per member with HER price; greyed heads say why
@@ -1644,7 +1674,7 @@
       '<div class="shop-foot">' + bagChip(v.items, null) + goldHtml(S.gold, 'big') + '<button class="btn btn-primary btn-lg" data-act="shopLeave">' + T('ui.shop.leave') + '</button></div></div>';
   }
   var SHOP_H = {
-    shopLine: function () { if (view && view.shop && !view.shop.line) { ui.shopLine = (ui.shopLine || 0) + 1; render(); } },
+    shopLook: function () { if (!view || !view.shop || !view.shop.open) return; fluoIntro[shopKey(view)] = 'shop'; render(); }, // 「看看货」
     shopPick: function (d, t) {
       var o = ((view && view.shop && view.shop.offers) || []).filter(function (x) { return x.id === d.id; })[0];
       if (!o || ui.acted) return;
@@ -1668,7 +1698,7 @@
           '<button class="bigchoice btn btn-primary" data-act="stayFire" data-opt="bell:stay"><span>' + T('ui.camp.bell.stay') + '</span><q>' + T('ui.camp.bell.stayDown') + '</q></button></div></div>';
       }
       if (ui.talking == null) ui.talking = !v.bell && campLines(v).length > 0 && !replayed['camp:' + (run.history || []).length]; // G2 #12: the bell night plays its own talk (enter) — talking mode here hid #bellChoices for good
-      if (!ui.talking && v.shop && v.shop.open) return shopHtml(v); // 2026-11-14 芙洛的店: after the talk, before the camp choice
+      if (!ui.talking && v.shop && v.shop.open) return fluoIntro[shopKey(v)] === 'shop' ? shopHtml(v) : shopIntroHtml(v); // 2026-11-14 芙洛的店: after the talk, before the camp choice (2026-11-15: her VN intro + ask first)
       var wd = woundedNow(v), n = ui.order.length, cards = ui.order.map(function (id, i) { return memberCard(member(id), i, n, { drag: true, moves: true, wounded: wd, orderNo: true }); }).join('');
       var foes = ''; for (var i = 0; i < Math.min(v.enemyCount || 0, 7); i++) foes += '<span class="foe-ghost">?</span>';
       var cs = campStep(v);
@@ -1707,7 +1737,8 @@
         fguideMaybe();
       });
     },
-    after: function () {
+    after: function (v) {
+      if (v && $('shopAsk')) shopIntroMaybe(v); // 2026-11-15 芙洛's intro beat
       var box = $('formation'), dragId = null; if (!box) return;
       fguideMaybe(); // 布阵教学: the first time the formation shows (it checks the talk / bell / dialog itself)
       function slot(e) { return e.target.closest && e.target.closest('.p-slot'); }
@@ -3503,7 +3534,7 @@
     epiSkip: function () { if (epi.vdone) epiWinEnd(epi.tok); else epiBlack(epi.tok); }
   };
   Object.keys(SHOP_H).forEach(function (k) { H[k] = SHOP_H[k]; }); // 2026-11-14 芙洛的店
-  var CLICK_CUE = { shopPick: 'none', shopBuy: 'none', shopLeave: 'cancel', shopWho: 'click', shopBack: 'cancel', shopLine: 'click', fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
+  var CLICK_CUE = { shopPick: 'none', shopBuy: 'none', shopLeave: 'cancel', shopWho: 'click', shopBack: 'cancel', shopLook: 'confirm', fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
     pCancel: 'cancel', fwBack: 'cancel', unpickCard: 'cancel', modalCancel: 'cancel', cheatNo: 'cancel', home: 'cancel',
     campChoose: 'none', unitInfo: 'click', campExplore: 'pick', campTrainPick: 'pick', campTrainBonus: 'confirm', viewHer: 'click', viewHerClose: 'cancel',
     pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', whoSel: 'click', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click', epiSkip: 'cancel' };

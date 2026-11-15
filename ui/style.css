@@ -2009,13 +2009,13 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .shop-fluo .stand-img, .shop-fluo img { width: 100%; height: 100%; object-fit: contain; object-position: bottom center; filter: drop-shadow(0 0 28px rgba(255,170,70,.25)); }
 .shop-side { position: absolute; left: var(--sp-6); top: 96px; width: 600px; display: flex; flex-direction: column; gap: var(--sp-3); z-index: 2; }
 .shop-title { margin: 0; font: 400 var(--fs-xl) var(--font-display); letter-spacing: .14em; color: var(--c-gold-hi); text-shadow: 0 3px 10px #000; }
-.shop-say { display: flex; align-items: flex-start; gap: var(--sp-3); min-height: var(--hit-min); padding: var(--sp-3) var(--sp-4); text-align: left; border-radius: var(--r-2); border: 1px solid var(--c-line); background: rgba(16,12,22,.9); color: var(--c-ink); cursor: pointer; }
+.shop-say { display: flex; align-items: flex-start; gap: var(--sp-3); min-height: var(--hit-min); padding: var(--sp-3) var(--sp-4); text-align: left; border-radius: var(--r-2); border: 1px solid var(--c-line); background: rgba(16,12,22,.9); color: var(--c-ink); }
 .shop-say .ss-face { flex: none; width: 88px; height: 88px; border-radius: 50%; overflow: hidden; border: 1px solid var(--c-gold); }
 .shop-say .ss-face img { width: 100%; height: 100%; object-fit: cover; }
 .shop-say .ss-body { display: flex; flex-direction: column; gap: var(--sp-1); }
 .shop-say b { font: 400 var(--fs-s) var(--font-display); letter-spacing: .1em; color: var(--c-gold-hi); }
 .shop-say q { font-size: var(--fs-m); line-height: 1.5; quotes: '「' '」'; }
-.shop-say.more q::after { content: ' ▸'; color: var(--c-gold); }
+.shop-intro { background: radial-gradient(ellipse at 70% 60%, rgba(255,176,80,.18), transparent 55%); } /* 2026-11-15 芙洛's intro beat: her lantern glow behind the stand */
 .shop-main { position: absolute; left: 700px; right: var(--sp-6); top: 96px; bottom: 150px; }
 .shop-offers { display: flex; flex-wrap: wrap; gap: var(--sp-4); justify-content: center; align-content: flex-start; }
 .shop-card { width: 340px; min-height: 340px; justify-content: flex-start; padding: var(--sp-4); }
