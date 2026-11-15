@@ -971,7 +971,7 @@
       (ally && M.mood != null && !lead ? '<span class="up-stat" data-tip="' + esc(MOOD_TIP(M.mood)) + '"><img class="up-mood" src="' + esc(A.moodIcon(M.mood)) + '" alt=""><span class="up-k">' + T('ui.unit.mood') + '</span><b>' + esc(M.moodLabel || moodWord(M.mood)) + '</b></span>' : '');
     var sec = function (k, body, cls) { return '<div class="up-sec' + (cls ? ' ' + cls : '') + '"><h3>' + T(k) + '</h3>' + body + '</div>'; };
     var skill = sec(ally ? 'ui.unit.skill' : 'ui.unit.pattern', '<p class="up-line"><b class="up-sk">' + esc(M.skillName || '—') + '</b>' + (M.skillLv ? '<span class="up-lv">' + A.glyph('level') + 'Lv' + esc(M.skillLv) + '</span>' : '') + '</p>' +
-      (M.skillText ? '<p class="up-txt">' + richText(M.skillText) + '</p>' : '') + (M.perkText ? '<p class="up-txt up-perk">' + richText(M.perkText) + '</p>' : ''));
+      (M.skillText ? '<p class="up-txt">' + richText(M.skillText) + '</p>' : '') + howLine(M, ally) + (M.perkText ? '<p class="up-txt up-perk">' + richText(M.perkText) + '</p>' : ''));
     var combo = ally || M.comboText ? sec('ui.unit.combo', M.comboText ? '<p class="up-line">' + (M.comboName ? '<b class="up-sk">' + esc(M.comboName) + '</b>' : '') + '</p><p class="up-txt">' + richText(M.comboText) + '</p>' : '<p class="up-txt dim">' + T('ui.common.none') + '</p>') : '';
     var keeps = ally ? sec('ui.unit.keepsakes', M.keepsakes.length ? M.keepsakes.map(function (k) { return '<p class="up-txt"><b class="up-sk">' + esc(k.name) + '</b>' + (k.text ? '：' + richText(k.text) : '') + '</p>'; }).join('') : '<p class="up-txt dim">' + T('ui.common.none') + '</p>') : '';
     var st = statusChips(M.statuses, M.side); // an enemy's hidden debuffs stay hidden (same filter as her card)
@@ -981,6 +981,12 @@
       '<div class="up-stats">' + stats + '</div></div></div>' +
       '<div class="up-body">' + skill + combo + keeps + sts + '</div>' +
       '<div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.close') + '</button></div>';
+  }
+  // v39「结算看得懂」: 「怎么算」 under the skill — her current numbers in one line (RoundPlan.howCalc reads them off her skill
+  // line), then the one rule every hit follows (护甲 first, then 生命). An enemy gets the rule only.
+  function howLine(M, ally) {
+    var h = ally ? RoundPlan.howCalc(M.skillKind, M.skillText) : null;
+    return '<p class="up-txt up-how"><span class="up-k">' + T('ui.settle.how') + '</span>' + (h ? richText(h) + '<br>' : '') + '<span class="dim">' + richText(T('ui.settle.how.order')) + '</span></p>';
   }
   function openUnitPanel(uid, id) {
     var p = panelUnit(uid, id); if (!p) return false;
@@ -1861,12 +1867,50 @@
   ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (t) { window.addEventListener(t, tfActive, { capture: true, passive: true }); });
   tfArm(TF_IDLE);
   function fxDiv(cls, html, x, y) { var d = document.createElement('div'); d.className = cls; d.innerHTML = html; d.style.left = x + 'px'; d.style.top = y + 'px'; fxLayer.appendChild(d); return d; }
-  function floatAt(el, text, cls, tag, ox) {
+  function floatAt(el, text, cls, tag, ox, rich) {
     // v2.3 [28]: floats start at the card's top edge and rise away from it: never over a face
     // DESIGN-skill-level: tag = a small word over the number (「暴击！」「第 2 下」), ox = side offset for a 连击 series
     if (!el) return; var p = stagePt(el, 0.5, 0), dy = /\bcrit\b/.test(cls || '') ? 110 : /\bmulti\b/.test(cls || '') ? 40 : -26; // a crit / 连击 lands on the card's art, clear of the top bar
     var d = fxDiv('float ' + (cls || ''), (tag ? '<small>' + esc(tag) + '</small>' : '') + esc(text), p.x + (ox || 0), p.y + dy);
+    tipNum(d, rich);
     setTimeout(function () { d.remove(); }, 1800 / Math.min(1, spd()));
+  }
+  // v39「结算看得懂」: a damage / heal number (flying or resolved) and the acting card carry the one-action breakdown
+  // (RoundPlan.explainAction) as a tip — hover, or tap to pin it. The 战报 (pause bar / result) lists every action.
+  function settleUnits() {
+    var m = {}, b = (view && view.battle) || {};
+    battleLog().forEach(function (e) { if (e && e.kind === 'enemyEnter' && e.unit) m[e.unit.uid || e.uid] = { name: e.unit.name }; });
+    (b.allies || []).concat(b.enemies || []).forEach(function (u) { m[u.uid] = { name: isLeader(u) ? (u.name || T('ui.name.you')) : u.name }; });
+    return m;
+  }
+  function battleLog() { var rb = run && run.battle, b = view && view.battle; return (rb && rb.log) || (b && b.log) || (b && b.lastRound) || []; }
+  function settleHtml(ex, cls) {
+    if (!ex) return '';
+    return '<div class="settle-act' + (cls ? ' ' + cls : '') + (ex.side === 'enemy' ? ' is-foe' : '') + '"><p class="st-head">' + richText(ex.head) + '</p><p class="st-f">' + richText(ex.formula) + '</p>' +
+      ex.targets.map(function (t) { return '<p class="st-t' + (t.down ? ' down' : '') + (t.kind === 'heal' ? ' heal' : '') + '">' + richText(t.text) + '</p>'; }).join('') + '</div>';
+  }
+  function tagSettle(a) { // once per action: every target (and so every number it sends) knows the breakdown
+    if (!a || a.exRich != null) return a ? a.exRich : '';
+    var h = ''; try { h = settleHtml(RoundPlan.explainAction(a, settleUnits()), 'tip'); } catch (err) { h = ''; }
+    a.exRich = h; (a.targets || []).forEach(function (t) { t.exRich = h; });
+    return h;
+  }
+  function tipNum(d, rich) { if (d && rich) { d.dataset.rich = rich; d.classList.add('tipnum'); } }
+  function actingTip(el, a) { var h = tagSettle(a); if (!el || !h) return; if (el.dataset.richOwn == null) el.dataset.richOwn = el.dataset.rich || ''; el.dataset.rich = h; }
+  function actingTipOff(el) { if (!el || el.dataset.richOwn == null) return; el.dataset.rich = el.dataset.richOwn; delete el.dataset.richOwn; if (tipFor === el) hideTip(); }
+  function battleLogHtml() {
+    var rounds = RoundPlan.battleReport(battleLog(), settleUnits());
+    var body = rounds.length ? rounds.map(function (g) {
+      return '<section class="sl-round"><h3>' + T('ui.settle.round', { n: esc(g.round) }) + '</h3>' + g.items.map(function (it) {
+        return settleHtml(it.ex) + (it.extra.length ? '<div class="st-extra">' + it.extra.map(function (x) { return '<p>' + A.glyph('block') + esc(x) + '</p>'; }).join('') + '</div>' : '');
+      }).join('') + '</section>';
+    }).join('') : '<p class="up-txt dim">' + T('ui.settle.empty') + '</p>';
+    return '<h2>' + T('ui.settle.title') + '</h2><p class="sl-sub">' + T('ui.settle.sub') + '</p><p class="sl-order">' + richText(T('ui.settle.how.order')) + '</p>' +
+      '<div class="sl-list">' + body + '</div><div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.close') + '</button></div>';
+  }
+  function openBattleLog() {
+    hideTip(); modal(battleLogHtml()); modalEl.classList.add('unit-open', 'vn-pass');
+    var pn = modalEl.querySelector('.panel'); if (pn) pn.classList.add('settle-panel');
   }
   // v2.3 [28]: the skill name above the actor (below a foe: the space above the enemy row is the top bar)
   function skillTag(el, name) {
@@ -1881,18 +1925,19 @@
   function flyNum(from, el, text, cls, tag, ox, t) {
     if (!el) return Promise.resolve();
     var n = t ? RoundPlan.hitNum(t) : null;
-    if (n && n.heal) { floatAt(el, n.to, cls, tag, ox); return Promise.resolve(); }
+    var rich = t && t.exRich;
+    if (n && n.heal) { floatAt(el, n.to, cls, tag, ox, rich); return Promise.resolve(); }
     var to = stagePt(el, 0.5, 0); to = { x: to.x + (ox || 0), y: to.y + (/\b(crit|multi)\b/.test(cls || '') ? 60 : -26) };
-    var d = fxDiv('flynum hitnum ' + (cls || ''), esc(n ? n.from : text), from.x, from.y);
+    var d = fxDiv('flynum hitnum ' + (cls || ''), esc(n ? n.from : text), from.x, from.y); tipNum(d, rich);
     return flyTo(d, from, to, 420, (to.x > from.x ? 1 : -1) * 90).then(function () {
-      if (!n || !n.changes) { floatAt(el, n ? n.to : text, cls, tag, ox); return; }
+      if (!n || !n.changes) { floatAt(el, n ? n.to : text, cls, tag, ox, rich); return; }
       t.numShown = true; // hitBlock: no second grey 「−挡下」 number
-      floatResolve(el, n, cls, tag, ox);
+      floatResolve(el, n, cls, tag, ox, rich);
     });
   }
-  function floatResolve(el, n, cls, tag, ox) {
+  function floatResolve(el, n, cls, tag, ox, rich) {
     var p = stagePt(el, 0.5, 0), dy = /\bcrit\b/.test(cls || '') ? 110 : /\bmulti\b/.test(cls || '') ? 40 : -26;
-    var d = fxDiv('float resolving ' + (cls || ''), (tag ? '<small>' + esc(tag) + '</small>' : '') + '<span class="rv">' + esc(n.from) + '</span>', p.x + (ox || 0), p.y + dy);
+    var d = fxDiv('float resolving ' + (cls || ''), (tag ? '<small>' + esc(tag) + '</small>' : '') + '<span class="rv">' + esc(n.from) + '</span>', p.x + (ox || 0), p.y + dy); tipNum(d, rich);
     var bd = el.querySelector('.blk-badge');
     var swap = function () {
       var rv = d.querySelector('.rv'); if (rv) rv.textContent = n.to;
@@ -1921,7 +1966,7 @@
       var tier = b.crit ? 'crit' : b.hpAfter <= 0 ? 'ko' : 'normal';
       if (b.crit) cue('crit', null, 0); else cue(b.amount >= 6 ? 'bigHit' : 'hit', null, 0);
       var stop = fx ? HitFX.contact(el, { tier: tier, kind: skill || 'strike', dir: dir, scale: b.crit ? 1 : 0.8, from: actor ? stagePt(actor, 0.5, 0.4) : null }) : 0;
-      floatAt(el, '−' + b.amount, 'dmg multi' + (b.crit ? ' crit' : ''), b.crit ? T('ui.battle.crit') : T('ui.battle.hitNo', { n: i + 1 }), 0);
+      floatAt(el, '−' + b.amount, 'dmg multi' + (b.crit ? ' crit' : ''), b.crit ? T('ui.battle.crit') : T('ui.battle.hitNo', { n: i + 1 }), 0, b.t && b.t.exRich);
       if (stop) await wait(Math.min(stop, 90), tok);
       if (fx) HitFX.after(el, { tier: tier, kind: skill || 'strike', dir: dir, scale: b.crit ? 1 : 0.7 }, sh); else pulse(el, 'hit', 300);
       setHp(b.uid, b.hpAfter); hitBlock(b.t, el);
@@ -2014,6 +2059,7 @@
     async function playBeat(bt, k, tok) {
       var a = bt.act, el = aEl(a); if (!el) return;
       el.classList.add('acting'); // the rise (.bcard.acting: up, gold glow); she stays up until her hits have landed
+      actingTip(el, a); // v39: while she is up, her card's tip = this action's breakdown
       await wait(RS.up, tok);
       if (bt.from) comboFire(cardEl(bt.from), el);
       var at = stagePt(el, 0.5, 0), step = bt.depth, inStep = 0, val = 0, ticks = 0;
@@ -2055,7 +2101,7 @@
       chk(tok);
       bt.targets.forEach(function (x) { if (!x.miss) return; if (x.soft) softMark(el, tEl(x.t)); else { floatAt(tEl(x.t), T('ui.battle.miss'), 'miss'); cue('miss'); } });
       await impacts(live.filter(function (x) { return !x.t.seqDone; }).map(function (x) { var te = tEl(x.t); return { el: te, uid: te.dataset.u, t: x.t, kind: x.heal ? 'heal' : x.t.refund ? 'strike' : a.skillKind, from: el, dir: 1, scale: x.splash ? 0.75 : undefined }; }), tok);
-      await settleCard(el, tok); // she settles back; the next girl in the chain rises
+      await settleCard(el, tok); actingTipOff(el); // she settles back; the next girl in the chain rises
     }
     function chargeTag(at, depth) {
       if (!ctag) ctag = fxDiv('charge-tag', '', at.x - 175, at.y - 46);
@@ -2245,7 +2291,8 @@
       }
       case 'action': {
         if (e.side === 'ally') { await playChain([e], tok); break; }
-        el = aEl(e); cue('enemyAttack');
+        el = aEl(e); cue('enemyAttack'); tagSettle(e);
+        actingTip(el, e); // v39: while she is up, her card's tip = this action's breakdown
         if (el) { el.classList.add('acting'); await wait(RoundPlan.RISE.up, tok); } // v36: every actor rises before acting (same as ours)
         if ((e.bonuses || []).some(function (b) { return b.amount < 0; })) cue('guard');
         skillTag(el, e.skill || e.skillName);
@@ -2267,7 +2314,7 @@
           var eRest = (e.targets || []).filter(function (t) { return !t.miss && !t.capped && !eBeats.some(function (sb) { return sb.t === t; }) && tEl(t); }); // v38: a target outside the 连击 still lands
           if (eRest.length) await impacts(eRest.map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
           (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
-          await wait(160, tok); await settleCard(el, tok); break;
+          await wait(160, tok); await settleCard(el, tok); actingTipOff(el); break;
         }
         var seen = {};
         await Promise.all((e.targets || []).map(function (t, i) {
@@ -2279,7 +2326,7 @@
         }).filter(Boolean)); chk(tok);
         (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
         await impacts((e.targets || []).filter(function (t) { return !t.miss && tEl(t); }).map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
-        await wait(160, tok); await settleCard(el, tok); break;
+        await wait(160, tok); await settleCard(el, tok); actingTipOff(el); break;
       }
       case 'down': {
         el = cardEl(e.uid) || cardById(e.id); var mine = e.side === 'ally' || (el && el.classList.contains('ally'));
@@ -2513,6 +2560,7 @@
   }
   function syncField(v) { // snap every card to the round's end state (after a skip or a failed animation)
     v.battle.allies.concat(v.battle.enemies).forEach(function (u) { var el = cardEl(u.uid); if (!el) return; el.classList.remove('pre-enter', 'acting'); el.classList.toggle('down', u.hp <= 0); if (ui.field && ui.field[u.uid]) ui.field[u.uid].maxHp = u.maxHp; setHp(u.uid, u.hp); if (u.hp > 0) setBlock(u.uid, u.block || 0); }); // batch6 H2-14: max hp too · v38: the 护甲 badge too (it used to keep a stale number next to the end-state hp)
+    app.querySelectorAll('[data-rich-own]').forEach(actingTipOff); // v39: a skipped beat gives the card its own tip back
   }
   function announce(an) {
     var d = fxDiv('toast', (an.face ? '<span class="toast-face">' + pic(an.face, '', '', '') + '</span>' : '') + '<b>' + esc(an.title) + '</b>' + (an.sub ? '<small>' + esc(an.sub) + '</small>' : ''), 960, 380);
@@ -2536,6 +2584,7 @@
       (sk ? '<button class="pbtn' + (sk.used ? ' used' : '') + '" data-act="pSkill"' + (sk.available ? '' : ' disabled') + ' data-tip="' + esc((sk.name ? T('ui.battle.skillTitle', { name: sk.name }) : '') + (sk.text || '') + T(sk.used ? 'ui.pause.skillUsed' : 'ui.pause.skillOnce')) + '"><span class="pb-ic face">' + pic(A.face(v.advisor && v.advisor.id, 'calm'), '', '', '') + '</span><b>' + T('ui.pause.advisor') + '</b><small>' + esc(sk.name || '') + '</small></button>'
         : '<button class="pbtn" disabled data-tip="' + T('ui.pause.advisorGoneTip') + '"><span class="pb-ic">✦</span><b>' + T('ui.pause.advisor') + '</b><small>' + T('ui.common.none') + '</small></button>') +
       '<button class="pbtn" data-act="pItem"' + (items.length ? '' : ' disabled') + ' data-tip="' + T('ui.pause.itemTip') + '"><span class="pb-ic">✚</span><b>' + T('ui.pause.item') + '</b><small>' + items.length + ' / 3</small></button>' +
+      '<button class="pbtn" data-act="pLog" data-tip="' + esc(T('ui.settle.btnTip')) + '"><span class="pb-ic">' + A.glyph('power') + '</span><b>' + T('ui.settle.btn') + '</b></button>' + // v39「结算看得懂」: this battle's every action, explained
       '<button class="pbtn go" data-act="pContinue"><span class="pb-ic">▶</span><b>' + T('ui.common.continue') + '</b></button>' +
       '</div><div class="pause-sub" id="pauseSub"></div>'; // UI-CLEAN §2.8: 自动继续 is a ☰ 游戏组 switch now (prefs.autoCont)
     // v2.4 [15] root cause: the 继续 button used to take focus here, so the keyup of the Space / Enter that closed the round's
@@ -2582,7 +2631,7 @@
     w.innerHTML = '<div class="result-wrap"><div class="result paper">' + heading(T(win ? 'ui.result.win' : 'ui.result.lose'), (b.rounds || b.round) ? T('ui.result.rounds', { n: b.rounds || b.round }) : '', win ? 'laurel' : 'grim') +
       (b.maxChain ? '<p class="chain-sum">' + T('ui.result.maxChain') + ' <b>×' + esc(b.maxChain) + '</b></p>' : '') +
       (mvp ? '<div class="mvp"><span class="mvp-face">' + pic(isLeader(mvp) ? A.face('leader', 'happy') : A.face(mvp.id, 'happy'), '', mvp.name, isLeader(mvp) ? crestHtml(true) : initialHtml(mvp.name)) + '</span><img class="crown" src="' + esc(A.icon('dps-crown')) + '" alt=""><b>' + esc(isLeader(mvp) ? T('ui.name.you') : mvp.name) + '</b></div>' : '') +
-      '<div class="actions"><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button></div></div></div>'; // UI-CLEAN §2.9: 改判胜利 is in ☰ 试玩作弊
+      '<div class="actions"><button class="btn btn-secondary btn-lg" data-act="pLog" data-tip="' + esc(T('ui.settle.btnTip')) + '">' + T('ui.settle.btn') + '</button><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button></div></div></div>'; // UI-CLEAN §2.9: 改判胜利 is in ☰ 试玩作弊 · v39: 战报 beside 继续
     resultUp(w);
   }
   // ===== v2.3 battle §D8 [5]: one clean stats table (per ally: damage, healing, taken, kills, longest 加成; MVP crown; rounds) =====
@@ -2601,7 +2650,7 @@
     }).join('');
     w.innerHTML = '<div class="result-wrap"><div class="result paper rs-panel">' + heading(T(win ? 'ui.result.win' : 'ui.result.lose'), rounds ? T('ui.result.roundsTotal', { n: rounds }) : '', win ? 'laurel' : 'grim') +
       '<table class="rs-table"><thead><tr><th></th>' + COLS.map(function (c) { return '<th>' + c[1] + '</th>'; }).join('') + '</tr></thead><tbody>' + body + '</tbody></table>' +
-      '<div class="actions"><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button></div></div></div>'; // UI-CLEAN §2.9: 改判胜利 is in ☰ 试玩作弊
+      '<div class="actions"><button class="btn btn-secondary btn-lg" data-act="pLog" data-tip="' + esc(T('ui.settle.btnTip')) + '">' + T('ui.settle.btn') + '</button><button class="btn btn-primary btn-lg" data-act="battleContinue">' + (win ? T('ui.common.continue') : '……') + '</button></div></div></div>'; // UI-CLEAN §2.9: 改判胜利 is in ☰ 试玩作弊 · v39: 战报 beside 继续
     resultUp(w);
   }
   // ===== v2.3 §H: 「作弊：改判胜利」 on a lost battleResult and on gameOver (from a battle loss); ?nocheat=1 hides it.
@@ -3213,6 +3262,7 @@
       ui.item = it; pauseMode('itemTarget', T('ui.pause.itemTarget', { item: '<b>' + esc(it.name) + '</b>' }));
     },
     pCancel: function () { pauseMode(null); },
+    pLog: function () { openBattleLog(); }, // v39 战报
     battleContinue: function (d, t, e) { if (ui.resActed || (e && e.isTrusted && ui.resultAt && nowMs() - ui.resultAt < 450)) return; ui.resActed = 1; if (!doAct({ type: 'continue' })) ui.resActed = 0; },
     pickCard: function (d) {
       ui.who = null;

@@ -737,6 +737,7 @@
       openBlock: !ally && u.openBlock > 0 ? u.openBlock : 0,
       mood: ally ? pick('mood') : null, moodLabel: ally ? pick('moodLabel') || null : null,
       skillName: pick('skillName') || sk.name || '', skillLv: ally ? pick('skillLv') || null : null,
+      skillKind: sk.kind || ((pick('keywords') || []).map(function (k) { return k && /^skill:/.test(k.id || '') ? k.id.slice(6) : null; }).filter(Boolean)[0]) || null, // v39 「怎么算」
       skillText: pick('actionText') || sk.text || '', perkText: pick('perkText') || '',
       comboName: pick('comboName') || combo.name || '', comboText: pick('bonusText') || combo.text || '',
       keepsakes: toks.map(function (name) {

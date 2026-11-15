@@ -538,7 +538,9 @@
   const HEAL_FORMULA = 'full';
   const healShare = (p) => (HEAL_FORMULA === 'full' ? Math.max(1, p) : HEAL_FORMULA === 'minus2' ? Math.max(1, p - 2) : Math.ceil(Math.max(1, p) / 2));
   const GUARD_LV = [{ self: 1, cover: 0 }, { self: 1, cover: 1 }, { self: 2, cover: 1 }, { self: 2, cover: 2 }]; // 2026-11-14 护甲: shares of 威力 for herself + allies behind her (掩护, one share each)
-  const HEAL_LV = [{ n: 1 }, { n: 2 }, { n: 2, over: true }, { n: 3, over: true, cleanse: true }]; // shares; Lv3+ overflow → 护甲, Lv4 净化
+  // 用户 2026-11-15 牧师变强: 「威力 = 加血，满了变护甲」 from Lv1 — what a share cannot heal becomes 护甲 on that ally; a share with
+  // nobody left hurt goes whole as 护甲 to the lowest-hp ally (front-most on a tie). Everyone full before she acts → she attacks (unchanged).
+  const HEAL_LV = [{ n: 1, over: true }, { n: 2, over: true }, { n: 3, over: true }, { n: 3, over: true, cleanse: true }]; // shares; Lv4 净化
   function lvOf(sk) { return clamp(1 + ((sk && sk.power) || 0), 1, SKILL_LV_MAX); }
   function hitsOf(sk) { return sk && sk.kind === 'backstab' ? lvOf(sk) + 1 : 1; } // rogues: 连击 2..5 hits (SPEC-11-13 F: one blow, many hits = 连击)
   function lvLine(kind, lv) { // the plain words for one level: 「暴击率 35%」
@@ -549,7 +551,7 @@
       case 'aim': return i >= SKILL_LV_MAX - 1 ? TX('skill.lv.aimMax', { x: CRIT_X_MAX }) : TX('skill.lv.aim', { pct: Math.round(CRIT_RATE[i] * 100) });
       case 'backstab': return TX('skill.lv.backstab', { n: i + 2 });
       case 'spark': return SPARK_TARGETS[i] === Infinity ? TX('skill.lv.sparkAll') : TX('skill.lv.spark', { n: SPARK_TARGETS[i] });
-      case 'heal': { const h = HEAL_LV[i]; return h.cleanse ? TX('skill.lv.healCleanse', { n: h.n }) : h.over ? TX('skill.lv.healOver', { n: h.n }) : TX('skill.lv.heal', { n: h.n }); }
+      case 'heal': { const h = HEAL_LV[i]; return h.cleanse ? TX('skill.lv.healCleanse', { n: h.n }) : TX('skill.lv.heal', { n: h.n }); }
       default: return '';
     }
   }
@@ -587,7 +589,7 @@
           : sparkSplash(d, lv) > 0 ? TX('skill.action.spark', { n: SPARK_TARGETS[i], dmg: sparkMain(d, lv), splash: sparkSplash(d, lv), lvTag: tag }) : TX('skill.action.sparkOne', { dmg: sparkMain(d, lv), lvTag: tag });
       case 'heal': { const h = HEAL_LV[i];
         const hv = { n: h.n, heal: healShare(Math.max(1, atk)), foe, dmg: d, lvTag: tag };
-        return enemy ? TX('skill.action.healEnemy', hv) : h.cleanse ? TX('skill.action.healCleanse', hv) : h.over ? TX('skill.action.healOver', hv) : TX('skill.action.heal', hv); }
+        return enemy ? TX('skill.action.healEnemy', hv) : h.cleanse ? TX('skill.action.healCleanse', hv) : TX('skill.action.heal', hv); }
       default: return enemy && skill.vary ? TX('skill.action.defaultRange', { foe, dmg: d, max: d + skill.vary }) : TX('skill.action.default', { foe, dmg: d });
     }
   }
@@ -2183,7 +2185,7 @@
   // ---------- battle (§2.3 interactive, one round per pause) ----------
   const KIND_VERB = lazy(() => ({ guard: TX('skill.verb.attack'), aim: TX('skill.verb.aim'), strike: TX('skill.verb.attack'), backstab: TX('skill.verb.backstab'), heal: TX('skill.verb.attack'), spark: TX('skill.verb.spark') }));
   const SIDE_LABEL = lazy(() => ({ ally: TX('battle.side.ally'), enemy: TX('battle.side.enemy') }));
-  const MAX_CHAIN = 5;
+  const MAX_CHAIN = 3; // 用户 2026-11-15: a side chains at most 3 extra actions per round (was 5)
   // 2026-11-14 敌方加成: after an enemy attack, each living neighbour (left / right) rolls ENEMY_ASSIST to follow up as a chain
   // (depth k = +k damage, the same rule as ours); the fairy (小铃) ignores position — every other enemy rolls FAIRY_ASSIST.
   // At most ENEMY_ASSIST_MAX followers per attack, followers never pull in more. Tiered runs only (a tier may override with
@@ -2736,7 +2738,7 @@
       let af = alive(foes);
       if (u.focus) { const f = af.find((x) => x.id === u.focus); if (f) af = [f].concat(af.filter((x) => x !== f)); } // turncoats go for the fairy
       if (!af.length) return null;
-      let targets = [], heal = false, healAmt = 0, text, bon = [], soft = null, pflat = [];
+      let targets = [], heal = false, healAmt = 0, text, bon = [], soft = null, pflat = [], plater = [];
       const base = rawAmount(sk.kind, u.atk, !ally);
       // 威力 for this action: atk + bonuses − 虚弱, +1 when pulled in by 加成 (three-factors 用户拍板 #3)
       const powerFor = (t) => { const b = atkBonuses(u, t), a = u.atk + sum(b); return { b, p: Math.max(Math.min(1, a), a - (u.weak || 0)) + (k ? CHAIN_POWER : 0) }; }; // 虚弱 never takes 威力 below 1
@@ -2773,7 +2775,7 @@
         if (hurt.length) {
           // §C per-battle heal cap: prefer the lowest-hp ally still below her cap; if every hurt ally is capped, the heal is wasted
           const room = (x) => HEAL_CAP_X * x.maxHp - (x.healedIn || 0);
-          const hl = ally ? HEAL_LV[li] : HEAL_LV[0];
+          const hl = ally ? HEAL_LV[li] : { n: 1 }; // enemy priests: one plain share, no 护甲 (2026-11-15: enemies not re-tuned)
           const r = powerFor(null);
           bon = r.b;
           const share = healShare(r.p);
@@ -2781,10 +2783,17 @@
           let refund = 0;
           heal = true;
           // three-factors §3.4: hl.n shares, each to whoever is lowest right then (the same ally may get several);
-          // Lv3+: what a share cannot heal becomes 护甲 on her (葛蕾「回本」 turns it into damage instead)
+          // what a share cannot heal becomes 护甲 on her (2026-11-15: from Lv1; 葛蕾「回本」 turns it into damage instead);
+          // a share with nobody left hurt goes whole as 护甲 to the lowest-hp ally (front-most on a tie) — 回本: damage
           for (let n = 0; n < hl.n; n++) {
             const left = alive(mine).filter((x) => x.hp < x.maxHp);
-            if (!left.length) break;
+            if (!left.length) {
+              if (!hl.over || raw <= 0) break;
+              if (pid === 'refund') { refund += raw; continue; }
+              const t = alive(mine).reduce((b, x) => (x.hp < b.hp ? x : b), alive(mine)[0]);
+              gainBlock(t, raw, u.id, true, { name: u.name, skill: sk.name });
+              continue;
+            }
             const open = left.filter((x) => room(x) > 0);
             const pool = open.length ? open : left;
             const t = pool.reduce((b, x) => (x.hp < b.hp ? x : b), pool[0]);
@@ -2828,6 +2837,7 @@
         const hitOne = (t, i, n, adj) => {
           const pf = perkFlat(t, i, n, fallback);
           if (i === 0 && t === front) pflat = pf;
+          else if (i > 0 && pid === 'collect') plater = plater.concat(pf.filter((x) => x.label === pk.name).map((x) => Object.assign({}, x, { hit: i + 1 }))); // 夜鸦「收账」: the +1 on her last hit (log fix 2026-11-15)
           const crit = critOf(t, i);
           const a0 = amountFor(t).amt + (!ally && sk.vary ? Math.floor(hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, seq, i, 7) * (sk.vary + 1)) : 0); // 试玩反馈 #3: 史莱姆 1–2
           const tr = hit(u, t, Math.max(0, adj ? adj(a0) : a0) + sum(pf), crit);
@@ -2899,19 +2909,23 @@
       }
       if (ally) u.lastSeq = seq;
       // bonuses as shown to the player: atk bonuses (collapsed if the skill's math is not linear) + chain depth
-      const atkPart = rawAmount(sk.kind, u.atk + sum(bon)) - rawAmount(sk.kind, u.atk);
+      const atkPart = rawAmount(sk.kind, u.atk + sum(bon), !ally) - rawAmount(sk.kind, u.atk, !ally); // 2026-11-15: enemy-aware (an enemy spark is 1 / 2 by 威力 tier)
       let bonuses = bon;
       if (atkPart !== sum(bon)) bonuses = atkPart ? [{ from: u.id, label: listSeq(bon.map((b) => b.label)), amount: atkPart }] : [];
       if (pflat.length) bonuses = bonuses.concat(pflat); // §2 个人特点 (first hit / first target)
+      if (plater.length) bonuses = bonuses.concat(plater); // later hits only (entry.hit = which hit), not part of the first hit
       if (u.weak > 0 && !heal) { // 虚弱: what it really took off (威力 never drops below 1 — 用户 2026-11-14: say so when it did nothing)
-        const a0 = u.atk + sum(bon), drop = a0 - Math.max(Math.min(1, a0), a0 - u.weak);
-        bonuses = bonuses.concat([drop > 0 ? { from: u.id, label: TX('status.weak'), amount: -drop } : { from: u.id, label: TX('status.weakNone'), amount: 0, noEffect: true }]);
+        // 2026-11-15 log fix: the drop is measured on the damage, not on 威力 — an enemy spark (1 / 2 by tier) may not change at all
+        const a0 = u.atk + sum(bon), a1 = Math.max(Math.min(1, a0), a0 - u.weak);
+        const drop = rawAmount(sk.kind, a0, !ally) - rawAmount(sk.kind, a1, !ally);
+        bonuses = bonuses.concat([drop > 0 ? { from: u.id, label: TX('status.weak'), amount: -drop }
+          : { from: u.id, label: a0 - a1 > 0 ? TX('status.weakNoneStep') : TX('status.weakNone'), amount: 0, noEffect: true }]);
       }
       if (k) bonuses = bonuses.concat([{ from: from || u.id, label: TX('battle.bonus.chain', { k }), amount: CHAIN_POWER }]); // 加成: 威力 +1
       if (k) text += TX('battle.chainSuffix', { k });
       const mult = B.mult || 1;
       if (mult > 1 && !heal && !soft) { // §C: the frenzy share of the first hit, so base + bonuses still add up
-        const pre = amountFor(targets.length ? foes.find((x) => x.id === targets[0].uid) || af[0] : af[0]).amt;
+        const pre = amountFor(targets.length ? foes.find((x) => x.id === targets[0].uid) || af[0] : af[0]).amt + sum(pflat); // 2026-11-15: + the first hit's perk bonus (it is multiplied too)
         bonuses = bonuses.concat([{ from: 'frenzy', label: TX('battle.bonus.frenzy', { mult }), amount: pre * (mult - 1) }]);
       }
       const entry = { kind: 'action', round: rnd, side: u.side, actor: u.id, actorId: u.ref, skill: sk.name, skillKind: sk.kind,
