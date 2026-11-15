@@ -191,6 +191,7 @@
   const OPEN_BLOCK_SHARE = { fodder: 0, guard: 0.4, girl: 0.25, elite: 0.4 }, OPEN_BLOCK_MIN = 2;
   const OPEN_BLOCK_LEVEL = { 4: 0.5, 5: 0.5, 6: 0.75, 7: 0.75, 8: 1, 9: 1.5, 10: 1.5, 11: 1 };
   const openBlockKind = (u) => (isElite(u) ? 'elite' : u.candidate ? 'girl' : u.skill && u.skill.kind === 'guard' ? 'guard' : 'fodder');
+  const DRUM_ADD = 0.2; // 战鼓: 加成 +20% for the round it is used
   const LUCK_ADD = 0.1; // nicota 好运 (2026-11-15): 加成 +10%, that round only
   const LUCKY_BONUS = 0.3; // G2 #8 (legacy flow kinds, unused by the advisors since 第六批 H1-1): ward — each ally's first hit taken each battle −1 · lucky — our first bonus roll each round +30%
   const EXPLORE_N = 2, EXPLORE_N_OUTLANDER = 3;
@@ -577,7 +578,7 @@
       : [TX('skill.target.enemy.random'), TX('skill.target.enemy.rightmost'), TX('skill.target.enemy.leftmost')][where];
     const tag = enemy ? '' : TX('skill.action.lvTag', { lv }); // 2026-11-14 keyword style: the numbers are in the line itself
     switch (skill.kind) {
-      case 'guard': { if (enemy) return TX('skill.action.guardEnemy', { foe, dmg: d, block: ENEMY_GUARD_BLOCK });
+      case 'guard': { if (enemy) return TX('skill.action.guardEnemy', { foe, dmg: d, block: skill.block || ENEMY_GUARD_BLOCK });
         const g = GUARD_LV[i], pw = Math.max(1, atk);
         return g.cover ? TX('skill.action.guardCover', { foe, dmg: d, block: pw * g.self, cover: g.cover, give: pw, lvTag: tag }) : TX('skill.action.guard', { foe, dmg: d, block: pw * g.self, lvTag: tag }); }
       case 'aim': if (enemy) return TX('skill.action.aimEnemy', { foe, dmg: d });
@@ -1245,21 +1246,12 @@
       chooseLeader(data, run, a, ev) { setLeader(data, run, a.identity || (run.leader && run.leader.identity), a.class || a.cls, ev); },
     },
     interview: {
-      side(data, run, a, ev) {
-        if (run.interviewStep !== 'side') fail('not choosing a side now');
-        const pair = roundPair(data, run.interviewRound);
-        const pick = pair.find((c) => c.id === a.id) || fail('candidate not in this round');
-        const cf = conflictFor(data, run.interviewRound);
-        run.sided[run.interviewRound] = pick.id;
-        const se = sideEffect(data, run, run.interviewRound, pick.id); // G2 #9: the effect, right away
-        ev.push({ kind: 'sideEffect', id: pick.id, name: pick.name, text: se.effect, more: se.effectMore, against: se.against || null, againstId: se.againstId || null });
-        for (const c of pair) {
-          const r = dig(cf, 'reactions', pick.id, c.id);
-          if (r) ev.push(lineEvent(data, run, r, { name: c.name }, c.id, { id: c.id, key: 'reaction' }));
-        }
-        run.interviewStep = 'hire';
-      },
+      side(data, run, a, ev) { doSide(data, run, a.id, ev); },
       hire(data, run, a, ev) { doHire(data, run, a.id || a.candidate, ev); },
+      // 2026-11-15 老玩家快速开局: one page, one pick per remaining round = side with her AND hire her (the other one is
+      // rejected exactly as in the normal flow). Runs the same doSide / doHire steps in round order, so the run state
+      // (party, rejected, grudges, memory, rng) matches doing them one by one; the talk lines are dropped (quick page).
+      quickRecruit(data, run, a, ev) { quickRecruit(data, run, a, ev); },
     },
     prep: {
       setOrder(data, run, a) {
@@ -1389,7 +1381,47 @@
     run.interviewRound = round;
     run.interviewStep = conflictFor(data, round) ? 'side' : 'hire';
   }
-  function doHire(data, run, id, ev) {
+  function doSide(data, run, id, ev) {
+    if (run.interviewStep !== 'side') fail('not choosing a side now');
+    const pair = roundPair(data, run.interviewRound);
+    const pick = pair.find((c) => c.id === id) || fail('candidate not in this round');
+    const cf = conflictFor(data, run.interviewRound);
+    run.sided[run.interviewRound] = pick.id;
+    const se = sideEffect(data, run, run.interviewRound, pick.id); // G2 #9: the effect, right away
+    ev.push({ kind: 'sideEffect', id: pick.id, name: pick.name, text: se.effect, more: se.effectMore, against: se.against || null, againstId: se.againstId || null });
+    for (const c of pair) {
+      const r = dig(cf, 'reactions', pick.id, c.id);
+      if (r) ev.push(lineEvent(data, run, r, { name: c.name }, c.id, { id: c.id, key: 'reaction' }));
+    }
+    run.interviewStep = 'hire';
+  }
+  // 2026-11-15 老玩家快速开局: only for a returning player (meta.runs ≥ 1), only at the start of a round (nothing picked in it
+  // yet). The rounds still to go, in order; null when the quick page is not on offer.
+  const isReturning = (run) => !!(run.meta && run.meta.runs >= 1);
+  function quickRounds(data, run) {
+    if (run.phase !== 'interview' || !isReturning(run)) return null;
+    const first = conflictFor(data, run.interviewRound) ? 'side' : 'hire';
+    if (run.interviewStep !== first || run.sided[run.interviewRound]) return null;
+    const rounds = interviewRounds(data, run);
+    const i = rounds.indexOf(run.interviewRound);
+    return i < 0 ? null : rounds.slice(i);
+  }
+  function quickRecruit(data, run, a, ev) {
+    const rounds = quickRounds(data, run);
+    if (!rounds) fail(isReturning(run) ? 'quickRecruit only at the start of an interview round' : 'quickRecruit is for returning players (meta.runs >= 1)');
+    const picks = a.picks;
+    if (!Array.isArray(picks) || picks.length !== rounds.length) fail(`quickRecruit needs ${rounds.length} picks (one per round, in order)`);
+    picks.forEach((id, i) => { if (!roundPair(data, rounds[i]).some((c) => c.id === id)) fail(`pick ${i + 1} is not in round ${rounds[i]}`); });
+    const talk = []; // the side / hire lines (reactions, hired, leave): the quick page skips them
+    picks.forEach((id, i) => {
+      if (run.interviewRound !== rounds[i]) fail('quickRecruit: round out of step');
+      if (run.interviewStep === 'side') doSide(data, run, id, talk);
+      doHire(data, run, id, ev, talk); // the last hire advances (teamAssembled …) into ev
+    });
+    ev.unshift({ kind: 'quickRecruit', picks: picks.slice(), rejected: run.rejected.slice(-picks.length).map((r) => r.id) });
+  }
+  function doHire(data, run, id, ev, talk) {
+    const tk = talk || ev;
     const round = run.interviewRound;
     const pair = roundPair(data, round);
     const pick = pair.find((c) => c.id === id) || fail('candidate not in this round');
@@ -1407,7 +1439,7 @@
       g.sidedFor = sided ? sided === c.id : null;
       g.rival = o ? o.id : null;
     }
-    say(data, run, ev, pick.id, 'hired');
+    say(data, run, tk, pick.id, 'hired');
     if (other) {
       const grudge = cf && sided === other.id ? 'low' : 'high';
       run.rejected.push({ id: other.id, round, grudge });
@@ -1415,8 +1447,8 @@
       Object.assign(girlMem(run, other.id), { departure: 'rejected', departLevel: run.level, grudge, mood: null });
       const key = sided === other.id ? 'sided' : 'unsided';
       const raw = dig(cf, 'leave', other.id, key) || dig(cf, key === 'sided' ? 'leaveSided' : 'leaveUnsided', other.id);
-      if (raw) ev.push(lineEvent(data, run, raw, { name: other.name }, other.id, { id: other.id, key: key === 'sided' ? 'leaveSided' : 'leaveUnsided' }));
-      else say(data, run, ev, other.id, 'rejected');
+      if (raw) tk.push(lineEvent(data, run, raw, { name: other.name }, other.id, { id: other.id, key: key === 'sided' ? 'leaveSided' : 'leaveUnsided' }));
+      else say(data, run, tk, other.id, 'rejected');
     }
     const rounds = interviewRounds(data, run);
     const next = rounds[rounds.indexOf(round) + 1];
@@ -1793,7 +1825,7 @@
     return n;
   }
   const FLUO_TEXT = { // her lines, data/text/zh/engine.json shop.fluo.* (literal keys: tests/i18n checks every TX key)
-    greetFirst: () => TX('shop.fluo.greetFirst'), greetFirstAsk: () => TX('shop.fluo.greetFirstAsk'), greetBack: () => TX('shop.fluo.greetBack'),
+    hello: () => TX('shop.fluo.hello'), greetFirst: () => TX('shop.fluo.greetFirst'), greetFirstAsk: () => TX('shop.fluo.greetFirstAsk'), greetBack: () => TX('shop.fluo.greetBack'),
     slipSpent: (v) => TX('shop.fluo.slipSpent', v), slipDolls: () => TX('shop.fluo.slipDolls'), slipRuns: (v) => TX('shop.fluo.slipRuns', v),
     lv3: () => TX('shop.fluo.lv3'), lv6: () => TX('shop.fluo.lv6'), lv6Tease: () => TX('shop.fluo.lv6Tease'), lv9: () => TX('shop.fluo.lv9'), rich: () => TX('shop.fluo.rich'),
     buy1: () => TX('shop.fluo.buy1'), buy2: () => TX('shop.fluo.buy2'), buyMaster: () => TX('shop.fluo.buyMaster'), buyDoll: () => TX('shop.fluo.buyDoll'),
@@ -1808,9 +1840,9 @@
   function fluoIntro(data, run) {
     const out = [], M = run.meta || {}, first = !Object.keys(run.shopsSeen || {}).some((k) => +k < run.level);
     if (first) {
-      if (!(M.runs > 0)) out.push(fluoLine('greetFirst', 'calm'), fluoLine('greetFirstAsk', 'sly'));
+      out.push(fluoLine('hello', 'happy')); // 2026-11-15 user: her entrance line, right after the bells
+      if (!(M.runs > 0)) out.push(fluoLine('greetFirst', 'calm'));
       else {
-        out.push(fluoLine('greetBack', 'calm'));
         if (M.fluoSpentLast > 0) out.push(fluoLine('slipSpent', 'shock', { n: M.fluoSpentLast }));
         else if (M.dollsGiven > 0) out.push(fluoLine('slipDolls', 'shock'));
         else out.push(fluoLine('slipRuns', 'shock', { n: M.runs + 1 }));
@@ -2384,7 +2416,7 @@
   const HEAL_CAP_X = 2; // total healing one unit can receive in a battle = 2 × maxHp
   // DESIGN-skill-level: our hunters' aim = atk (the old +1 became the crit); enemy archers keep atk + 1
   // the main hit for 威力 a (enemy archers keep +1; an enemy spark — the fairy's bell — keeps the old flat 1/2 to everyone)
-  const rawAmount = (kind, a, enemy) => (kind === 'aim' ? a + (enemy ? 1 : 0) : kind === 'backstab' ? Math.max(1, a - 1) : kind === 'spark' ? (enemy ? (a >= 4 ? 2 : 1) : a) : a);
+  const rawAmount = (kind, a, enemy) => (kind === 'aim' ? a + (enemy ? 1 : 0) : kind === 'backstab' ? (enemy ? Math.max(1, a - 1) : a) : kind === 'spark' ? (enemy ? (a >= 4 ? 2 : 1) : a) : a);
 
   // 试玩反馈 2026-11-15: a member's skill text is copied at hire time; show the current data's text (rules change, saves don't)
   function freshSkill(data, run, id, sk0) {
@@ -3020,22 +3052,25 @@
         const fallback = sk.kind === 'heal';
         bon = amountFor(front).b;
         // one hit on t (hit i of n): perks, crit, then the target's own reductions in hit()
-        const hitOne = (t, i, n, adj) => {
+        // dk (用户 2026-11-15 刺客连击递减): hit i+1 of her 连击 does i less (after every bonus), never below 1 — logged per hit
+        const hitOne = (t, i, n, adj, dk) => {
           const pf = perkFlat(t, i, n, fallback);
           if (i === 0 && t === front) pflat = pf;
           else if (i > 0 && pid === 'collect') plater = plater.concat(pf.filter((x) => x.label === pk.name).map((x) => Object.assign({}, x, { hit: i + 1 }))); // 夜鸦「收账」: the +1 on her last hit (log fix 2026-11-15)
           const crit = critOf(t, i);
           const a0 = amountFor(t).amt + (!ally && sk.vary ? Math.floor(hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, seq, i, 7) * (sk.vary + 1)) : 0); // 试玩反馈 #3: 史莱姆 1–2
-          const tr = hit(u, t, Math.max(0, adj ? adj(a0) : a0) + sum(pf), crit);
+          const base = Math.max(0, adj ? adj(a0) : a0) + sum(pf), dec = dk ? Math.min(i, Math.max(0, base - 1)) : 0;
+          if (dec) plater.push({ from: u.id, label: TX('battle.comboDecay'), amount: -dec, hit: i + 1 });
+          const tr = hit(u, t, base - dec, crit);
           if (crit) tr.crit = true;
           if (n > 1) tr.hit = i + 1;
           return tr;
         };
         // §D soft heart also applies to each target of a multi-target skill (once per ally per battle)
-        const softOrHit = (t, i, n, adj) => {
+        const softOrHit = (t, i, n, adj, dk) => {
           if (soft === t) return { uid: t.id, id: t.ref, amount: 0, hpAfter: t.hp, kind: 'damage', miss: true, soft: true };
           if (!soft && softHeart(u, t)) { soft = t; return { uid: t.id, id: t.ref, amount: 0, hpAfter: t.hp, kind: 'damage', miss: true, soft: true }; }
-          return hitOne(t, i, n, adj);
+          return hitOne(t, i, n, adj, dk);
         };
         if (sk.kind === 'spark') {
           // 法师 (three-factors, 用户 2026-11-14 final): Lv1 2 targets, +1 per level, main = leftmost, splash left→right.
@@ -3057,7 +3092,7 @@
             if (!lv.length) break;
             const pair = u.focus && lv.includes(af[0]) ? [af[0]] : lv.slice(0, 2);
             const t = pair[i % pair.length];
-            const tr = softOrHit(t, i, n);
+            const tr = softOrHit(t, i, n, null, ally);
             targets.push(tr);
             if (pid === 'handy' && !extra && tr.amount > 0 && t.hp <= 0 && alive(foes).length) { extra = true; n += 1; tr.handy = true; } // 琪琪「顺手」
           }
@@ -3081,7 +3116,7 @@
         }
         if (sk.kind === 'guard' && u.hp > 0) { // 盾击 (2026-11-14 护甲): 威力 per share — herself, then (掩护) the nearest living allies behind her
           const src = { name: u.name, skill: sk.name };
-          if (!ally) gainBlock(u, ENEMY_GUARD_BLOCK, u.id, true, src);
+          if (!ally) gainBlock(u, sk.block || ENEMY_GUARD_BLOCK, u.id, true, src); // enemies.json skill.block overrides (石门守卫 +6, 用户 2026-11-15)
           else {
             const g = GUARD_LV[li], pw = Math.max(1, powerFor(front).p); // 用户 2026-11-14: the same 威力 as the hit, temporary bonuses (mood / 怀表 / …) included
             gainBlock(u, pw * g.self, u.id, true, src);
@@ -3171,7 +3206,7 @@
       if (u.side === 'ally') {
         if (u.bond === 'high') c += 0.1; // §2.2 bond high
         if (hasTok(u, 'combo')) c += 0.1; // 信物 母亲的发绳
-        if (B.mods.drum) c *= 2; // §2.5 drum
+        if (B.mods.drum) c = Math.min(1, c + DRUM_ADD); // §2.5 drum — 2026-11-15 user: ×2 was a bug-level spike; now +20%
         if (B.lucky && B.luckyRound !== B.round) c += LUCKY_BONUS; // G2 #8 flow lucky (legacy): our first roll each round
         if (B.mods.luck) c = Math.min(1, c + LUCK_ADD); // 2026-11-15 user: nicota 好运 was 「every roll succeeds」 → one-round wipe; now 加成 +10%, that round only
       } else if (B.enemyCombat === 'luck') c = Math.min(0.9, c + 0.15); // L10 boss: the v1 passive
@@ -4027,6 +4062,8 @@
         v.pair = pair.map((c) => candidateView(data, run, c, pair.find((o) => o.id !== c.id)));
         v.conflict = conflictView(data, run, run.interviewRound);
         v.sided = run.sided[run.interviewRound] || null;
+        const qr = quickRounds(data, run); // 2026-11-15 老玩家快速开局: act interview.quickRecruit { picks: [id per row] }
+        if (qr) v.quick = { rows: qr.map((r) => { const p = roundPair(data, r); return { round: r, role: p[0] && p[0].role, pair: p.map((c) => candidateView(data, run, c, p.find((o) => o.id !== c.id))) }; }) }; // absent when not on offer
         break;
       }
       case 'prep': v.levelTitle = ''; Object.assign(v, prepInfo(data, run)); v.campfire = run.campfire ? { talkId: run.campfire.talkId } : null; v.bell = !!run.bell; v.bellWound = tierRule(run, 'bellWound') !== false; v.wounded = !!run.wounded; v.camp = campView(data, run); v.skillArmed = !!run.skillArmed; v.shop = shopView(data, run); break; // 叙事节奏 2026-11-13: the night never names the next level

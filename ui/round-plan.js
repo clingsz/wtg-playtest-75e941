@@ -245,7 +245,10 @@
       if (t.miss) { r.kind = t.soft ? 'soft' : 'miss'; r.text = to + L(t.soft ? 'soft' : 'miss'); return r; }
       if (t.capped) { r.kind = 'capped'; r.text = to + L('capped'); return r; }
       if (t.kind === 'heal') { r.text = to + L('heal', { n: t.amount || 0, hp: t.hpAfter }); return r; }
-      var s = hitStart(e, t, pre, mult);
+      // per-hit bonuses (夜鸦「收账」 +1 on her last hit, 刺客「连击递减」 −k on hit k+1) start this hit from its own number
+      var ph = t.hit ? (e.bonuses || []).filter(function (b) { return b.hit === t.hit && !b.noEffect; }) : [];
+      var preT = pre + bonusSum({ bonuses: ph });
+      var s = hitStart(e, t, preT, mult);
       if (!s) { // the formula does not reproduce this hit (a per-hit 特点, a second bolt, …): read it straight from the log
         r.exact = !!t.refund; // 葛蕾「回本」: the overflow itself is the number, nothing to reproduce
         var sh = t.shieldAmt || 0;
@@ -256,6 +259,7 @@
       var f = s.from || {};
       if (f.crit) bits.push(L('crit', { n: f.crit.n, x: f.crit.x, v: s.start }));
       else if (f.splash) bits.push(L(f.splash.min ? 'splashMin' : 'splash', { n: f.splash.n, d: f.splash.d, v: s.start }));
+      else if (ph.length && r.exact) bits.push(String(pre) + ph.map(function (b) { return L((b.amount || 0) < 0 ? 'minus' : 'plus', { label: b.label || '', n: Math.abs(b.amount || 0) }); }).join('') + L('equals', { n: s.start }));
       else bits.push(L(r.exact ? 'start' : 'startOdd', { n: s.start }));
       if (s.tough) bits.push(L('tough', { n: s.tough }));
       if (s.shield) bits.push(L('shield', { name: name(t.shieldBy), n: s.shield }));
@@ -304,7 +308,35 @@
       default: return n.length ? L('how.default', { d: n[0] }) : null;
     }
   }
-  var api = { explainAction: explainAction, battleReport: battleReport, howCalc: howCalc, SPLASH_DIV: SPLASH_DIV, blockStart: blockStart, hitBlocks: hitBlocks, eventBlocks: eventBlocks, beatExtras: beatExtras, actionBeats: actionBeats, RISE: RISE, riseTiming: riseTiming, hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
+  // 2026-11-15「一起蓄力，一起出手」: a chain (加成 / 连携) is no longer played one girl per beat. Everyone the chain pulled in
+  // (same chainId) rises at once, each builds her own number over her own head at the same time, they all fly together, and
+  // the hits resolve on the targets in the ENGINE's order, a short stagger apart (TOGETHER.resolveGap), so hp bars and 护甲
+  // badges step exactly as the log says. Pure parts:
+  // chainGroups(log) → [{ chainId, side, actors: [uid…], actions: [action events…] }] — consecutive actions sharing a chainId
+  // (an action without one is its own group). chainWaves(beats) → [[beat…]…] — the beats that rise together: a chain splits
+  // only where a girl would act a second time (one charge bubble per head). A plain action = one wave of one beat.
+  function chainGroups(log) {
+    var out = [], cur = null;
+    (log || []).forEach(function (e) {
+      if (!e || e.kind !== 'action') return;
+      if (cur && e.chainDepth && e.chainId != null && e.chainId === cur.chainId && e.side === cur.side) { cur.actions.push(e); if (cur.actors.indexOf(e.actor) < 0) cur.actors.push(e.actor); return; }
+      cur = { chainId: e.chainId == null ? null : e.chainId, side: e.side, actors: [e.actor], actions: [e] }; out.push(cur);
+      if (e.chainId == null) cur = null;
+    });
+    return out;
+  }
+  function chainWaves(beats) {
+    var out = [], w = null;
+    (beats || []).forEach(function (bt) {
+      if (!w || w.some(function (x) { return x.actor === bt.actor; })) { w = []; out.push(w); }
+      w.push(bt);
+    });
+    return out;
+  }
+  // timing of a together wave (ms at ×1 before the speed factor): each girl's charge starts `chargeGap` after the one who
+  // pulled her in (the cascade stays readable), all release together, the hits land `resolveGap` apart in engine order
+  var TOGETHER = { chargeGap: 140, resolveGap: 100 };
+  var api = { chainGroups: chainGroups, chainWaves: chainWaves, TOGETHER: TOGETHER, explainAction: explainAction, battleReport: battleReport, howCalc: howCalc, SPLASH_DIV: SPLASH_DIV, blockStart: blockStart, hitBlocks: hitBlocks, eventBlocks: eventBlocks, beatExtras: beatExtras, actionBeats: actionBeats, RISE: RISE, riseTiming: riseTiming, hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.RoundPlan = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -40,7 +40,7 @@
     'allyDown', 'pause', 'move', 'advisorSkill', 'item', 'frenzy', 'victory', 'defeat',
     'reward', 'debuff', 'darkTransition', 'rainStart', 'rainStop', 'sacrificeConfirm', 'nameStrike', 'reckoning', 'debtDot', 'flashback',
     'moodDown', 'moodUp', 'gallery', 'fireStart', 'fireStop', 'fire',
-    'bell', 'giggle', 'transform', 'whiteout', 'turncoat', 'phase2',
+    'bell', 'shopBell', 'giggle', 'transform', 'whiteout', 'turncoat', 'phase2',
     'victoryTheme', 'defeatTheme'];
   // V2.4 [6] sequential fades: the old track fades out completely, and only then does the new one fade in. Never overlap.
   var FADE_OUT = 1.2, FADE_IN = 1.5;
@@ -423,6 +423,9 @@
   // --- cues: fn(t, P, detail) ---
   var C = {
     // ---- v2.2 (docs/V2.2-CONTRACT.md §7) ----
+    shopBell: function (t, P) { // 2026-11-15 芙洛's lantern bells: 叮—玲—玲, three small bright bells, quick and light
+      [[0, 1568], [0.13, 1760], [0.24, 2093]].forEach(function (b) { chime(P, t + b[0], b[1], 0.045, 0.9); chime(P, t + b[0] + 0.01, b[1] * 2.01, 0.012, 0.5); });
+    },
     bell: function (t, P) { // small clear guild bell; act 3: slightly detuned, beating, eerie
       var eerie = P.act === 3, f = eerie ? 830 : 880;
       [[1, 0.05, 1.1], [2.0, 0.025, 0.7], [2.76, 0.018, 0.5], [4.07, 0.01, 0.3], [5.4, 0.006, 0.2]].forEach(function (p, i) {
