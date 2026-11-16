@@ -118,13 +118,6 @@
   var prefs = lsGet(PKEY, { speed: 1, auto: false });
   // v2.4 [15]: auto-continue is a fresh opt-in (prefs.autoCont, default off); an old saved prefs.auto no longer applies
   if (prefs.autoCont == null) prefs.autoCont = false;
-  // 2026-11-15 跳过已读 (ui/seen-lines.js): the lines this player has seen, one key per ?profile= (bounded); only a returning
-  // player (meta.runs ≥ 1) gets the 「跳过已读 ▶▶」 button on a seen line. Saved a moment after the last new line.
-  var SL = window.ChooserSeen, SKEY = (SL ? SL.KEY : 'chooser.seen.v1') + (STUB ? '.stub' : '') + PSUF;
-  var SEEN = SL ? SL.create(lsGet(SKEY, []), SL.MAX) : null, seenT = null;
-  function seenSave(now) { clearTimeout(seenT); if (!SEEN) return; if (now) lsSet(SKEY, SEEN.list()); else seenT = setTimeout(function () { lsSet(SKEY, SEEN.list()); }, 800); }
-  window.addEventListener('pagehide', function () { seenSave(true); });
-  function isReturning() { return !!(SL && SL.returning(loadMeta())); }
 
   // ---------- audio (ui/audio.js, owned by the audio worker; may be missing → every call is guarded) ----------
   var MUTE_Q = Q.get('mute') === '1'; // ?mute=1: tests and screenshot runs never make sound
@@ -132,7 +125,7 @@
   // UI-CLEAN §3: the sound controls (mute, music, sfx) live in the ☰ menu (menuHtml)
   var cueLast = {};
   // every cue is throttled per name (default 60 ms) so nothing can fire in a tight loop
-  function cue(name, detail, ms) { var t = Date.now(), gap = ms == null ? 60 : ms; if (cueLast[name] && t - cueLast[name] < gap) return; cueLast[name] = t; au('cue', name, detail); }
+  function cue(name, detail, ms) { if (vn && vn.skipping) return; /* 跳过剧情: skipped lines and effects make no sound */ var t = Date.now(), gap = ms == null ? 60 : ms; if (cueLast[name] && t - cueLast[name] < gap) return; cueLast[name] = t; au('cue', name, detail); }
   // ?mute=1 mutes this page only: audio.js reads it itself (session-only, never written); its store is per ?profile=
   var auReady = false, sceneKey = null, sceneCtx = null;
   function audioInit() {
@@ -418,30 +411,19 @@
   // ---------- dialogue: ONE queue for lines, markers and blocking effects ----------
   // say(lines, done): a line is the contract object { speaker, speakerId, name, text, expr } or a plain string (narration).
   // UI extras: tone, tag, onShow. sayFx(fn): a blocking effect fn(done, item); item.skip() is called on click.
-  var vn = { q: [], cur: null, eff: null, typing: false, t: null, busy: false, cls: '', skipping: false, curSeen: false }; // skipping: 跳过已读 is fast-forwarding // vn.cls: screen-wide box placement (camp, epi-vn …)
+  var vn = { q: [], cur: null, eff: null, typing: false, t: null, busy: false, cls: '', skipping: false, carry: 0 }; /* skipping: 跳过剧情 is draining the queue; carry: until when a talk queued right after it is skipped too */ // vn.cls: screen-wide box placement (camp, epi-vn …)
   function normLine(l) {
     if (l == null) return null;
     if (typeof l === 'string') return l ? { speaker: 'narrator', text: l } : null;
     if (!l.text) return null;
     var o = {}; Object.keys(l).forEach(function (k) { o[k] = l[k]; }); return o;
   }
-  function say(lines, done) { (lines || []).forEach(function (l) { var n = normLine(l); if (n) vn.q.push(n); }); if (done) vn.q.push({ marker: done }); kick(); }
+  function say(lines, done) { (lines || []).forEach(function (l) { var n = normLine(l); if (n) vn.q.push(n); }); if (done) vn.q.push({ marker: done }); if (!vn.skipping && vn.carry > Date.now() && vn.q.length) vn.skipping = true; kick(); }
   function sayFx(fn) { vn.q.push({ effect: fn }); kick(); }
-  // UI-CLEAN §2.5a: drop the queued LINES up to the first marker and run it (= the talk was heard to the end). Effects are
-  // never dropped (a blocking animation must still play); the line on screen is closed and the speaker un-highlighted.
-  function vnSkipToMarker() {
-    clearInterval(vn.t); vn.typing = false; vnEl.classList.remove('typing');
-    var keep = [], it, mk = null;
-    while ((it = vn.q.shift())) { if (it.marker) { mk = it; break; } if (it.effect) keep.push(it); }
-    vn.q = keep.concat(vn.q);
-    vn.cur = null; vnEl.hidden = true; vnEl.innerHTML = ''; document.body.classList.remove('vn-on'); if (ui.onSpeak) ui.onSpeak(undefined);
-    if (mk) mk.marker();
-    kick();
-  }
   function sayP(lines) { return new Promise(function (r) { say(lines, r); }); }
   function kick() { if (!vn.cur && !vn.eff && !vn.busy) vnNext(); }
   function vnActive() { return !!(vn.cur || vn.eff || vn.q.length); }
-  function vnClear() { vn.skipping = false; clearInterval(vn.t); vn.q = []; vn.cur = null; vn.eff = null; vn.typing = false; vnEl.hidden = true; vnEl.innerHTML = ''; vn.cls = ''; document.body.classList.remove('vn-on'); cineEl.innerHTML = ''; cineEl.className = 'cine'; }
+  function vnClear() { vn.skipping = false; vn.carry = 0; clearInterval(vn.t); vn.q = []; vn.cur = null; vn.eff = null; vn.typing = false; vnEl.hidden = true; vnEl.innerHTML = ''; vn.cls = ''; document.body.classList.remove('vn-on'); cineEl.innerHTML = ''; cineEl.className = 'cine'; syncSkip(); }
   function speakerId(l) {
     if (l.speakerId === 'narrator' || l.speakerId === 'gallery') return null;
     if (l.speakerId) return l.speakerId;
@@ -455,19 +437,20 @@
     try {
       while ((it = vn.q.shift())) {
         if (it.marker) { it.marker(); continue; }
+        if (vn.skipping && !it.effect) continue; /* 跳过剧情: the line is passed over unseen (no onShow, no stand change, no sound) */
         if (it.effect) {
           vn.cur = null; vn.eff = it; vnEl.hidden = true; document.body.classList.remove('vn-on');
           var self = it; vn.busy = false;
           it.effect(function () { if (vn.eff !== self) return; vn.eff = null; vnNext(); }, it);
-          if (vn.skipping) skipEffect(self); // 跳过已读: a blocking effect is clicked through (never a choice: those are screens)
+          syncSkip(); if (vn.skipping) skipEffect(self); /* 跳过剧情: a blocking effect is clicked through (never a choice: those are screens) */
           return;
         }
         break;
       }
     } finally { vn.busy = false; }
     vn.cur = it || null;
-    if (!vn.cur) vn.skipping = false; // 跳过已读 stops where the talk runs out (the next choice)
-    if (!vn.cur) { vnEl.hidden = true; vnEl.innerHTML = ''; document.body.classList.remove('vn-on'); if (ui.onSpeak) ui.onSpeak(null); return; }
+    if (!vn.cur && vn.skipping) { vn.skipping = false; vn.carry = Date.now() + 500; } /* 跳过剧情 stops where the talk runs out (the next choice) */
+    if (!vn.cur) { syncSkip(); vnEl.hidden = true; vnEl.innerHTML = ''; document.body.classList.remove('vn-on'); if (ui.onSpeak) ui.onSpeak(null); return; }
     showLine(vn.cur);
   }
   // §E7 masked-noble gallery speaker: a stand portrait (noble-a/b/c, picked by the line) above the box; a dark silhouette until delivered
@@ -476,35 +459,45 @@
     var x = l.noble || ['a', 'b', 'c'][h % 3];
     return '<div class="noble-stand n-' + x + '" aria-hidden="true">' + pic(A.noble(x), 'stand-img', '', '<span class="noble-sil"><i class="ns-mask"></i><i class="ns-grin"></i></span>') + '</div>';
   }
-  // 2026-11-15 跳过已读: mark the line seen as it shows; an unseen one ends a fast-forward
-  function noteSeen(l) {
-    var k = SL && SEEN ? SL.lineKey(l) : null; vn.curSeen = !!k && SEEN.has(k);
-    if (k && SEEN.add(k)) seenSave();
-    if (vn.skipping && !vn.curSeen) vn.skipping = false;
+  // 2026-11-15 跳过剧情 ⏭: ONE button (top right) whenever a talk or story plays. A click drains the whole dialogue queue — lines
+  // passed over silently, markers (end callbacks) run in order, blocking effects clicked through — and a talk the markers queue
+  // right after (camp → 芙洛, bell lines) goes too; it stops at the next screen that asks. A screen with its own sequence
+  // (the opening, the epilogue) sets storyHook { on(), skip() } instead.
+  var storyHook = null, skipBtn = null;
+  function skipOn() { return !!(storyHook && storyHook.on()) || !!(vn.cur || vn.eff) && !vn.skipping; }
+  function syncSkip() {
+    if (!skipBtn) { skipBtn = document.createElement('button'); skipBtn.type = 'button'; skipBtn.id = 'storySkip'; skipBtn.className = 'story-skip vn-pass'; skipBtn.textContent = T('ui.dialog.skipStory'); skipBtn.hidden = true; stageEl.appendChild(skipBtn); }
+    if (storyHook && !storyHook.on()) storyHook = null;
+    skipBtn.hidden = !skipOn() || !modalEl.hidden;
   }
-  function skipSeenBtn() { return vn.curSeen && !vn.skipping && isReturning() ? '<button type="button" class="vn-skipseen" id="vnSkipSeen" data-tip="' + esc(T('ui.dialog.skipSeenTip')) + '">' + esc(T('ui.dialog.skipSeen')) + '</button>' : ''; }
-  function skipSeen() { // 跳过已读 ▶▶: through every seen line in a row; stops at the first unseen line or when the talk runs out
-    if (!vn.cur || !vn.curSeen || vn.skipping) return;
-    vn.skipping = true; pl('event', 'skipSeen', { phase: view && view.phase });
-    clearInterval(vn.t); vn.typing = false; vnEl.classList.remove('typing'); vnNext();
+  function storySkip() {
+    if (!skipOn() || !modalEl.hidden) return;
+    if (storyHook) { pl('event', 'storySkip', { kind: storyHook.kind }); storyHook.skip(); syncSkip(); return; }
+    pl('event', 'storySkip', { phase: view && view.phase });
+    vn.skipping = true; clearInterval(vn.t); vn.typing = false; vnEl.classList.remove('typing');
+    if (vn.eff) skipEffect(vn.eff); else { vn.cur = null; vnNext(); }
+    syncSkip();
   }
-  function skipEffect(it) { var n = 0, h = setInterval(function () { if (vn.eff !== it || !vn.skipping || ++n > 60) { clearInterval(h); return; } if (it.skip) it.skip(); }, 120); }
+  function skipEffect(it) { /* stages() skip synchronously; a 'noskip' stage is waited out (then vnNext goes on skipping) */
+    for (var n = 0; n < 20 && vn.eff === it && it.skip; n++) it.skip();
+    if (vn.eff !== it) return;
+    var k = 0, h = setInterval(function () { if (vn.eff !== it || !vn.skipping || ++k > 60) { clearInterval(h); return; } if (it.skip) it.skip(); }, 120);
+  }
+  setInterval(syncSkip, 300); /* the hooks (opening, epilogue) and the ☰ menu change without a vn call */
   function showLine(l) {
-    noteSeen(l);
     var sid = speakerId(l), gallery = l.speaker === 'gallery', variant = sid ? variantFor(sid, l) : null;
     var name = l.name || (sid ? nameOf(sid) : gallery ? T('ui.dialog.galleryVoice') : '');
     if (NO_NAME[name]) name = ''; // 2026-11-14 结局去英文: never a 「narrator」 plate (a player's own Latin leader name stays)
     var face = sid ? '<div class="vn-face v-' + variant + '">' + pic(faceList(sid, l.expr, variant), '', name, sid === 'leader' ? crestHtml() : initialHtml(name)) + '</div>' : '';
     vnEl.innerHTML = '<div class="vn-box' + (sid ? ' has-face' : gallery ? ' gallery' : ' narration') + (l.kind === 'flashback' ? ' flashback' : '') + (variant && variant !== 'base' ? ' v-' + variant : '') + (l.tone ? ' tone-' + l.tone : '') + (l.mad ? ' tone-mad' : '') + '">' + face +
       '<div class="vn-body">' + (name ? '<div class="nameplate">' + esc(name) + (l.tag ? '<small>' + esc(l.tag) + '</small>' : '') + '</div>' : '') +
-      '<div class="vn-text" id="vnText"></div><span class="vn-next" aria-hidden="true">▼</span>' + skipSeenBtn(l) + '</div></div>' + (gallery ? nobleStand(l) : '');
+      '<div class="vn-text" id="vnText"></div><span class="vn-next" aria-hidden="true">▼</span></div></div>' + (gallery ? nobleStand(l) : '');
     vnEl.className = 'vn' + (l.vnClass ? ' ' + l.vnClass : vn.cls ? ' ' + vn.cls : '');
-    vnEl.hidden = false; document.body.classList.add('vn-on');
+    vnEl.hidden = false; document.body.classList.add('vn-on'); syncSkip();
     if (gallery) cue('gallery', null, 1500);
     if (ui.onSpeak) ui.onSpeak(sid, l);
     if (l.onShow) l.onShow(l);
     var el = $('vnText'), txt = fixWords(l.text), i = 0;
-    if (vn.skipping && vn.curSeen) { el.textContent = txt; var me = l; vn.t = setTimeout(function () { if (vn.cur === me && vn.skipping) vnNext(); }, 60); return; } // 跳过已读: a seen line flashes past
     if (REDUCED || txt.length < 2) { el.textContent = txt; return; }
     vn.typing = true; vnEl.classList.add('typing');
     vn.t = setInterval(function () { i += 2; el.textContent = txt.slice(0, i); cue('type', null, 90); if (i >= txt.length) { clearInterval(vn.t); vn.typing = false; vnEl.classList.remove('typing'); } }, 28);
@@ -518,8 +511,8 @@
   // A click ANYWHERE on the stage advances or finishes the dialogue (capture phase: nothing underneath fires).
   // Only explicitly marked controls (.vn-pass: home, battle speed/skip) still work while a line is up.
   stageEl.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.story-skip')) { e.preventDefault(); e.stopPropagation(); cue('advance'); storySkip(); return; } /* 2026-11-15 跳过剧情 */
     if (!vnActive()) return;
-    if (e.target.closest && e.target.closest('.vn-skipseen')) { e.preventDefault(); e.stopPropagation(); cue('advance'); skipSeen(); return; } // 2026-11-15 跳过已读
     if (e.target.closest && e.target.closest('.vn-pass')) return;
     e.preventDefault(); e.stopPropagation(); vnAdvance();
   }, true);
@@ -1390,11 +1383,43 @@
       '<div class="iv-tag panel"><div class="it-h">' + roleBadge(c.role) + '<b>' + esc(c.name) + '</b><span class="it-stats num"><span>' + IC.hp + ' ' + esc(c.hp) + '</span><span>' + IC.atk + ' ' + esc(c.atk) + '</span></span></div>' +
       (v.interviewStep === 'hire' && v.sided === c.id ? '<span class="iv-sided" data-tip="' + T('ui.interview.sidedTip') + '">' + T('ui.interview.sided') + '</span>' : '') + rowsHtml(c) + '</div></div>';
   }
-  // 2026-11-15 老玩家快速开局 · 一页招完人: a returning player (engine view.quick, meta.runs ≥ 1) gets every remaining
-  // interview pair on one page, one tap per row (= side with her + hire her; the other one is rejected as usual), then
-  // 「确定」 → act quickRecruit { picks }. 「一个个面试」 goes back to the normal talk (remembered for this run only).
-  var ivMode = { seed: null, normal: false };
-  function quickOn(v) { return !!(v && v.quick && v.quick.rows && v.quick.rows.length) && !(ivMode.seed === (run && run.seed) && ivMode.normal); }
+  // 2026-11-15 一页招完人: every remaining interview pair on one page (engine view.quick), one tap per row (= side with her +
+  // hire her; the other one is rejected as usual), then 「确定」 → act quickRecruit { picks }.
+  // Designer feedback (same day): before the first interview the advisor ASKS 「一个个面试」(first run: primary + 第一次推荐)
+  // or 「直接写名单」 (the one-page list). The answer is kept per run (localStorage, keyed by seed) so a refresh / resume never
+  // asks again; 「一页招完 ▶▶」 / 「一个个面试」 still switch later. Like 芙洛's shop ask: the line first, the buttons after it.
+  var IVM_KEY = 'chooser.ivMode.v1' + (STUB ? '.stub' : '') + PSUF;
+  var ivMode = lsGet(IVM_KEY, null) || { seed: null, mode: null };
+  function ivModeNow() { return ivMode && ivMode.seed === (run && run.seed) ? ivMode.mode : null; }
+  function setIvMode(m) { ivMode = { seed: run && run.seed, mode: m }; lsSet(IVM_KEY, ivMode); }
+  function quickRowsOn(v) { return !!(v && v.quick && v.quick.rows && v.quick.rows.length); }
+  function quickOn(v) { return quickRowsOn(v) && ivModeNow() === 'quick'; }
+  function ivAskOn(v) { return quickRowsOn(v) && !ivModeNow(); }
+  function ivAskWho(v) { var a = v && v.advisor && v.advisor.present !== false ? v.advisor : null; return a ? { id: a.id, name: a.name } : { id: 'leader', name: nameOf('leader') }; }
+  function ivAskHtml(v) {
+    var first = !(+(loadMeta() || {}).runs >= 1), shown = ui.ivAsk === 'ask', w = ivAskWho(v);
+    var stand = shown && w.id !== 'leader' ? '<div class="stand at-right v-base" data-k="' + esc(w.id) + ':base">' + pic(standList(w.id, 'base'), 'stand-img', '', '') + '</div>' : ''; // a re-render while she asks keeps her on screen
+    return '<div class="camp-wrap iv-ask-wrap" id="ivAskWrap"><div class="stand-layer" id="stand">' + stand + '</div>' +
+      '<div class="bell-choices iv-ask" id="ivAsk"' + (shown ? '' : ' hidden') + '>' +
+      '<button class="bigchoice btn ' + (first ? 'btn-primary' : 'btn-secondary') + '" data-act="ivAskNormal" data-opt="ivask:normal"><span>' + T('ui.interview.ask.oneByOne') + '</span><small class="ia-hint">' + T('ui.interview.ask.firstHint') + '</small></button>' +
+      '<button class="bigchoice btn ' + (first ? 'btn-secondary' : 'btn-primary') + '" data-act="ivAskList" data-opt="ivask:list"><span>' + T('ui.interview.ask.list') + '</span></button></div></div>';
+  }
+  function ivAskShow(v) {
+    // never draw the buttons over the subtitle: wait until the dialogue box is really gone
+    if (vnActive() || !vnEl.hidden) { setTimeout(function () { if (view && ivAskOn(view) && ui.ivAsk === 'play') ivAskShow(view); }, 120); return; }
+    ui.ivAsk = 'ask';
+    var c = $('ivAsk'); if (!c) { render(); return; }
+    c.hidden = false; var b = c.querySelector('.btn-primary'); if (b) b.focus({ preventScroll: true });
+  }
+  function ivAskMaybe(v) { // called from SCREENS.interview.after while the ask is up
+    if (ui.ivAsk === 'play' && !vnActive()) { ivAskShow(v); return; } // the queue was cleared under it (menu…): straight to the buttons
+    if (ui.ivAsk) return;
+    ui.ivAsk = 'play'; vn.cls = 'camp';
+    var w = ivAskWho(v);
+    ui.onSpeak = function (id, l) { if (id !== undefined) standShow(id, l); };
+    say([{ speaker: w.id === 'leader' ? 'leader' : 'advisor', speakerId: w.id, name: w.name, expr: 'calm', vnClass: 'camp', text: w.id === 'leader' ? T('ui.interview.ask.self') : T('ui.interview.ask.line') }],
+      function () { ui.onSpeak = null; vn.cls = ''; if (view && ivAskOn(view) && ui.ivAsk === 'play') ivAskShow(view); });
+  }
   function quickHtml(v) {
     var picks = ui.qp || (ui.qp = {}), rows = v.quick.rows, left = rows.filter(function (r) { return !picks[r.round]; }).length;
     var body = rows.map(function (r, i) {
@@ -1413,9 +1438,10 @@
   SCREENS.interview = {
     // UI-CLEAN §2.5a: 「跳过剧情」 left of ☰ while the intros / topic talk play (not her reaction: that carries the mood fx)
     // 2026-11-15: a returning player who chose 「一个个面试」 can go back to the one-page pick (一页招完 ▶▶)
-    topExtra: function (v) { return '<button class="btn-ghost iv-skip vn-pass" data-act="ivSkip" id="ivSkip" hidden>' + T('ui.interview.skipTalk') + '</button>' + (v && v.quick && !quickOn(v) ? '<button class="btn-ghost iv-skip iv-quick vn-pass" data-act="ivQuick">' + T('ui.interview.quick.open') + '</button>' : ''); },
+    topExtra: function (v) { return (quickRowsOn(v) && ivModeNow() === 'normal' ? '<button class="btn-ghost iv-skip iv-quick vn-pass" data-act="ivQuick">' + T('ui.interview.quick.open') + '</button>' : ''); },
     plate: function (v) { if (quickOn(v)) return plate(T('ui.interview.quick.plate')); var role = v.pair[0] && v.pair[0].role; return plate(T('ui.interview.plate') + '<small>' + (v.roundTotal ? T('ui.interview.roundOfTotal', { round: esc(v.round), total: esc(v.roundTotal), role: esc(ROLE_NAME()[role] || '') }) : T('ui.interview.round', { round: esc(v.round), role: esc(ROLE_NAME()[role] || '') })) + '</small>'); },
     html: function (v) {
+      if (ivAskOn(v)) return ivAskHtml(v);
       if (quickOn(v)) return quickHtml(v);
       var side = v.interviewStep === 'side' && v.conflict, opts = side ? v.conflict.options : v.pair.map(function (c) { return { id: c.id }; });
       var btns = opts.map(function (o, i) {
@@ -1432,6 +1458,7 @@
         (side ? '<div class="iv-under" id="ivUnder"' + (ui.ivReady ? '' : ' hidden') + '><button class="btn-ghost" data-act="ivReplay">' + T('ui.interview.replay') + '</button></div>' : '');
     },
     enter: function (v) {
+      if (ivAskOn(v)) return; // the ask plays from after()
       ui.onSpeak = function (id) {
         if (id) { var st = $('ivStage'), ti = $('ivTitle'); if (st) st.classList.remove('ready'); if (ti) ti.hidden = true; } // feedback-1113 #4: talking again (her reaction) → hide title / panels
         app.querySelectorAll('.iv-side').forEach(function (el) {
@@ -1442,7 +1469,8 @@
       if (quickOn(v)) return; // 一页招完人: no talk, just the rows
       ivTalk(v);
     },
-    after: function () { // feedback-1113 #4: hover / focus a candidate (her portrait or her choice) to peek at her status
+    after: function (v) { // feedback-1113 #4: hover / focus a candidate (her portrait or her choice) to peek at her status
+      if (v && $('ivAsk')) { ivAskMaybe(v); return; } // 2026-11-15 the 一个个面试 / 直接写名单 ask
       var peek = function (id) { app.querySelectorAll('.iv-side').forEach(function (el) { el.classList.toggle('peek', !!id && el.dataset.c === id); }); };
       var who = function (e) {
         var st = $('ivStage'); if (!st || !st.classList.contains('ready')) return null;
@@ -1465,8 +1493,7 @@
     ui.ivReady = false; // a re-render (any cause) keeps the choices up once the talk is over
     var st0 = $('ivStage'), ti0 = $('ivTitle'); if (st0) st0.classList.remove('ready'); if (ti0) ti0.hidden = true; // feedback-1113 #4 (also on 再听一遍)
     app.querySelectorAll('.iv-side.peek').forEach(function (el) { el.classList.remove('peek'); });
-    var sk = $('ivSkip'); if (sk) sk.hidden = !lines.length;
-    say(lines, function () { ui.ivReady = true; var sk1 = $('ivSkip'); if (sk1) sk1.hidden = true; var c = $('ivChoices'), u = $('ivUnder'), st = $('ivStage'), ti = $('ivTitle'); if (c) c.hidden = false; if (u) u.hidden = false; if (st) st.classList.add('ready'); if (ti) ti.hidden = false; });
+    say(lines, function () { ui.ivReady = true; var c = $('ivChoices'), u = $('ivUnder'), st = $('ivStage'), ti = $('ivTitle'); if (c) c.hidden = false; if (u) u.hidden = false; if (st) st.classList.add('ready'); if (ti) ti.hidden = false; });
   }
 
   // ---------- prep = the campfire rest: a small talk around the fire, then the formation and 出发 ----------
@@ -1659,7 +1686,9 @@
         var m = member(t.id) || { id: t.id, name: t.name }, art = unitArt({ id: t.id, side: 'ally', isLeader: isLeader(m) }), sel = ui.shopWho === t.id;
         var why = t.ok ? '' : T('engine.shop.why.' + t.reason);
         return '<button class="who-head shop-who' + (sel ? ' on' : '') + (t.ok ? '' : ' has') + '" data-act="shopWho" data-id="' + esc(t.id) + '" data-opt="sw:' + esc(t.id) + '"' + (t.ok ? '' : ' aria-disabled="true" data-tip="' + esc(why) + '"') + '>' +
-          '<span class="wh-face">' + pic(art.list, '', m.name, art.fb) + '</span><b>' + esc(whoNameOf(m, false)) + '</b><span class="sw-price">' + A.glyph('coin', false) + esc(t.price) + '</span>' + (t.ok ? '' : '<small class="sw-why">' + esc(why) + '</small>') + '</button>';
+          '<span class="wh-face">' + pic(art.list, '', m.name, art.fb) + '</span><b>' + esc(whoNameOf(m, false)) + '</b>' +
+          (m.atk != null ? '<span class="sw-stat num">' + IC.atk + esc(m.atk) + (m.skillLv ? '<span class="sw-lv">' + A.glyph('level', false) + 'Lv' + esc(m.skillLv) + '</span>' : '') + '</span>' : '') + /* 2026-11-15 user: show her current 威力 / Lv while choosing */
+          '<span class="sw-price">' + A.glyph('coin', false) + esc(t.price) + '</span>' + (t.ok ? '' : '<small class="sw-why">' + esc(why) + '</small>') + '</button>';
       }).join('');
       var t0 = (c.targets || []).filter(function (t) { return t.id === ui.shopWho && t.ok; })[0], detail;
       if (!t0) detail = '<div class="who-detail panel wd-empty"><div class="wd-body"><b class="wd-name">' + T('ui.reward.pickWhoPrompt') + '</b><button class="btn btn-primary wd-ok" disabled aria-disabled="true">' + T('ui.shop.buy') + '</button></div></div>';
@@ -1692,17 +1721,50 @@
     shopLeave: function () { if (ui.acted) return; ui.acted = 1; if (!doAct({ type: 'shopLeave' }, true)) ui.acted = 0; }
   };
 
+  // 2026-11-15 user: on the bell night the team's talk, 芙洛 (if her shop is open) and the bell each play on their own, in that order.
+  // The lines come from the night's first view only (v.events), so they are kept here across re-renders and shop actions.
+  var nightQ = {};
+  function nightKey() { return 'n:' + (run && run.seed) + ':' + (run && run.level); }
+  function nightState(v) {
+    var k = nightKey(), st = nightQ[k];
+    if (!st) {
+      var cl = campLines(v).map(function (l) { var o = normLine(l); if (o) o.vnClass = 'camp'; return o; }).filter(Boolean);
+      var bl = bellLines(v).map(function (l) { var o = normLine(l); if (o) o.vnClass = 'camp'; return o; }).filter(Boolean);
+      st = nightQ[k] = { cl: cl, bl: bl, team: !cl.length, bell: !bl.length && !cl.length, playing: null };
+    }
+    return st;
+  }
+  function nightTeamDone(v) { var st = nightQ[nightKey()]; return !!(st && st.team); }
+  function nightBellDone(v) { var st = nightQ[nightKey()]; return !!(st && st.bell); }
+  function nightStep(v) {
+    var st = nightState(v);
+    if (st.playing && !vnActive()) st.playing = null; /* the queue was cleared under it (menu, home…) */
+    if (st.playing) return;
+    if (!st.team) {
+      st.playing = 'team'; vn.cls = 'camp';
+      say(st.cl, function () { vn.cls = ''; st.team = true; st.playing = null; render(); });
+      return;
+    }
+    if (v.shop && v.shop.open) { if ($('shopAsk')) shopIntroMaybe(v); return; } /* html shows her once the team is done */
+    if (!st.bell) {
+      st.playing = 'bell'; vn.cls = 'camp'; ringBell();
+      var bl = st.bl.slice(); if (bl.length) bl[0].onShow = function () { ringBell(); };
+      say(bl, function () { vn.cls = ''; st.bell = true; st.playing = null; ui.bellHeard = true; var c = $('bellChoices'); if (c) c.hidden = false; else render(); later(ringBell, 1800); });
+      return;
+    }
+    ui.bellHeard = true; var c = $('bellChoices'); if (c && c.hidden) c.hidden = false;
+  }
   SCREENS.prep = {
     plate: function (v) { return plate(T(campStep(v) === 'done' ? 'ui.camp.plateDone' : 'ui.camp.plate')); }, // 叙事节奏 2026-11-13: the night never names the next level; the scene intro comes after 「出发」
     html: function (v) {
       if (!ui.order) { ui.order = v.party.map(function (m) { return m.id; }); ui.moves = 0; }
       if (v.bell && !campHasBell(v)) { // §6 the bell campfire (engines without the v2.3 four-card camp): no talk, a bell nobody else hears, two big choices
-        return '<div class="camp-wrap bell-camp">' + standHtml() + bellRing() + '<div class="bell-choices" id="bellChoices"' + (ui.bellHeard ? '' : ' hidden') + '>' +
+        return '<div class="camp-wrap bell-camp">' + standHtml() + bellRing() + '<div class="bell-choices" id="bellChoices"' + (ui.bellHeard || nightBellDone(v) ? '' : ' hidden') + '>' +
           '<button class="bigchoice btn btn-secondary bell-follow" data-act="followBell" data-opt="bell:follow"><span>' + T('ui.camp.bell.follow') + '</span><q>' + T(v.bellWound === false ? 'ui.camp.bell.noWoundDown' : 'ui.camp.bell.down') + '</q></button>' +
           '<button class="bigchoice btn btn-primary" data-act="stayFire" data-opt="bell:stay"><span>' + T('ui.camp.bell.stay') + '</span><q>' + T('ui.camp.bell.stayDown') + '</q></button></div></div>';
       }
       if (ui.talking == null) ui.talking = !v.bell && campLines(v).length > 0 && !replayed['camp:' + (run.history || []).length]; // G2 #12: the bell night plays its own talk (enter) — talking mode here hid #bellChoices for good
-      if (!ui.talking && v.shop && v.shop.open) return fluoIntro[shopKey(v)] === 'shop' ? shopHtml(v) : shopIntroHtml(v); // 2026-11-14 芙洛的店: after the talk, before the camp choice (2026-11-15: her VN intro + ask first)
+      if (!ui.talking && v.shop && v.shop.open && !(v.bell && !nightTeamDone(v))) return fluoIntro[shopKey(v)] === 'shop' ? shopHtml(v) : shopIntroHtml(v); // 2026-11-14 芙洛的店: after the talk, before the camp choice (2026-11-15: her VN intro + ask first)
       var wd = woundedNow(v), n = ui.order.length, cards = ui.order.map(function (id, i) { return memberCard(member(id), i, n, { drag: true, moves: true, wounded: wd, orderNo: true }); }).join('');
       var foes = ''; for (var i = 0; i < Math.min(v.enemyCount || 0, 7); i++) foes += '<span class="foe-ghost">?</span>';
       var cs = campStep(v);
@@ -1716,14 +1778,7 @@
     },
     enter: function (v) {
       resetBattleMarks(); cue('fire', null, 0);
-      if (v.bell) {
-        ringBell(); vn.cls = 'camp';
-        var bl = bellLines(v).map(function (l) { var o = normLine(l); if (o) o.vnClass = 'camp'; return o; }).filter(Boolean);
-        if (bl.length) bl[0].onShow = function () { ringBell(); };
-        bl = campLines(v).map(function (l) { var o = normLine(l); if (o) o.vnClass = 'camp'; return o; }).filter(Boolean).concat(bl); // feedback-1112 #8: the sacrifice talk first, then the bell
-        say(bl, function () { vn.cls = ''; ui.talking = false; ui.bellHeard = true; var c = $('bellChoices'); if (c) c.hidden = false; else render(); later(ringBell, 1800); }); // G2 #12: no choices on screen → re-render them
-        return;
-      }
+      if (v.bell) { nightState(v); return; } /* 2026-11-15 user: the bell night plays 队员 → 芙洛 → 铃铛 one after another (nightStep in prep.after) */
       if (!ui.talking) { campEnter(v); return; }
       replayed['camp:' + (run.history || []).length] = true;
       vn.cls = 'camp';
@@ -1742,7 +1797,8 @@
       });
     },
     after: function (v) {
-      if (v && $('shopAsk')) shopIntroMaybe(v); // 2026-11-15 芙洛's intro beat
+      if (v && v.bell) nightStep(v); /* 2026-11-15 bell night: 队员 → 芙洛 → 铃铛 */
+      else if (v && $('shopAsk')) shopIntroMaybe(v); // 2026-11-15 芙洛's intro beat
       var box = $('formation'), dragId = null; if (!box) return;
       fguideMaybe(); // 布阵教学: the first time the formation shows (it checks the talk / bell / dialog itself)
       function slot(e) { return e.target.closest && e.target.closest('.p-slot'); }
@@ -2117,7 +2173,7 @@
       var tier = b.crit ? 'crit' : b.hpAfter <= 0 ? 'ko' : 'normal';
       if (b.crit) cue('crit', null, 0); else cue(b.amount >= 6 ? 'bigHit' : 'hit', null, 0);
       var stop = fx ? HitFX.contact(el, { tier: tier, kind: skill || 'strike', dir: dir, scale: b.crit ? 1 : 0.8, from: actor ? stagePt(actor, 0.5, 0.4) : null }) : 0;
-      if (b.amount > 0) floatAt(el, '−' + b.amount, 'dmg multi' /* 2026-11-15 user: a hit that only hit 护甲 shows no 「−0」 — the shield cracks instead */ + (b.crit ? ' crit' : ''), b.crit ? (b.t && b.t.pierce ? T('ui.battle.critPierce') : T('ui.battle.crit')) : T('ui.battle.hitNo', { n: i + 1 }), 0, b.t && b.t.exRich);
+      if (b.amount > 0) floatAt(el, '−' + b.amount, 'dmg multi' /* 2026-11-15 user: a hit that only hit 护甲 shows no 「−0」 — the shield cracks instead */ + (b.crit ? ' crit' : ''), b.crit ? (b.t && b.t.jackpot ? T('ui.battle.jackpot') : b.t && b.t.pierce ? T('ui.battle.critPierce') : T('ui.battle.crit')) : T('ui.battle.hitNo', { n: i + 1 }), 0, b.t && b.t.exRich);
       if (stop) await wait(Math.min(stop, 90), tok);
       if (fx) HitFX.after(el, { tier: tier, kind: skill || 'strike', dir: dir, scale: b.crit ? 1 : 0.7 }, sh); else pulse(el, 'hit', 300);
       setHp(b.uid, b.hpAfter); hitBlock(b.t, el);
@@ -2343,7 +2399,7 @@
       var tEls = live.map(function (x) { return tEl(x.t); }).filter(function (x, i, arr) { return arr.indexOf(x) === i; });
       var nums = (!together && seq.length ? [wait(260, tok).then(function () { return comboSeq(seq, el, a.skillKind, tok); })] : []).concat(live.map(function (x) {
         var t = x.t, te = tEl(t), uid = te.dataset.u; if (t.capped || t.seqDone) return null;
-        var tag = x.splash ? T('ui.battle.splashTag') : t.pierce ? T('ui.battle.critPierce') : t.crit ? T('ui.battle.crit') : '';
+        var tag = t.jackpot ? T('ui.battle.jackpot') : x.splash ? T('ui.battle.splashTag') : t.pierce ? T('ui.battle.critPierce') : t.crit ? T('ui.battle.crit') : '';
         if (t.kind !== 'heal' && t.crit) cue('crit', null, 0);
         return flyNum(src0, te, '', t.kind === 'heal' ? 'heal' : 'dmg' + (foe ? ' foe-hit' : '') + (t.crit ? ' crit' : hitTier(uid, t) !== 'normal' ? ' huge' : '') + (x.splash ? ' splash' : ''), tag, 0, t); // 先飞后结算, per target
       })).filter(Boolean);
@@ -3248,8 +3304,8 @@
     var t = ++epi.tok, V = vopt && vopt.victory; epi.vdone = V ? vopt.done : null;
     vnClear(); document.body.classList.add('epi-on');
     var bgs = A.scene(V === 'true' ? 'guild-dawn-full' : V ? 'dawn-exit' : 'game-over').map(function (c) { return 'url("' + esc(splitCand(c).src) + '")'; }).join(', ');
-    cine('epi' + (V ? ' epi-win' + (V === 'true' ? ' epi-true' : '') : ''), '<div class="ep-bg" style=\'background-image:' + bgs + '\'></div><div class="ep-stand" id="epStand"></div><div class="ep-name" id="epName"></div><div class="ep-black"></div>' +
-      '<button class="btn-ghost ep-skip vn-pass" data-act="epiSkip">' + T('ui.epilogue.skip') + '</button>');
+    cine('epi' + (V ? ' epi-win' + (V === 'true' ? ' epi-true' : '') : ''), '<div class="ep-bg" style=\'background-image:' + bgs + '\'></div><div class="ep-stand" id="epStand"></div><div class="ep-name" id="epName"></div><div class="ep-black"></div>');
+    storyHook = { kind: 'epilogue', on: function () { return t === epi.tok; }, skip: function () { if (epi.vdone) epiWinEnd(epi.tok); else epiBlack(epi.tok); } }; syncSkip();
     try {
       if (!V) cue('gallery', null, 0);
       await epiWait(1200, t);
@@ -3285,7 +3341,7 @@
     if (t !== epi.tok) return;
     epi.tok++; var t2 = epi.tok; vn.q = []; vnClear(); vn.cls = '';
     if (!cineEl.classList.contains('epi')) cine('epi', '<div class="ep-black"></div>');
-    cineEl.classList.add('black'); var sk = cineEl.querySelector('.ep-skip'); if (sk) sk.remove();
+    cineEl.classList.add('black');
     setTimeout(function () {
       if (t2 !== epi.tok) return;
       try { localStorage.removeItem(KEY); } catch (e) { /* */ } // the run is over: 继续 must not resume a dead run
@@ -3456,7 +3512,6 @@
       // v2.4 [8] the girl who wasn't picked leaves slowly (~1.2 s) after her line; the next round waits for it
       doAct({ type: 'hire', id: d.id, candidate: d.id }, true, null, { post: function () { return stages([[function () { app.querySelectorAll('.iv-side').forEach(function (el) { if (el.dataset.c !== d.id) { el.classList.remove('dim', 'speaking'); el.classList.add('leaving'); } }); }, 1300, 'noskip']]); } });
     },
-    ivSkip: function (d, t, e) { if (e) e.stopPropagation(); var sk = $('ivSkip'); if (!sk || sk.hidden || ui.ivReady) return; pl('event', 'ivSkip', { round: view && view.round }); vnSkipToMarker(); },
     // 2026-11-15 一页招完人
     qPick: function (d) { if (!view || !view.quick) return; ui.qp = ui.qp || {}; ui.qp[d.r] = d.id; render(); },
     quickGo: function () {
@@ -3464,8 +3519,10 @@
       if (picks.some(function (x) { return !x; })) return;
       pl('event', 'quickRecruit', { picks: picks }); cue('confirm', null, 0); doAct({ type: 'quickRecruit', picks: picks }, true);
     },
-    ivNormal: function () { ivMode = { seed: run && run.seed, normal: true }; pl('event', 'quickOff'); vnClear(); render(); SCREENS.interview.enter(view); },
-    ivQuick: function (d, t, e) { if (e) e.stopPropagation(); ivMode = { seed: run && run.seed, normal: false }; pl('event', 'quickOn'); vnClear(); render(); },
+    ivNormal: function () { setIvMode('normal'); pl('event', 'quickOff'); vnClear(); render(); SCREENS.interview.enter(view); },
+    ivQuick: function (d, t, e) { if (e) e.stopPropagation(); setIvMode('quick'); pl('event', 'quickOn'); vnClear(); render(); },
+    ivAskNormal: function () { setIvMode('normal'); pl('event', 'ivAsk', { mode: 'normal' }); vnClear(); render(); SCREENS.interview.enter(view); },
+    ivAskList: function () { setIvMode('quick'); pl('event', 'ivAsk', { mode: 'quick' }); vnClear(); render(); },
     ivReplay: function () { $('ivChoices').hidden = true; $('ivUnder').hidden = true; ivTalk(view); },
     move: function (d) { var i = +d.i, j = i + +d.d, o = ui.order, t = o[i]; if (j < 0 || j >= o.length) return; o[i] = o[j]; o[j] = t; ui.moves++; render(); },
     // 2026-11-15 bug: toggling 「开场用…」 re-rendered from the engine's order and dropped the line-up the player had just dragged —
@@ -3553,14 +3610,13 @@
     rate: function (d) { var q = qState(); q.ratings[d.r] = +d.v; qSave(q); render(); },
     'export': exportJson,
     plExport: function () { plExport(false); },
-    plCopy: function () { plExport(true); },
-    epiSkip: function () { if (epi.vdone) epiWinEnd(epi.tok); else epiBlack(epi.tok); }
+    plCopy: function () { plExport(true); }
   };
   Object.keys(SHOP_H).forEach(function (k) { H[k] = SHOP_H[k]; }); // 2026-11-14 芙洛的店
   var CLICK_CUE = { shopPick: 'none', shopBuy: 'none', shopLeave: 'cancel', shopWho: 'click', shopBack: 'cancel', shopLook: 'confirm', fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
     pCancel: 'cancel', fwBack: 'cancel', unpickCard: 'cancel', modalCancel: 'cancel', cheatNo: 'cancel', home: 'cancel',
     campChoose: 'none', unitInfo: 'click', campExplore: 'pick', campTrainPick: 'pick', campTrainBonus: 'confirm', viewHer: 'click', viewHerClose: 'cancel',
-    pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', whoSel: 'click', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click', epiSkip: 'cancel' };
+    pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', whoSel: 'click', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click' };
   // battle cards during a pause: pick-then-place, or the item's target
   function battleCardClick(card) {
     if (!view || view.phase !== 'battle' || !card.classList.contains('ally') || ui.acted) return false;
@@ -3618,14 +3674,12 @@
   });
   function trackOpt(e) { var t = e.target.closest && e.target.closest('[data-opt]'); if (t) tracker.touch(t.dataset.opt); }
   app.addEventListener('mouseover', trackOpt); app.addEventListener('focusin', trackOpt);
-  // 2026-11-15 跳过已读: holding Ctrl fast-forwards the seen lines too (returning players); letting go stops it
-  document.addEventListener('keydown', function (e) { if (e.key === 'Control' && !e.repeat && vn.cur && vn.curSeen && isReturning() && modalEl.hidden) skipSeen(); });
-  document.addEventListener('keyup', function (e) { if (e.key === 'Control') vn.skipping = false; });
+  // 2026-11-15 跳过剧情: Ctrl = the 「跳过剧情 ⏭」 button
+  document.addEventListener('keydown', function (e) { if (e.key === 'Control' && !e.repeat) storySkip(); });
   document.addEventListener('keydown', function (e) {
     var tag = e.target.tagName;
     if (e.key === 'Escape') {
       if (!modalEl.hidden) { closeModal(); return; }
-      var ivs = $('ivSkip'); if (ivs && !ivs.hidden) { H.ivSkip(); return; }
       if (view && view.phase === 'battle' && ui.mode) { pauseMode(null); return; }
       if (view && view.phase === 'sacrifice' && ui.pending) { H.fwBack(); return; }
       if (view && (view.phase === 'reward' || view.phase === 'debuff') && ui.card) { H.unpickCard(); return; } // 「给谁」: Esc = 换一张 (back to the three cards)
@@ -3651,10 +3705,10 @@
     var fairy = (fz && fz.lines && fz.lines.length ? fz.lines.map(txt) : INTRO_FAIRY()).concat([fz && fz.go ? txt(fz.go) : INTRO_GO()]);
     var first = replay || !prefs.introSeen, TS = REDUCED ? 0.25 : 1, done = false, tok = 0;
     var el = document.createElement('div'); el.id = 'intro'; el.className = 'intro';
-    el.innerHTML = '<div class="in-logo"><img src="' + A.ver('../art/brand/alpico-logo.png') + '" alt="ALPICO PRESENTS"></div><button class="in-skip" type="button">' + T('ui.intro.skip') + '</button>';
+    el.innerHTML = '<div class="in-logo"><img src="' + A.ver('../art/brand/alpico-logo.png') + '" alt="ALPICO PRESENTS"></div>';
     stageEl.appendChild(el); introHold = true;
     var wait = function (ms) { var my = tok; return new Promise(function (r) { setTimeout(function () { r(my === tok && !done); }, ms * TS); }); };
-    var click = function () { return new Promise(function (r) { el.onclick = function (e) { if (e.target.closest('.in-skip')) return; el.onclick = null; r(!done); }; }); };
+    var click = function () { return new Promise(function (r) { el.onclick = function (e) { el.onclick = null; r(!done); }; }); };
     function finish() { // whiteout → the title underneath, the music in under the white
       if (done) return; done = true; tok++; el.onclick = null; el.classList.add('white');
       if (first) { prefs.introSeen = true; lsSet(PKEY, prefs); }
@@ -3663,7 +3717,7 @@
         setTimeout(function () { el.classList.add('out'); setTimeout(function () { el.remove(); }, 1200); }, 500 * TS);
       }, 800 * TS);
     }
-    el.querySelector('.in-skip').addEventListener('click', function (e) { e.stopPropagation(); finish(); });
+    storyHook = { kind: 'opening', on: function () { return !done && !!el.parentNode; }, skip: finish }; syncSkip();
     var onKey = function (e) { // Space / Enter = next, Esc = skip
       if (!document.getElementById('intro') || done) { document.removeEventListener('keydown', onKey, true); return; }
       if (e.key !== ' ' && e.key !== 'Enter' && e.key !== 'Escape') return;

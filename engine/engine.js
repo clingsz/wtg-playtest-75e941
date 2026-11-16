@@ -541,13 +541,16 @@
   // 加成 = how often (pseudo-random, see comboRoll). A pulled-in action gets 威力 +1 (CHAIN_POWER), not +depth.
   const CRIT_RATE = [0.3, 0.6, 0.9, 1], CRIT_X = 2, CRIT_X_LV = [2, 2, 2.5, 3], CRIT_X_MAX = CRIT_X_LV[3]; // hunters (aim): crit 30/60/90% at ×2/×2/×2.5 · Lv4 鹰眼 every arrow ×3
   // 用户 2026-11-15 弓手加强: our hunters' crits from Lv3 穿甲 (ignore 护甲 / 伊芙挺身, straight to hp). Lv1–2 crits and enemy archers (×2) hit 护甲 first.
+  const JACKPOT_X = 2; // 2026-11-15 妮可塔「通杀」: ×2 (skill.jackpot = the chance per hit)
   const CRIT_PIERCE_ENEMY = false, CRIT_PIERCE_LV = 3; // 设计规则: every class changes in kind at Lv3 — the hunter's is 暴击穿甲
   const CHAIN_POWER = 1, COMBO_PITY = Infinity; // 加成: plain chance (用户 2026-11-14: no pity — it nearly doubled the real rate); set a number to bring the pity back
+  const LATE_HP_FROM = 6, LATE_HP_MIN = 10; /* 用户 2026-11-15: later levels, every enemy unit ≥ 10 hp */
+  const COMBO_DECAY = 2; /* 用户 2026-11-15 晚: our rogue's 连击 does 2 less per hit (was 1) */
   const SPARK_TARGETS = [2, 3, 4, Infinity]; // 法师: Lv1 2 targets, +1 per level, Lv4 everyone
   // 试玩反馈 2026-11-14 晚 #17: levels add ONLY targets; damage is 威力 alone — main 威力 (lv kept for callers)
   // 试玩反馈 2026-11-15 (法师成长削弱): the others take max(1, ⌊威力/3⌋) (was ⌊威力/2⌋); 威力 0 splashes nothing
   const sparkMain = (p, lv) => p; // eslint-disable-line no-unused-vars
-  const sparkSplash = (p, lv) => (p > 0 ? Math.max(1, Math.floor(p / 3)) : 0); // eslint-disable-line no-unused-vars
+  const sparkSplash = (p, lv) => (p > 0 ? Math.max(1, Math.ceil(p / 3)) : 0); /* 用户 2026-11-15 晚: /3 rounded UP, min 1 */ // eslint-disable-line no-unused-vars
   // 牧师 per heal share: 'half' = ⌈威力/2⌉ (chosen 2026-11-14 by sim, see DESIGN-2026-11-14-block 实施记录) · 'minus2' = max(1, 威力 − 2)
   // 试玩反馈 2026-11-14 晚 (用户): the priest was too weak — 'full' = each share heals the full 威力
   const HEAL_FORMULA = 'full';
@@ -586,7 +589,8 @@
     if (!skill) return null;
     const ei = enemy && elv > 1 && FOE_LV_KINDS[skill.kind] ? elv - 1 : 0; // 用户 2026-11-15 第 4–7 关: an enemy above Lv1
     const lv = lvOf(skill), i = enemy ? ei : lv - 1;
-    const d = rawAmount(skill.kind, atk, enemy) + (enemy && skill.kind === 'spark' ? ei : 0);
+    const d = (enemy && skill.kind === 'spark' && skill.full ? atk : rawAmount(skill.kind, atk, enemy)) + (enemy && skill.kind === 'spark' ? ei : 0);
+    if (enemy && skill.kind === 'spark' && skill.jackpot) return TX('skill.action.sparkJackpot', { dmg: d, pct: Math.round(skill.jackpot * 100), x2: d * JACKPOT_X }); // 2026-11-15 妮可塔「满场通杀」
     if (ei) { // her real numbers at this level (the same tables as ours: 掩护 / 连击 / 治疗份数; archers crit 30 / 60 / 90%)
       const etag = TX('skill.action.lvTag', { lv: ei + 1 });
       const foeE = skill.kind === 'aim' ? TX('skill.target.party.random') : TX('skill.target.party.leftmost');
@@ -1425,11 +1429,10 @@
     }
     run.interviewStep = 'hire';
   }
-  // 2026-11-15 老玩家快速开局: only for a returning player (meta.runs ≥ 1), only at the start of a round (nothing picked in it
-  // yet). The rounds still to go, in order; null when the quick page is not on offer.
-  const isReturning = (run) => !!(run.meta && run.meta.runs >= 1);
+  // 2026-11-15 一页招完人: on offer to every player (the UI first asks 一个个面试 / 直接写名单), only at the start of a round
+  // (nothing picked in it yet). The rounds still to go, in order; null when the quick page is not on offer.
   function quickRounds(data, run) {
-    if (run.phase !== 'interview' || !isReturning(run)) return null;
+    if (run.phase !== 'interview') return null;
     const first = conflictFor(data, run.interviewRound) ? 'side' : 'hire';
     if (run.interviewStep !== first || run.sided[run.interviewRound]) return null;
     const rounds = interviewRounds(data, run);
@@ -1438,7 +1441,7 @@
   }
   function quickRecruit(data, run, a, ev) {
     const rounds = quickRounds(data, run);
-    if (!rounds) fail(isReturning(run) ? 'quickRecruit only at the start of an interview round' : 'quickRecruit is for returning players (meta.runs >= 1)');
+    if (!rounds) fail('quickRecruit only at the start of an interview round');
     const picks = a.picks;
     if (!Array.isArray(picks) || picks.length !== rounds.length) fail(`quickRecruit needs ${rounds.length} picks (one per round, in order)`);
     picks.forEach((id, i) => { if (!roundPair(data, rounds[i]).some((c) => c.id === id)) fail(`pick ${i + 1} is not in round ${rounds[i]}`); });
@@ -1865,7 +1868,7 @@
     poor: () => TX('shop.fluo.poor'), moodLow: () => TX('shop.fluo.moodLow'),
     leaveNone: () => TX('shop.fluo.leaveNone'), leaveBought: () => TX('shop.fluo.leaveBought'), leaveLast: () => TX('shop.fluo.leaveLast'),
   };
-  const SHOP_WHY = { poor: () => TX('shop.why.poor'), bagFull: () => TX('shop.why.bagFull'), maxed: () => TX('shop.why.maxed'), needLv3: () => TX('shop.why.needLv3'),
+  const SHOP_WHY = { poor: () => TX('shop.why.poor'), bagFull: () => TX('shop.why.bagFull'), maxed: () => TX('shop.why.maxed'), powerCap: () => TX('shop.why.powerCap'), needLv3: () => TX('shop.why.needLv3'),
     mood: () => TX('shop.why.mood'), noMood: () => TX('shop.why.noMood'), has: () => TX('shop.why.has') };
   const fluoLine = (key, expr, vars) => ({ speaker: FLUO, speakerId: FLUO, name: TX('names.fluo'), expr, text: FLUO_TEXT[key](vars) });
   // her opening (1–3 lines): the first shop of a run greets by the meta (a returning player gets one slip of the tongue,
@@ -1916,7 +1919,7 @@
     let tier = p.tier || 1, reason = null;
     if (m) {
       const lv = lvOf(m.skill), leader = isLeader(id);
-      if (p.by === 'power') { if (m.atk >= 5) reason = 'maxed'; tier = clamp(m.atk, 1, 4); }
+      if (p.by === 'power') { if (m.atk >= 5) reason = 'powerCap'; /* 用户 2026-11-15: say why (her sandbag only goes to 5) */ tier = clamp(m.atk, 1, 4); }
       else if (p.by === 'level') { if (lv >= (fx.capLv || 3)) reason = 'maxed'; tier = clamp(lv + 1, 2, 3); }
       if (fx.type === 'skillUp' && fx.fromLv && lv !== fx.fromLv) reason = 'needLv3';
       else if (fx.type === 'skillUp' && fx.needMood != null && !leader && m.mood < fx.needMood) reason = 'mood';
@@ -2392,6 +2395,12 @@
         u.maxHp = Math.ceil(u.maxHp * ENEMY_HP_MUL - 1e-9);
         if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct));
       }
+      if (df && run.level >= LATE_HP_FROM) for (const u of all) { /* 用户 2026-11-15: from L6 on no enemy unit has a one-digit hp (else one sweep takes them all) */
+        if (u.maxHp >= LATE_HP_MIN) continue;
+        const pct = u.startHp != null ? u.startHp / u.maxHp : null;
+        u.maxHp = LATE_HP_MIN;
+        if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct));
+      }
       if (df) for (const u of all) { // 方案 B 开场护甲 (after the final hp)
         const t = data.enemies.find((x) => x.id === u.ref);
         const share = (t && Number.isFinite(t.openBlock) ? t.openBlock : OPEN_BLOCK_SHARE[openBlockKind(u)]) * (OPEN_BLOCK_LEVEL[run.level] || 0);
@@ -2595,7 +2604,6 @@
         const cb = advA && combatOf(advA);
         out.push({ from: 'advisor', label: (cb && cb.name) || TX('skill.formation'), amount: 1 });
       }
-      if (u.side === 'enemy' && B.emods && B.emods.luck) { const cb = advA && combatOf(advA); out.push({ from: 'advisor', label: (cb && cb.name) || TX('battle.bonus.luck'), amount: 1 }); } // #36
       return out;
     }
     const sum = (bs) => bs.reduce((s, b) => s + b.amount, 0);
@@ -3026,7 +3034,7 @@
         }
       }
       const sk = u.skill, ally = u.side === 'ally', li = ally ? lvOf(sk) - 1 : (u.elv || 1) - 1; // DESIGN-skill-level: enemies Lv1 unless the level gives them more (用户 2026-11-15 第 4–7 关, u.elv)
-      const rawAmount = (kind, a, enemy) => rawAmount0(kind, a, enemy) + (enemy && kind === 'spark' ? li : 0); // an enemy spark: +1 per level above 1
+      const rawAmount = (kind, a, enemy) => (enemy && kind === 'spark' && sk.full ? a : rawAmount0(kind, a, enemy)) + (enemy && kind === 'spark' ? li : 0); // an enemy spark: +1 per level above 1 · sk.full (妮可塔「满场通杀」): full 威力 on everyone
       const pk = ally && u.perk ? u.perk : null, pid = pk ? pk.id : null, pn = pk ? (pk.n || 1) : 0;
       B.seq = (B.seq || 0) + 1; // this battle's action counter (crit hash, 赎罪)
       const seq = B.seq;
@@ -3057,6 +3065,7 @@
       };
       // §4 crit: our hunters only; the roll is a hash, never the main rng
       const critOf = (t, i) => {
+        if (!ally && sk.kind === 'spark' && sk.jackpot) return hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, seq, foes.indexOf(t), 13) < sk.jackpot ? JACKPOT_X : false; // 2026-11-15 妮可塔「通杀」: each hit rolls on its own
         if (sk.kind !== 'aim') return false;
         if (!ally) return li > 0 && hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, seq, i, 11) < ENEMY_CRIT_RATE[li]; // 用户 2026-11-15: enemy archers Lv2+ crit ×2
         if (li >= SKILL_LV_MAX - 1) return CRIT_X_MAX; // Lv4 鹰眼: every arrow, ×3
@@ -3137,10 +3146,11 @@
           else if (i > 0 && pid === 'collect') plater = plater.concat(pf.filter((x) => x.label === pk.name).map((x) => Object.assign({}, x, { hit: i + 1 }))); // 夜鸦「收账」: the +1 on her last hit (log fix 2026-11-15)
           const crit = critOf(t, i);
           const a0 = amountFor(t).amt + (!ally && sk.vary ? Math.floor(hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, seq, i, 7) * (sk.vary + 1)) : 0); // 试玩反馈 #3: 史莱姆 1–2
-          const base = Math.max(0, adj ? adj(a0) : a0) + sum(pf), dec = dk ? Math.min(i, Math.max(0, base - 1)) : 0;
+          const base = Math.max(0, adj ? adj(a0) : a0) + sum(pf), dec = dk ? Math.min(i * (dk === true ? 1 : dk), Math.max(0, base - 1)) : 0;
           if (dec) plater.push({ from: u.id, label: TX('battle.comboDecay'), amount: -dec, hit: i + 1 });
           const tr = hit(u, t, base - dec, crit, crit && (ally ? li >= CRIT_PIERCE_LV - 1 : CRIT_PIERCE_ENEMY));
           if (crit) tr.crit = true;
+          if (crit && !ally && sk.jackpot) tr.jackpot = true;
           if (n > 1) tr.hit = i + 1;
           return tr;
         };
@@ -3159,7 +3169,7 @@
           for (const tr of targets) if (tr.uid !== list[0].id) tr.splash = true;
           // v36 (试玩者 1): the battle text says how many it really hit — 「波及全体」 only for the all-target spark (Lv4 / the bell)
           if (pid === 'prep') u.prepDone = true;
-          const sArgs = { name: u.name, skill: sk.name, n: targets.length, hits: targets.map((r) => TX('battle.sparkHit', { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount })).join(TX('list.comma')) };
+          const sArgs = { name: u.name, skill: sk.name, n: targets.length, hits: targets.map((r) => { const hv = { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount }; return r.jackpot ? TX('battle.sparkHitJackpot', hv) : TX('battle.sparkHit', hv); }).join(TX('list.comma')) };
           text = nT === Infinity ? TX('battle.spark', sArgs) : targets.length > 1 ? TX('battle.sparkN', sArgs) : TX('battle.sparkOne', sArgs);
         } else if (sk.kind === 'backstab') {
           // 连击: hit the first two living foes in turn (re-picked every hit); with one foe left, every hit lands on her
@@ -3170,7 +3180,7 @@
             if (!lv.length) break;
             const pair = u.focus && lv.includes(af[0]) ? [af[0]] : lv.slice(0, 2);
             const t = pair[i % pair.length];
-            const tr = softOrHit(t, i, n, null, ally || li > 0); // 连击递减 for enemies Lv2+ too
+            const tr = softOrHit(t, i, n, null, ally ? COMBO_DECAY : li > 0); // 连击递减: ours −2 per hit (用户 2026-11-15), enemies Lv2+ −1
             targets.push(tr);
             if (pid === 'handy' && !extra && tr.amount > 0 && t.hp <= 0 && alive(foes).length) { extra = true; n += 1; tr.handy = true; } // 琪琪「顺手」
           }
@@ -3339,7 +3349,8 @@
     function enemyAssist(u, r, ps, st) {
       if (u.side !== 'enemy' || !r || !(r.damage > 0 || r.kills > 0) || u.hp <= 0) return;
       const fairy = u.ref === 'fairy-demon', key = fairy ? 'fairyAssist' : 'enemyAssist', lc = levelCfg(data, B.level) || {};
-      const p = lc[key] != null ? lc[key] : !diffOf(run) ? 0 : (tierRule(run, key) ?? (fairy ? FAIRY_ASSIST : ENEMY_ASSIST)); // level field > tier field > default
+      let p = lc[key] != null ? lc[key] : !diffOf(run) ? 0 : (tierRule(run, key) ?? (fairy ? FAIRY_ASSIST : ENEMY_ASSIST)); // level field > tier field > default
+      if (B.emods && B.emods.luck && B.enemies.some((x) => x.advisorBoss && x.hp > 0)) p += LUCK_ADD; // 2026-11-15 妮可塔「坐庄」: while she stands, her side's 加成 +10% (the mirror of her 好运)
       if (!(p > 0)) return;
       const pool = fairy ? B.enemies.filter((t) => t !== u && t.hp > 0) : ['prev', 'next'].map((d) => neighbour(B.enemies, u, d)).filter(Boolean);
       let n = 0;
