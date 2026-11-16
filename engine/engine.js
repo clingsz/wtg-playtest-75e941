@@ -2395,6 +2395,11 @@
         u.maxHp = Math.ceil(u.maxHp * ENEMY_HP_MUL - 1e-9);
         if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct));
       }
+      if (df) { /* 用户 2026-11-15: 敌方加成 is written on every enemy card — stamp each unit's chance (the same order as enemyAssist: level > tier > default) */
+        const lc0 = levelCfg(data, run.level) || {};
+        const pOf = (key, d) => { const p0 = lc0[key] != null ? lc0[key] : (tierRule(run, key) ?? d); return p0 > 0 ? p0 : 0; };
+        for (const u of all) { u.assistP = pOf('enemyAssist', ENEMY_ASSIST); if (u.ref === 'fairy-demon') u.fairyP = pOf('fairyAssist', FAIRY_ASSIST); }
+      }
       if (df && run.level >= LATE_HP_FROM) for (const u of all) { /* 用户 2026-11-15: from L6 on no enemy unit has a one-digit hp (else one sweep takes them all) */
         if (u.maxHp >= LATE_HP_MIN) continue;
         const pct = u.startHp != null ? u.startHp / u.maxHp : null;
@@ -2454,7 +2459,9 @@
       for (const t of FOE_TRAIT_CHIPS) if (Array.isArray(u.traits) && u.traits.includes(t)) ids.push(t);
       if (u.dazed) ids.push('daze'); // 试玩反馈 2026-11-14 晚: 附加条款 → this enemy 发呆 this round (keyword / icon 'daze')
     }
-    return ids.map((id) => statusChip(data, id));
+    const chips = ids.map((id) => statusChip(data, id));
+    if (u.side === 'enemy' && (u.assistP > 0 || u.fairyP > 0)) chips.push({ id: 'assist', label: TX('status.assist'), tip: TX('status.tip.assist', { pct: Math.round((u.assistP || 0) * 100) }) + (u.fairyP > 0 ? TX('status.tip.assistFairy', { pct: Math.round(u.fairyP * 100) }) : '') });
+    return chips;
   }
   function unitView(data, B, u) {
     const v = { id: u.ref, uid: u.id, side: u.side, name: u.name, role: u.role || null, hp: u.hp, maxHp: u.maxHp, atk: u.atk,

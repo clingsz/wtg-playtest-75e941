@@ -318,7 +318,7 @@
   var ST_HIDE = { debt: 1, 'bond-high': 1, 'bond-low': 1, vengeful: 1, 'vengeful-high': 1, 'vengeful-low': 1, possessed: 1 };
   var ST_BAD = { 'slow-start': 1, 'mood-low': 1, debuffed: 1, smoke: 1, clause: 1 };
   var ST_LABEL = lazy(function () { var o = {}; ['slow-start', 'formation', 'clause', 'luck', 'smoke', 'drum', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.label.' + k); }); return o; });
-  var ST_GOOD = { tough: 1, shell: 1, ambush: 1, escort: 1, doubleCut: 1, twinShot: 1, 'foe-lv2': 1, 'foe-lv3': 1, 'foe-lv4': 1 }; // 2026-11-15 enemy traits / skill levels: shown as strengths
+  var ST_GOOD = { tough: 1, shell: 1, ambush: 1, assist: 1, escort: 1, doubleCut: 1, twinShot: 1, 'foe-lv2': 1, 'foe-lv3': 1, 'foe-lv4': 1 }; // 2026-11-15 enemy traits / skill levels: shown as strengths
   function kwStatus(id) { var K = DATA.keywords && DATA.keywords.status; return (K && K[id]) || null; } // 2026-11-14 发呆 (daze): keywords.json status label / tip
   function stObj(s) { if (typeof s !== 'string') return s; var k = kwStatus(s); return { id: s, label: ST_LABEL()[s] || (k && k.label) || s, tip: k && k.tip }; }
   function isBadStatus(s) { var o = stObj(s); return !!(o.dark || o.bad || ST_BAD[o.id] || (!ST_LABEL()[o.id] && !ST_HIDE[o.id] && o.id && !ST_GOOD[o.id])); }
@@ -1863,7 +1863,7 @@
   }
   // ===== v2.3 battle §D1: statuses as small icons, ×N when stacked; hover = name + effect =====
   var ST_GLYPH = lazy(function () { var o = {}; ['formation', 'clause', 'luck', 'smoke', 'drum', 'slow-start', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.glyph.' + k); }); return o; });
-  var ST_SVG = { weak: 'weak', tough: 'tough', shell: 'block', 'slow-start': 'daze', daze: 'daze', ambush: 'bonus', escort: 'cover', doubleCut: 'bonus', twinShot: 'power', 'foe-lv2': 'level', 'foe-lv3': 'level', 'foe-lv4': 'level' }; // 2026-11-14: code-drawn glyphs (no art file)
+  var ST_SVG = { weak: 'weak', tough: 'tough', shell: 'block', 'slow-start': 'daze', daze: 'daze', ambush: 'bonus', assist: 'bonus', escort: 'cover', doubleCut: 'bonus', twinShot: 'power', 'foe-lv2': 'level', 'foe-lv3': 'level', 'foe-lv4': 'level' }; // 2026-11-14: code-drawn glyphs (no art file)
   var ST_FILE = { 'mood-low': 'mood-down', 'mood-high': 'mood-up', 'vengeful-high': 'vengeful', 'vengeful-low': 'vengeful', wound: 'wounded' };
   function statusIcons(list, side) {
     var seen = {}, order = [];
@@ -2789,7 +2789,7 @@
       var allies = b.allies.filter(function (u) { return !sw[u.uid]; });
       for (var i = evs.length - 1; i >= 0; i--) { // walk back to the state before this round
         var e = evs[i];
-        if (e.kind === 'action') (e.targets || []).forEach(function (t) { if (t.miss || t.capped) return; var before = t.kind === 'heal' ? t.hpAfter - t.amount : t.hpAfter + t.amount; hp[t.uid] = before; });
+        if (e.kind === 'action') (e.targets || []).slice().reverse().forEach(function (t) { if (t.miss || t.capped) return; /* 2026-11-15 user: walk a 连击's hits backwards too, or the first hit stays on the card before the round plays */ var before = t.kind === 'heal' ? t.hpAfter - t.amount : t.hpAfter + t.amount; hp[t.uid] = before; });
         if (e.kind === 'relic' && e.uid != null && e.hpBefore != null) hp[e.uid] = e.hpBefore;
         if (e.kind === 'memory' && e.hpWas) e.hpWas.forEach(function (w) { hp[w.uid] = w.hp; mx0[w.uid] = w.maxHp; }); // batch6 H2-14: a debt's numbers change when its dots land
       }
