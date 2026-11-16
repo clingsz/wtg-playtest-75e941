@@ -325,7 +325,7 @@
   var ST_HIDE = { debt: 1, 'bond-high': 1, 'bond-low': 1, vengeful: 1, 'vengeful-high': 1, 'vengeful-low': 1, possessed: 1 };
   var ST_BAD = { 'slow-start': 1, 'mood-low': 1, debuffed: 1, smoke: 1, clause: 1 };
   var ST_LABEL = lazy(function () { var o = {}; ['slow-start', 'formation', 'clause', 'luck', 'smoke', 'drum', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.label.' + k); }); return o; });
-  var ST_GOOD = { tough: 1, shell: 1 };
+  var ST_GOOD = { tough: 1, shell: 1, ambush: 1, escort: 1, doubleCut: 1, twinShot: 1, 'foe-lv2': 1, 'foe-lv3': 1, 'foe-lv4': 1 }; // 2026-11-15 enemy traits / skill levels: shown as strengths
   function kwStatus(id) { var K = DATA.keywords && DATA.keywords.status; return (K && K[id]) || null; } // 2026-11-14 发呆 (daze): keywords.json status label / tip
   function stObj(s) { if (typeof s !== 'string') return s; var k = kwStatus(s); return { id: s, label: ST_LABEL()[s] || (k && k.label) || s, tip: k && k.tip }; }
   function isBadStatus(s) { var o = stObj(s); return !!(o.dark || o.bad || ST_BAD[o.id] || (!ST_LABEL()[o.id] && !ST_HIDE[o.id] && o.id && !ST_GOOD[o.id])); }
@@ -928,7 +928,8 @@
   function showItems(v) { return !!v && (v.phase === 'battle' || v.phase === 'reward' || v.phase === 'debuff' || (v.phase === 'prep' && !v.bell)); }
   function topbar(v, custom, extra) {
     var items = showItems(v), pl8 = '';
-    if (TOPBAR_PLATE) pl8 = '<span class="tb-plate"' + (v.difficulty ? ' data-tip="' + esc(T('ui.topbar.difficultyTip') + ' ' + T('ui.topbar.difficulty', { name: v.difficulty.name })) + '"' : '') + '>' + (custom != null ? custom : plate(levelText(v))) + '</span>';
+    // 2026-11-15 user: in battle the level plate is back top-left
+    if (TOPBAR_PLATE || (v && v.phase === 'battle')) pl8 = '<span class="tb-plate"' + (v.difficulty ? ' data-tip="' + esc(T('ui.topbar.difficultyTip') + ' ' + T('ui.topbar.difficulty', { name: v.difficulty.name })) + '"' : '') + '>' + (custom != null ? custom : plate(levelText(v))) + '</span>';
     return '<header class="topbar">' + pl8 + '<span class="spacer"></span>' +
       (items ? teamBtn(v) + bagChip(v.items, v.relics || (v.run && v.run.relics)) + goldChip(v) + advisorChip(v.advisor) : '') + (items || v.bell ? keysChip(v.keys) : '') +
       (extra || '') + menuBtn() + '</header>';
@@ -1002,10 +1003,11 @@
     var keeps = ally ? sec('ui.unit.keepsakes', M.keepsakes.length ? M.keepsakes.map(function (k) { return '<p class="up-txt"><b class="up-sk">' + esc(k.name) + '</b>' + (k.text ? '：' + richText(k.text) : '') + '</p>'; }).join('') : '<p class="up-txt dim">' + T('ui.common.none') + '</p>') : '';
     var st = statusChips(M.statuses, M.side); // an enemy's hidden debuffs stay hidden (same filter as her card)
     var sts = sec('ui.unit.statuses', st ? '<div class="chips">' + st + '</div>' : '<p class="up-txt dim">' + T('ui.common.none') + '</p>');
-    return '<div class="up-head"><div class="up-face">' + pic(art.list, 'up-img', name, art.fb) + '</div><div class="up-id"><h2>' + esc(name) + '</h2>' +
+    // 2026-11-15 user: the panel scrolled → two columns (left: face, name, numbers · right: skill / combo / keepsakes / statuses)
+    return '<div class="up-cols"><div class="up-left"><div class="up-head"><div class="up-face">' + pic(art.list, 'up-img', name, art.fb) + '</div><div class="up-id"><h2>' + esc(name) + '</h2>' +
       '<div class="up-role">' + (M.role ? roleBadge(M.role, 'up-rb') + '<span>' + esc(ROLE_NAME()[M.role] || M.role) + '</span>' : '<span>' + T(M.boss ? 'ui.unit.boss' : 'ui.unit.foe') + '</span>') + '</div>' +
-      '<div class="up-stats">' + stats + '</div></div></div>' +
-      '<div class="up-body">' + skill + combo + keeps + sts + '</div>' +
+      '<div class="up-stats">' + stats + '</div></div></div></div>' +
+      '<div class="up-right"><div class="up-body">' + skill + combo + keeps + sts + '</div></div></div>' +
       '<div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.close') + '</button></div>';
   }
   // v39「结算看得懂」: 「怎么算」 under the skill — her current numbers in one line (RoundPlan.howCalc reads them off her skill
@@ -1607,8 +1609,8 @@
   function shopPrice(o) { return '<span class="sc-price">' + A.glyph('coin', false) + '<b>' + esc(o.price) + '</b>' + (o.varies ? '<small>' + T('ui.shop.from') + '</small>' : '') + '</span>'; }
   function shopCard(o, small) {
     var off = o.sold || !o.affordable, why = o.sold ? T('ui.shop.soldOut') : o.reason ? T('engine.shop.why.' + o.reason) : '';
-    return '<button class="choice shop-card k-' + esc(o.kind || 'x') + (o.sold ? ' sold' : '') + (off ? ' off' : '') + (small ? ' small' : '') + '" data-act="shopPick" data-id="' + esc(o.id) + '" data-opt="shop:' + esc(o.id) + '"' +
-      (off ? ' aria-disabled="true"' : '') + ' data-tip="' + esc((o.flavor || '') + (why ? ' ' + why : '')) + '"' + (small ? ' disabled' : '') + '>' +
+    return '<button class="choice shop-card k-' + esc(o.kind || 'x') + (o.sold ? ' sold' : '') + (off ? ' off' : '') + (small ? ' small' : '') + '" data-act="' + (small ? 'shopBack' : 'shopPick') + '" data-id="' + esc(o.id) + '" data-opt="shop:' + esc(o.id) + '"' + // 2026-11-15 user: the picked card itself takes you back (换一件)
+      (off && !small ? ' aria-disabled="true"' : '') + ' data-tip="' + esc(small ? T('ui.shop.back') : (o.flavor || '') + (why ? ' ' + why : '')) + '">' +
       '<span class="ch-head"><img src="' + esc(shopIcon(o)) + '" alt=""></span><b class="ch-name">' + esc(o.name) + '</b>' + cardFaceHtml({ text: o.text }) + /* the effect line (bold numbers) */
       (o.sold ? '<span class="sc-sold">' + T('ui.shop.soldOut') + '</span>' : shopPrice(o)) + '</button>';
   }
@@ -1634,6 +1636,8 @@
       '<button class="bigchoice btn btn-primary" data-act="shopLook" data-opt="shop:look"><span>' + T('ui.shop.askLook') + '</span></button></div></div>';
   }
   function shopIntroShowAsk(v) {
+    // 2026-11-15 user: the buttons came up while her last line was still on screen — wait until the dialogue box is really gone
+    if (vnActive() || !vnEl.hidden) { setTimeout(function () { if (view && view.shop && view.shop.open && fluoIntro[shopKey(view)] === 'play') shopIntroShowAsk(view); }, 120); return; }
     fluoIntro[shopKey(v)] = 'ask';
     var c = $('shopAsk'); if (!c) { render(); return; }
     c.hidden = false; var b = c.querySelector('.btn-primary'); if (b) b.focus({ preventScroll: true });
@@ -1803,7 +1807,7 @@
   }
   // ===== v2.3 battle §D1: statuses as small icons, ×N when stacked; hover = name + effect =====
   var ST_GLYPH = lazy(function () { var o = {}; ['formation', 'clause', 'luck', 'smoke', 'drum', 'slow-start', 'mood-low', 'debuffed'].forEach(function (k) { o[k] = T('ui.status.glyph.' + k); }); return o; });
-  var ST_SVG = { weak: 'weak', tough: 'tough', shell: 'block', 'slow-start': 'daze', daze: 'daze' }; // 2026-11-14: code-drawn glyphs (no art file)
+  var ST_SVG = { weak: 'weak', tough: 'tough', shell: 'block', 'slow-start': 'daze', daze: 'daze', ambush: 'bonus', escort: 'cover', doubleCut: 'bonus', twinShot: 'power', 'foe-lv2': 'level', 'foe-lv3': 'level', 'foe-lv4': 'level' }; // 2026-11-14: code-drawn glyphs (no art file)
   var ST_FILE = { 'mood-low': 'mood-down', 'mood-high': 'mood-up', 'vengeful-high': 'vengeful', 'vengeful-low': 'vengeful', wound: 'wounded' };
   function statusIcons(list, side) {
     var seen = {}, order = [];
@@ -2086,9 +2090,10 @@
     var d = fxDiv('float resolving ' + (cls || ''), (tag ? '<small>' + esc(tag) + '</small>' : '') + '<span class="rv">' + esc(n.from) + '</span>', p.x + (ox || 0), p.y + dy); tipNum(d, rich);
     var bd = el.querySelector('.blk-badge');
     var swap = function () {
+      if (bd) pulse(bd, 'crack', 420);
+      if (n.clank) { cue('guard', null, 0); d.remove(); return; } // 2026-11-15 user: all on 护甲, no hp lost → no 「0」 / 「−0」, just the shield cracking + clank
       var rv = d.querySelector('.rv'); if (rv) rv.textContent = n.to;
-      d.classList.add(n.clank ? 'clank' : 'resolved'); if (n.clank) d.classList.remove('dmg', 'foe-hit', 'huge', 'crit');
-      if (bd) pulse(bd, 'crack', 420); if (n.clank) cue('guard', null, 0);
+      d.classList.add('resolved');
     };
     if (anim.skip || REDUCED) swap(); else setTimeout(swap, dur(150));
     setTimeout(function () { d.remove(); }, 1800 / Math.min(1, spd()));
@@ -2112,7 +2117,7 @@
       var tier = b.crit ? 'crit' : b.hpAfter <= 0 ? 'ko' : 'normal';
       if (b.crit) cue('crit', null, 0); else cue(b.amount >= 6 ? 'bigHit' : 'hit', null, 0);
       var stop = fx ? HitFX.contact(el, { tier: tier, kind: skill || 'strike', dir: dir, scale: b.crit ? 1 : 0.8, from: actor ? stagePt(actor, 0.5, 0.4) : null }) : 0;
-      floatAt(el, '−' + b.amount, 'dmg multi' + (b.crit ? ' crit' : ''), b.crit ? T('ui.battle.crit') : T('ui.battle.hitNo', { n: i + 1 }), 0, b.t && b.t.exRich);
+      if (b.amount > 0) floatAt(el, '−' + b.amount, 'dmg multi' /* 2026-11-15 user: a hit that only hit 护甲 shows no 「−0」 — the shield cracks instead */ + (b.crit ? ' crit' : ''), b.crit ? (b.t && b.t.pierce ? T('ui.battle.critPierce') : T('ui.battle.crit')) : T('ui.battle.hitNo', { n: i + 1 }), 0, b.t && b.t.exRich);
       if (stop) await wait(Math.min(stop, 90), tok);
       if (fx) HitFX.after(el, { tier: tier, kind: skill || 'strike', dir: dir, scale: b.crit ? 1 : 0.7 }, sh); else pulse(el, 'hit', 300);
       setHp(b.uid, b.hpAfter); hitBlock(b.t, el);
@@ -2194,6 +2199,47 @@
   // numbers fly to every target of her action (splash targets too, with a small 「波及」 tag), resolve there (先飞后结算), the hits
   // land, she settles, then the next chained girl rises. ×2 / ×3 shorten every wait; skip / reduced motion = instant results.
   async function settleCard(el, tok) { await wait(RoundPlan.RISE.hold, tok); if (el) el.classList.remove('acting'); await wait(RoundPlan.RISE.down, tok); } // v36: the actor settles back
+  // one enemy action on its own (a lone attack, or one link of an enemy chain whose wave is a single girl): she rises, lunges,
+  // her numbers fly and land (连击 hit by hit), she settles. o.quiet: the chain already sounded its enemyAttack cue.
+  async function foeStrike(e, tok, o) {
+    o = o || {};
+    var el = aEl(e); if (!o.quiet) cue('enemyAttack'); tagSettle(e);
+    actingTip(el, e); // v39: while she is up, her card's tip = this action's breakdown
+    if (el) { el.classList.add('acting'); await wait(RoundPlan.RISE.up, tok); } // v36: every actor rises before acting (same as ours)
+    if ((e.bonuses || []).some(function (b) { return b.amount < 0; })) cue('guard');
+    skillTag(el, e.skill || e.skillName);
+    // feedback-1112 [5]: the card lunges toward its target; the number leaves at the top of the lunge (40%), then lands
+    var LUNGE = 560, tg0 = (e.targets || []).map(tEl).filter(Boolean)[0];
+    if (el && el.animate && !anim.skip && !REDUCED) {
+      var c0 = stagePt(el, 0.5, 0.5), c1 = tg0 ? stagePt(tg0, 0.5, 0.5) : { x: c0.x, y: c0.y + 300 }, lx = c1.x - c0.x, ly = c1.y - c0.y, ln = Math.max(1, Math.hypot(lx, ly));
+      el.style.zIndex = 4;
+      var lg = el.animate([{ transform: 'none' }, { transform: 'translate(' + (lx / ln * 70).toFixed(1) + 'px,' + (ly / ln * 70).toFixed(1) + 'px) scale(1.08)', boxShadow: '0 0 30px rgba(255,80,80,.8)', offset: 0.4 }, { transform: 'none' }], { duration: dur(LUNGE), easing: 'ease-in-out' });
+      lg.finished.then(function () { el.style.zIndex = ''; }, function () { el.style.zIndex = ''; });
+      if (FXLOG) FXLOG.push({ ev: 'lungeStart', t: nowMs(), apex: nowMs() + dur(LUNGE) * 0.4 });
+      await wait(LUNGE * 0.4, tok);
+    } else { if (el) pulse(el, 'strike', 520); await wait(420, tok); }
+    if (FXLOG) FXLOG.push({ ev: 'numLaunch', t: nowMs() });
+    var from = el ? stagePt(el, 0.5, 1) : { x: 1300, y: 520 };
+    var eBeats = A.comboBeats(e.targets, function (t) { var x = tEl(t); return x ? x.dataset.u : null; });
+    if (eBeats.length > 1) { // batch6 H2-7: an enemy 连击 — every hit its own beat (flash, shake, cue, number, hp step)
+      await comboSeq(eBeats, el, e.skillKind, tok); chk(tok);
+      var eRest = (e.targets || []).filter(function (t) { return !t.miss && !t.capped && !eBeats.some(function (sb) { return sb.t === t; }) && tEl(t); }); // v38: a target outside the 连击 still lands
+      if (eRest.length) await impacts(eRest.map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
+      (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
+      await wait(160, tok); await settleCard(el, tok); actingTipOff(el); return;
+    }
+    var seen = {};
+    await Promise.all((e.targets || []).map(function (t, i) {
+      var te = tEl(t); if (!te || t.miss || t.capped) return null;
+      var nth = seen[t.uid] = (seen[t.uid] || 0) + 1, delay = (nth - 1) * 190; // DESIGN-skill-level: an enemy 连击 hits the same card again a beat later
+      return new Promise(function (r) { setTimeout(r, anim.skip ? 0 : dur(delay)); }).then(function () {
+        return flyNum(from, te, '', t.kind === 'heal' ? 'heal' : 'dmg foe-hit' + (t.hit ? ' multi' : ''), '', nth > 1 ? (nth - 1) * 62 : 0, t); // 先飞后结算
+      });
+    }).filter(Boolean)); chk(tok);
+    (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
+    await impacts((e.targets || []).filter(function (t) { return !t.miss && tEl(t); }).map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
+    await wait(160, tok); await settleCard(el, tok); actingTipOff(el); return;
+  }
   // 2026-11-15「一起蓄力，一起出手」: the girls one chain pulled in (RoundPlan.chainWaves) rise TOGETHER, each builds her own
   // number over her own head at the same time (each starts TOGETHER.chargeGap after the one who pulled her in, so the 「加成」
   // cascade still reads A → B → C), they all release together (each a resolveGap after the previous), and the hits land on
@@ -2201,15 +2247,23 @@
   // action's block gains right after it. A wave of one (a plain action) is the old single rise (playBeat).
   async function playChain(group, tok) {
     var beats = RoundPlan.actionBeats(group), acts = beats.map(function (b) { return b.act; }), first = acts[0], extras = RoundPlan.beatExtras(group), waves = RoundPlan.chainWaves(beats);
+    // 2026-11-15「对方的加成也要一起走」: an enemy chain (敌方加成, RoundPlan.planRound groups it too) plays the same waves; only the
+    // looks differ — enemy cues / number colour / hit direction, a guard cue for a weakened foe, and a wave of one is foeStrike
+    var foe = !!first && first.side !== 'ally';
+    if (foe && !aEl(first)) { for (var g0 = 0; g0 < group.length; g0++) await playOne(group[g0], tok); return; } // no card to rise: the old one-by-one path
     if (!first || !aEl(first)) return;
-    cue('allyAttack');
+    cue(foe ? 'enemyAttack' : 'allyAttack');
     var ctag = null, RS = RoundPlan.RISE, TG = RoundPlan.TOGETHER;
     for (var w = 0; w < waves.length; w++) {
       if (waves[w].length > 1) { await playWave(waves[w], tok); continue; } // charge together, strike together
-      var k = waves[w][0].k; await playBeat(beats[k], k, tok); for (var xb = 0; xb < (extras[k] || []).length; xb++) await playOne(extras[k][xb], tok); // v38: a block gain lands with its own beat
+      var k = waves[w][0].k;
+      if (foe) { var ce = chainEvOf(beats[k]); if (ce) await playOne(ce, tok); await foeStrike(beats[k].act, tok, { quiet: true }); } // a lone enemy link: her 「加成」 tag, then the old enemy strike
+      else await playBeat(beats[k], k, tok);
+      for (var xb = 0; xb < (extras[k] || []).length; xb++) await playOne(extras[k][xb], tok); // v38: a block gain lands with its own beat
     }
     if (ctag) { var ct = ctag; ct.classList.add('out'); setTimeout(function () { ct.remove(); }, 400); }
     await wait(200, tok);
+    function chainEvOf(bt) { return bt.depth ? group.filter(function (c) { return c.kind === 'chain' && !c.missed && c.to === bt.actor; })[0] : null; }
     async function playBeat(bt, k, tok) {
       var a = bt.act, el = aEl(a); if (!el) return;
       el.classList.add('acting'); // the rise (.bcard.acting: up, gold glow); she stays up until her hits have landed
@@ -2223,7 +2277,7 @@
       await settleCard(el, tok); actingTipOff(el); // she settles back; the next girl in the chain rises
     }
     async function playWave(wv, tok) {
-      var els = wv.map(function (bt) { var el = aEl(bt.act); if (el) { el.classList.add('acting'); actingTip(el, bt.act); } return el; }); // everyone rises at once
+      var els = wv.map(function (bt) { var el = aEl(bt.act); tagSettle(bt.act); if (el) { el.classList.add('acting'); actingTip(el, bt.act); } return el; }); // everyone rises at once
       await wait(RS.up, tok);
       var sts = await Promise.all(wv.map(function (bt, i) { // every girl's own number builds over her own head, at the same time
         return els[i] ? wait(i * TG.chargeGap, tok).then(function () { return chargeUp(bt, bt.k, els[i], true, tok); }) : Promise.resolve(null);
@@ -2236,7 +2290,7 @@
       });
       for (var i = 0; i < wv.length; i++) {
         await flies[i]; chk(tok);
-        if (els[i]) await land(wv[i], els[i], tok);
+        if (els[i] || foe) await land(wv[i], els[i], tok); // an enemy without a card still lands her hits (hp / 护甲 stay in sync)
         var xs = extras[wv[i].k] || []; for (var xb = 0; xb < xs.length; xb++) await playOne(xs[xb], tok); // her block gain shows as her action resolves
       }
       await wait(RS.hold, tok); els.forEach(function (el) { if (el) el.classList.remove('acting'); }); await wait(RS.down, tok); // they all settle together
@@ -2249,7 +2303,8 @@
       var at = stagePt(el, 0.5, 0), step = bt.depth, inStep = 0, val = 0, ticks = 0;
       if (k > 0 && bt.depth && !together) chargeTag(at, bt.depth); // F round 2: 「加成 ×N」 beside her orb, while the bonus is being added
       skillTag(el, a.skill || a.skillName);
-      var bubble = fxDiv('charge' + (bt.heal ? ' heal' : '') + (together ? ' together' : ''), '<b>0</b>', at.x, at.y - 46);
+      if (foe && (a.bonuses || []).some(function (b) { return b.amount < 0; })) cue('guard'); // a weakened foe (same cue as her lone strike)
+      var bubble = fxDiv('charge' + (bt.heal ? ' heal' : '') + (together ? ' together' : '') + (foe ? ' foe' : ''), '<b>0</b>', at.x, at.y - 46);
       if (together && k > 0 && bt.depth) { // together: her own small 「加成 ×N」 plate under her own orb (the big shared tag would cover a neighbour)
         var it = document.createElement('i'); it.className = 'ctag-in lv-' + Math.min(bt.depth, 4); it.textContent = T('ui.battle.chainDepth', { n: bt.depth }); bubble.appendChild(it);
         cue('combo', { depth: bt.depth }, 200);
@@ -2269,6 +2324,7 @@
       }
       setVal(a.base || 0, true); await wait(320, tok);
       for (var j = 0; j < (a.bonuses || []).length; j++) {
+        if (a.bonuses[j].hit) continue; // 2026-11-15: a per-hit entry (刺客「连击递减」, 夜鸦「收账」) belongs to that one hit — never to the opening number
         var b = a.bonuses[j], src = bonusSource(b, el), sp = src ? stagePt(src, 0.5, 0.3) : { x: at.x, y: at.y };
         var bd = fxDiv('flynum bonus', (b.noEffect ? '' : (b.amount >= 0 ? '+' : '') + b.amount) + '<small>' + esc(b.label || '') + '</small>', sp.x, sp.y); // 虚弱 that did nothing: no 「+0」, just the words
         await flyTo(bd, sp, { x: at.x, y: at.y - 46 }, 380, 80); chk(tok); inStep++; setVal(val + b.amount);
@@ -2287,9 +2343,9 @@
       var tEls = live.map(function (x) { return tEl(x.t); }).filter(function (x, i, arr) { return arr.indexOf(x) === i; });
       var nums = (!together && seq.length ? [wait(260, tok).then(function () { return comboSeq(seq, el, a.skillKind, tok); })] : []).concat(live.map(function (x) {
         var t = x.t, te = tEl(t), uid = te.dataset.u; if (t.capped || t.seqDone) return null;
-        var tag = x.splash ? T('ui.battle.splashTag') : t.crit ? T('ui.battle.crit') : '';
+        var tag = x.splash ? T('ui.battle.splashTag') : t.pierce ? T('ui.battle.critPierce') : t.crit ? T('ui.battle.crit') : '';
         if (t.kind !== 'heal' && t.crit) cue('crit', null, 0);
-        return flyNum(src0, te, '', t.kind === 'heal' ? 'heal' : 'dmg' + (t.crit ? ' crit' : hitTier(uid, t) !== 'normal' ? ' huge' : '') + (x.splash ? ' splash' : ''), tag, 0, t); // 先飞后结算, per target
+        return flyNum(src0, te, '', t.kind === 'heal' ? 'heal' : 'dmg' + (foe ? ' foe-hit' : '') + (t.crit ? ' crit' : hitTier(uid, t) !== 'normal' ? ' huge' : '') + (x.splash ? ' splash' : ''), tag, 0, t); // 先飞后结算, per target
       })).filter(Boolean);
       if (together && seq.length) bt.seqLate = true;
       return { fly: tEls.length ? Promise.all([burst(src0, tEls, bt.heal ? 'heal' : 'gold', Math.min(18, 6 + Math.max(0, bt.total)))].concat(nums)) : Promise.resolve() };
@@ -2299,7 +2355,7 @@
       var a = bt.act, live = bt.targets.filter(function (x) { return !x.miss && tEl(x.t); });
       bt.targets.forEach(function (x) { if (!x.miss) return; if (x.soft) softMark(el, tEl(x.t)); else { floatAt(tEl(x.t), T('ui.battle.miss'), 'miss'); cue('miss'); } });
       if (bt.seqLate) await comboSeq(bt.seq, el, a.skillKind, tok);
-      await impacts(live.filter(function (x) { return !x.t.seqDone; }).map(function (x) { var te = tEl(x.t); return { el: te, uid: te.dataset.u, t: x.t, kind: x.heal ? 'heal' : x.t.refund ? 'strike' : a.skillKind, from: el, dir: 1, scale: x.splash ? 0.75 : undefined }; }), tok);
+      await impacts(live.filter(function (x) { return !x.t.seqDone; }).map(function (x) { var te = tEl(x.t); return { el: te, uid: te.dataset.u, t: x.t, kind: x.heal ? 'heal' : x.t.refund ? 'strike' : a.skillKind, from: el, dir: foe ? -1 : 1, scale: foe ? 0.8 : x.splash ? 0.75 : undefined }; }), tok);
     }
     function chargeTag(at, depth) {
       if (!ctag) ctag = fxDiv('charge-tag', '', at.x - 175, at.y - 46);
@@ -2311,9 +2367,9 @@
     }
     var end = group.filter(function (e) { return e.kind === 'chainEnd'; })[0], depth = end ? end.depth : acts.length > 1 ? acts[acts.length - 1].chainDepth : 0;
     var mkLines = group.filter(function (e) { return e.kind === 'line' && e.bark === 'multiKill'; });
-    for (var g = 0; g < group.length; g++) { if (group[g].kind !== 'action' && group[g].kind !== 'chainEnd' && group[g].kind !== 'block' && group[g].kind !== 'blockClear' && mkLines.indexOf(group[g]) < 0) await playOne(group[g], tok); }
+    for (var g = 0; g < group.length; g++) { if (group[g].kind !== 'action' && group[g].kind !== 'chainEnd' && group[g].kind !== 'block' && group[g].kind !== 'blockClear' && !(foe && group[g].kind === 'chain') && mkLines.indexOf(group[g]) < 0) await playOne(group[g], tok); } // an enemy 加成 tag already rode on her orb (or her lone strike)
     await killCalls(acts, mkLines, tok); // SPEC-11-13 F: after the foes fall; her happy line right after the banner
-    if (depth >= 1) {
+    if (depth >= 1 && !foe) { // the happy faces are ours only
       celebrate(depth);
       acts.forEach(function (a) { var el = aEl(a); if (!el || el.classList.contains('foe')) return; var img = el.querySelector('.uc-img'), keep = img.dataset.cands;
         swapPic(img, isLeader(a.actorId) ? A.face('leader', 'happy', { variant: actNo() >= 3 ? 'worn' : 'base' }) : A.face(a.actorId, 'happy')); el.classList.add('joy');
@@ -2472,9 +2528,9 @@
   async function playOne(e, tok) {
     var el;
     switch (e.kind) {
-      case 'enemyEnter': el = cardEl(e.uid || (e.unit && e.unit.uid)); if (el) { el.classList.remove('pre-enter'); el.classList.add('enter'); setTimeout(function (c) { return function () { c.classList.remove('enter'); }; }(el), 700); } cue('enemyEnter', null, 150); await wait(420, tok); break; // batch6 H2-6: drop 'enter' once played — left on, every later pulse (felled / hit) restarted it and a greyed-out foe slid back in · fix: this comment once swallowed the wait+break, so enemyEnter fell through into 'phase2' (「第二阶段」 on every entrance)
+      case 'enemyEnter': el = cardEl(e.uid || (e.unit && e.unit.uid)); if (el) { el.classList.remove('pre-enter'); el.classList.add('enter'); setTimeout(function (c) { return function () { c.classList.remove('enter'); }; }(el), 700); } if (el && e.unit && e.unit.openBlock > 0 && !anim.skip) floatAt(el, '+' + e.unit.openBlock, 'blk gain', T('ui.battle.openBlock'), -70); /* 2026-11-15 方案 B: why the badge already shows a number */ cue('enemyEnter', null, 150); await wait(420, tok); break; // batch6 H2-6: drop 'enter' once played — left on, every later pulse (felled / hit) restarted it and a greyed-out foe slid back in · fix: this comment once swallowed the wait+break, so enemyEnter fell through into 'phase2' (「第二阶段」 on every entrance)
       case 'phase2': await playPhase2(e, tok); break;
-      case 'block': el = cardEl(e.uid); RoundPlan.eventBlocks(e).forEach(function (x) { setBlock(x[0], x[1]); }); if (el && !anim.skip) { floatAt(el, '+' + e.amount, 'blk gain', '', -70); cue('guard', null, 0); await wait(260, tok); } break; // 2026-11-14 护甲
+      case 'block': el = cardEl(e.uid); RoundPlan.eventBlocks(e).forEach(function (x) { setBlock(x[0], x[1]); }); if (el && !anim.skip) { floatAt(el, '+' + e.amount, 'blk gain', e.source ? T('ui.battle.blockFrom', { skill: e.source }) : '', -70); cue('guard', null, 0); await wait(e.source ? 420 : 260, tok); } break; // 2026-11-14 护甲 · 2026-11-15「说清楚是什么技能在加护甲」: 「退伍老兵 护甲 / +1」
       case 'blockClear': RoundPlan.eventBlocks(e).forEach(function (x) { setBlock(x[0], x[1]); }); break;
       case 'turncoat': await playTurncoat(e, tok); break;
       case 'switchSide': moveToAllies(e.uid); break;
@@ -2489,42 +2545,7 @@
       }
       case 'action': {
         if (e.side === 'ally') { await playChain([e], tok); break; }
-        el = aEl(e); cue('enemyAttack'); tagSettle(e);
-        actingTip(el, e); // v39: while she is up, her card's tip = this action's breakdown
-        if (el) { el.classList.add('acting'); await wait(RoundPlan.RISE.up, tok); } // v36: every actor rises before acting (same as ours)
-        if ((e.bonuses || []).some(function (b) { return b.amount < 0; })) cue('guard');
-        skillTag(el, e.skill || e.skillName);
-        // feedback-1112 [5]: the card lunges toward its target; the number leaves at the top of the lunge (40%), then lands
-        var LUNGE = 560, tg0 = (e.targets || []).map(tEl).filter(Boolean)[0];
-        if (el && el.animate && !anim.skip && !REDUCED) {
-          var c0 = stagePt(el, 0.5, 0.5), c1 = tg0 ? stagePt(tg0, 0.5, 0.5) : { x: c0.x, y: c0.y + 300 }, lx = c1.x - c0.x, ly = c1.y - c0.y, ln = Math.max(1, Math.hypot(lx, ly));
-          el.style.zIndex = 4;
-          var lg = el.animate([{ transform: 'none' }, { transform: 'translate(' + (lx / ln * 70).toFixed(1) + 'px,' + (ly / ln * 70).toFixed(1) + 'px) scale(1.08)', boxShadow: '0 0 30px rgba(255,80,80,.8)', offset: 0.4 }, { transform: 'none' }], { duration: dur(LUNGE), easing: 'ease-in-out' });
-          lg.finished.then(function () { el.style.zIndex = ''; }, function () { el.style.zIndex = ''; });
-          if (FXLOG) FXLOG.push({ ev: 'lungeStart', t: nowMs(), apex: nowMs() + dur(LUNGE) * 0.4 });
-          await wait(LUNGE * 0.4, tok);
-        } else { if (el) pulse(el, 'strike', 520); await wait(420, tok); }
-        if (FXLOG) FXLOG.push({ ev: 'numLaunch', t: nowMs() });
-        var from = el ? stagePt(el, 0.5, 1) : { x: 1300, y: 520 };
-        var eBeats = A.comboBeats(e.targets, function (t) { var x = tEl(t); return x ? x.dataset.u : null; });
-        if (eBeats.length > 1) { // batch6 H2-7: an enemy 连击 — every hit its own beat (flash, shake, cue, number, hp step)
-          await comboSeq(eBeats, el, e.skillKind, tok); chk(tok);
-          var eRest = (e.targets || []).filter(function (t) { return !t.miss && !t.capped && !eBeats.some(function (sb) { return sb.t === t; }) && tEl(t); }); // v38: a target outside the 连击 still lands
-          if (eRest.length) await impacts(eRest.map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
-          (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
-          await wait(160, tok); await settleCard(el, tok); actingTipOff(el); break;
-        }
-        var seen = {};
-        await Promise.all((e.targets || []).map(function (t, i) {
-          var te = tEl(t); if (!te || t.miss || t.capped) return null;
-          var nth = seen[t.uid] = (seen[t.uid] || 0) + 1, delay = (nth - 1) * 190; // DESIGN-skill-level: an enemy 连击 hits the same card again a beat later
-          return new Promise(function (r) { setTimeout(r, anim.skip ? 0 : dur(delay)); }).then(function () {
-            return flyNum(from, te, '', t.kind === 'heal' ? 'heal' : 'dmg foe-hit' + (t.hit ? ' multi' : ''), '', nth > 1 ? (nth - 1) * 62 : 0, t); // 先飞后结算
-          });
-        }).filter(Boolean)); chk(tok);
-        (e.targets || []).forEach(function (t) { var te = tEl(t); if (te && t.miss) { hitCue(t); floatAt(te, T('ui.battle.miss'), 'miss'); } });
-        await impacts((e.targets || []).filter(function (t) { return !t.miss && tEl(t); }).map(function (t) { var te = tEl(t); return { el: te, uid: te.dataset.u, t: t, kind: t.kind === 'heal' ? 'heal' : e.skillKind, from: el, dir: -1, scale: 0.8 }; }), tok);
-        await wait(160, tok); await settleCard(el, tok); actingTipOff(el); break;
+        await foeStrike(e, tok); break;
       }
       case 'down': {
         el = cardEl(e.uid) || cardById(e.id); var mine = e.side === 'ally' || (el && el.classList.contains('ally'));
@@ -3447,7 +3468,9 @@
     ivQuick: function (d, t, e) { if (e) e.stopPropagation(); ivMode = { seed: run && run.seed, normal: false }; pl('event', 'quickOn'); vnClear(); render(); },
     ivReplay: function () { $('ivChoices').hidden = true; $('ivUnder').hidden = true; ivTalk(view); },
     move: function (d) { var i = +d.i, j = i + +d.d, o = ui.order, t = o[i]; if (j < 0 || j >= o.length) return; o[i] = o[j]; o[j] = t; ui.moves++; render(); },
-    armSkill: function () { if (doAct({ type: 'armSkill', on: !view.skillArmed }, true)) render(); },
+    // 2026-11-15 bug: toggling 「开场用…」 re-rendered from the engine's order and dropped the line-up the player had just dragged —
+    // commit the dragged line-up first (setOrder, the same action 「出发」 sends), so the re-render keeps it
+    armSkill: function () { if (ui.order && !doAct({ type: 'setOrder', order: ui.order.slice() }, true)) return; if (doAct({ type: 'armSkill', on: !view.skillArmed }, true)) render(); },
     fight: function () { tracker.switches = ui.moves || 0; if (doAct({ type: 'setOrder', order: ui.order.slice() }, true)) doAct({ type: 'fight' }); },
     speed: function (d) { setSpeed(+d.s); },
     speedCycle: function () { setSpeed((prefs.speed || 1) % 3 + 1); },

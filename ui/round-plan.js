@@ -6,12 +6,12 @@
 (function (root) {
   'use strict';
   var STOP = { phase: 1, enemyEnter: 1, wave: 1, end: 1, frenzy: 1, reckoning: 1, debts: 1, memory: 1 };
-  // end (exclusive) of the ally group that starts at evs[i]
+  // end (exclusive) of the chain group that starts at evs[i] (2026-11-15: either side — an enemy 加成 groups like ours)
   function chainEnd(evs, i) {
     var e = evs[i], j = i + 1;
     while (j < evs.length) {
       var f = evs[j];
-      if (f.kind === 'action' && (!f.chainDepth || f.side !== 'ally' || (e.chainId != null && f.chainId != null && f.chainId !== e.chainId))) break;
+      if (f.kind === 'action' && (!f.chainDepth || f.side !== e.side || (e.chainId != null && f.chainId != null && f.chainId !== e.chainId))) break;
       if (STOP[f.kind]) break;
       j++;
       if (f.kind === 'chainEnd') break;
@@ -26,6 +26,13 @@
     }
     return false;
   }
+  // 2026-11-15「对方的加成也要一起走」: an enemy attack that pulled followers in (敌方加成, same chainId, chainDepth ≥ 1) is a
+  // chain group like ours (played by playChain: rise together, charge together, strike together). A lone enemy action stays 'one'.
+  function foeChained(evs, i) {
+    var j = chainEnd(evs, i);
+    for (var k = i + 1; k < j; k++) if (evs[k].kind === 'action') return true;
+    return false;
+  }
   // the steps, in order: { type: 'chain', group } | { type: 'debts', debts, memories } | { type: 'one', e, acts? }
   function planRound(evs) {
     var out = [], i = 0;
@@ -33,7 +40,7 @@
       var e = evs[i];
       if (e.kind === 'debts') { var mems = [], j0 = i + 1; while (j0 < evs.length && evs[j0].kind === 'memory') mems.push(evs[j0++]); out.push({ type: 'debts', debts: e, memories: mems, i: i }); i = j0; continue; }
       if (e.kind === 'memory') { var ms = [], j1 = i; while (j1 < evs.length && evs[j1].kind === 'memory') ms.push(evs[j1++]); out.push({ type: 'debts', debts: { id: e.id, debts: [] }, memories: ms, i: i }); i = j1; continue; }
-      if (e.kind === 'action' && e.side === 'ally' && !e.chainDepth) { var j = chainEnd(evs, i); out.push({ type: 'chain', group: evs.slice(i, j), i: i }); i = j; continue; }
+      if (e.kind === 'action' && !e.chainDepth && (e.side === 'ally' || foeChained(evs, i))) { var j = chainEnd(evs, i); out.push({ type: 'chain', group: evs.slice(i, j), i: i, side: e.side === 'ally' ? 'ally' : 'enemy' }); i = j; continue; }
       var st = { type: 'one', e: e, i: i };
       if (e.kind === 'phase') st.acts = phaseActs(evs, i);
       out.push(st); i++;
@@ -114,7 +121,7 @@
         return { uid: t.uid, t: t, splash: !!t.splash, miss: !!t.miss, soft: !!t.soft, capped: !!t.capped, heal: t.kind === 'heal', num: hitNum(t) };
       });
       var series = ts.filter(function (x) { return x.t.of > 1 && !x.miss && !x.capped && !x.heal; }).length > 1;
-      var total = (a.base || 0) + (a.bonuses || []).reduce(function (s, b) { return s + (b.noEffect ? 0 : b.amount || 0); }, 0);
+      var total = (a.base || 0) + (a.bonuses || []).reduce(function (s, b) { return s + (b.noEffect || b.hit ? 0 : b.amount || 0); }, 0); // a per-hit entry (`hit`) is not in the opening number
       return { k: k, act: a, actor: a.actor, depth: a.chainDepth || 0, from: ch ? ch.from : null, heal: ts.length > 0 && ts.every(function (x) { return x.heal; }), total: total, targets: ts, series: series };
     });
   }
@@ -176,12 +183,12 @@
   }
   // v39「结算看得懂」: one action of the battle log, explained in plain words. Every number comes from the log entry
   // ({base, bonuses, targets[{amount, hpAfter, blocked, blockAfter, shieldBy, shieldAmt, tough, crit, splash, miss}]}).
-  // The crit ×2 / ×2.5 and the mage splash ⌊威力÷3⌋ (min 1) are only SHOWN when they reproduce the logged number exactly;
+  // The crit ×2 / ×2.5 / ×3 (the log's critX when present) and the mage splash ⌊威力÷3⌋ (min 1) are only SHOWN when they reproduce the logged number exactly;
   // otherwise the line falls back to the plain 「打出 N → 护甲挡 → 掉血」 read straight from the hit (never a wrong formula).
   // explainAction(e, units, o) → { actor, total, formula, head, targets: [{ uid, name, kind, start, tough, shield, block,
   // dealt, hpAfter, down, minOne, over, saved, exact, text }], lines: [head, formula, ...target lines] }
   // units: { uid: { name } } (or an array of { uid, name }); o.t = the text lookup (T / E.t). Lines use {i:name} glyph tokens.
-  var SPLASH_DIV = 3, CRIT_X = 2, CRIT_X_MAX = 2.5;
+  var SPLASH_DIV = 3, CRIT_X = 2, CRIT_X_MAX = 3, CRIT_XS = [2, 2.5, 3]; // 用户 2026-11-15 弓手加强: Lv1–2 ×2 · Lv3 ×2.5 · Lv4 ×3
   function unitName(units, uid) {
     if (!units) return String(uid);
     if (Array.isArray(units)) { for (var i = 0; i < units.length; i++) if (units[i] && (units[i].uid === uid || (units[i].uid == null && units[i].id === uid))) return units[i].name || String(uid); return String(uid); }
@@ -197,7 +204,7 @@
     var ally = e.side !== 'enemy', cands = [];
     if (t.refund) return null;
     if (t.splash && e.skillKind === 'spark' && ally) { var fl = Math.floor(pre / SPLASH_DIV); cands.push({ v: Math.max(1, fl) * mult, splash: { n: pre, d: SPLASH_DIV, min: fl < 1 } }); }
-    else if (t.crit) [e.skillLv >= 4 ? CRIT_X_MAX : CRIT_X, CRIT_X, CRIT_X_MAX].forEach(function (x) { cands.push({ v: Math.floor(pre * x) * mult, crit: { n: pre, x: x } }); });
+    else if (t.crit) (t.critX ? [t.critX] : [e.skillLv >= 4 ? CRIT_X_MAX : CRIT_X].concat(CRIT_XS)).forEach(function (x) { cands.push({ v: Math.floor(pre * x) * mult, crit: { n: pre, x: x } }); });
     else { cands.push({ v: pre * mult }); if (!ally && e.skillKind === 'spark') cands.push({ v: (e.base || 0) * mult }); } // an enemy spark (the bell): one flat number on everyone
     for (var i = 0; i < cands.length; i++) { var r = settleHit(cands[i].v, t); if (r) { r.from = cands[i]; return r; } }
     return null;
@@ -261,6 +268,7 @@
       else if (f.splash) bits.push(L(f.splash.min ? 'splashMin' : 'splash', { n: f.splash.n, d: f.splash.d, v: s.start }));
       else if (ph.length && r.exact) bits.push(String(pre) + ph.map(function (b) { return L((b.amount || 0) < 0 ? 'minus' : 'plus', { label: b.label || '', n: Math.abs(b.amount || 0) }); }).join('') + L('equals', { n: s.start }));
       else bits.push(L(r.exact ? 'start' : 'startOdd', { n: s.start }));
+      if (t.pierce) bits.push(L('pierce')); // 用户 2026-11-15: a crit 穿甲 — no 护甲 step
       if (s.tough) bits.push(L('tough', { n: s.tough }));
       if (s.shield) bits.push(L('shield', { name: name(t.shieldBy), n: s.shield }));
       if (s.block) bits.push(L('block', { n: s.block }));
@@ -303,7 +311,9 @@
       case 'spark': return n.length >= 3 ? L('how.spark', { p: n[1], s: n[2] }) : n.length === 2 ? L('how.spark', { p: n[0], s: n[1] }) : n.length === 1 ? L('how.sparkOne', { p: n[0] }) : null;
       case 'heal': return n.length >= 2 ? L(over ? 'how.healOver' : 'how.heal', { n: n[0], h: n[1] }) : null;
       case 'guard': return n.length >= 4 ? L('how.guardCover', { d: n[0], b: n[1], c: n[2], g: n[3] }) : n.length >= 2 ? L('how.guard', { d: n[0], b: n[1] }) : null;
-      case 'aim': return n.length >= 3 ? L('how.aim', { d: n[0], c: n[2] }) : n.length === 1 ? L('how.aimMax', { c: n[0] }) : null;
+      case 'aim': { var ax = { d: n[0], c: n[2], x: CRIT_XS.filter(function (x) { return Math.floor(n[0] * x) === n[2]; })[0] || CRIT_X }; /* 3 级起暴击穿甲 */
+        if (n.length >= 3) return /\u7a7f\u7532/.test(s) ? L('how.aimPierce', ax) : L('how.aim', ax); }
+        return n.length === 1 ? L('how.aimMax', { c: n[0], x: CRIT_X_MAX }) : null;
       case 'backstab': return n.length >= 2 ? L('how.backstab', { n: n[0], d: n[1] }) : null;
       default: return n.length ? L('how.default', { d: n[0] }) : null;
     }
@@ -336,7 +346,7 @@
   // timing of a together wave (ms at ×1 before the speed factor): each girl's charge starts `chargeGap` after the one who
   // pulled her in (the cascade stays readable), all release together, the hits land `resolveGap` apart in engine order
   var TOGETHER = { chargeGap: 140, resolveGap: 100 };
-  var api = { chainGroups: chainGroups, chainWaves: chainWaves, TOGETHER: TOGETHER, explainAction: explainAction, battleReport: battleReport, howCalc: howCalc, SPLASH_DIV: SPLASH_DIV, blockStart: blockStart, hitBlocks: hitBlocks, eventBlocks: eventBlocks, beatExtras: beatExtras, actionBeats: actionBeats, RISE: RISE, riseTiming: riseTiming, hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
+  var api = { foeChained: foeChained, chainGroups: chainGroups, chainWaves: chainWaves, TOGETHER: TOGETHER, explainAction: explainAction, battleReport: battleReport, howCalc: howCalc, SPLASH_DIV: SPLASH_DIV, blockStart: blockStart, hitBlocks: hitBlocks, eventBlocks: eventBlocks, beatExtras: beatExtras, actionBeats: actionBeats, RISE: RISE, riseTiming: riseTiming, hitNum: hitNum, planRound: planRound, chainEnd: chainEnd, phaseActs: phaseActs, foeLane: foeLane, afterRound: afterRound, dimContent: dimContent, debtsContent: debtsContent, shouldDim: shouldDim };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.RoundPlan = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

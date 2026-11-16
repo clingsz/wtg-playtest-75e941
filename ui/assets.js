@@ -20,7 +20,8 @@
   var ENEMIES = {
     slime: 'slime', goblin: 'goblin-captain', 'goblin-boss': 'goblin-captain', skeleton: 'skeleton-soldier', 'skeleton-archer': 'skeleton-archer',
     ghoul: 'crypt-ghoul', 'gate-guardian': 'stone-gate-guardian', 'tomb-minion': 'masked-spectator-a', 'bandit-officer': 'magic-thieves-officer',
-    'bandit-chief': 'magic-thieves-chief', 'mercenary-blade': 'masked-spectator-b', 'mercenary-archer': 'masked-spectator-a',
+    'bandit-chief': 'magic-thieves-chief', 'bandit-blade': 'magic-thieves-officer', 'bandit-scout': 'magic-thieves-officer', 'bandit-medic': 'magic-thieves-officer', // 2026-11-15 L9 伏击: stand-ins (reuse)
+    'mercenary-blade': 'masked-spectator-b', 'mercenary-archer': 'masked-spectator-a',
     'noble-guard': 'masked-spectator-b', 'masked-champion': 'blank-general',
     'mercenary-guard': 'masked-spectator-b', 'mercenary-priest': 'masked-spectator-a' // 2026-11-14: stand-ins until their own art (art brief: mercenary guard, mercenary priest)
   };
