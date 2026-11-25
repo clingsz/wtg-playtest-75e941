@@ -1,4 +1,4 @@
-// DEV ONLY — fake v2 content for the stub engine (docs/V2-CONTRACT.md). Safe to delete together with stub-engine.js.
+// DEV ONLY — fake v2 content for the stub engine (docs/archive/V2-CONTRACT.md). Safe to delete together with stub-engine.js.
 (function (root) {
   var R = ['tank', 'adc', 'healer', 'mage', 'rogue'];
   var people = [ // id, name, look, skill kind

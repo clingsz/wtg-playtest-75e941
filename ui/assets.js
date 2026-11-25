@@ -1,4 +1,4 @@
-// 《欢迎加入冒险者公会！》 — the asset depot (docs/V2-CONTRACT.md §6, docs/ASSET-DEPOT.md).
+// 《欢迎加入冒险者公会！》 — the asset depot (docs/archive/V2-CONTRACT.md §6, docs/ASSET-DEPOT.md).
 // Every slot returns an ORDERED CANDIDATE LIST of paths (relative to ui/index.html). app.js tries them in order and
 // falls back on load error, so new art lights up just by being dropped into place — no flags, no code changes.
 // A candidate may carry CSS classes after '#', e.g. '../art/portraits/eve.png#masked' (fade the square edges) or
@@ -19,15 +19,47 @@
   // enemy data id → art/cells/enemies/<file>.png
   var ENEMIES = {
     slime: 'slime', goblin: 'goblin-captain', 'goblin-boss': 'goblin-captain', skeleton: 'skeleton-soldier', 'skeleton-archer': 'skeleton-archer',
+    'goblin-archer': 'goblin-captain', 'goblin-priest': 'goblin-captain', 'skeleton-mage': 'skeleton-archer', // 2026-11-16 L2/L3 新敌人: placeholder art (reuse) until their own cells
     ghoul: 'crypt-ghoul', 'gate-guardian': 'stone-gate-guardian', 'tomb-minion': 'masked-spectator-a', 'bandit-officer': 'magic-thieves-officer',
     'bandit-chief': 'magic-thieves-chief', 'bandit-blade': 'magic-thieves-officer', 'bandit-scout': 'magic-thieves-officer', 'bandit-medic': 'magic-thieves-officer', // 2026-11-15 L9 伏击: stand-ins (reuse)
     'mercenary-blade': 'masked-spectator-b', 'mercenary-archer': 'masked-spectator-a',
     'noble-guard': 'masked-spectator-b', 'masked-champion': 'blank-general',
+    'bell-guardian': 'stone-gate-guardian', 'tower-bell': 'stone-gate-guardian', 'split-slime': 'slime', 'goblin-mage': 'goblin-captain', // 2026-11-20 L5 / L7 新敌人 + L2 哥布林法师: placeholder art (reuse) — docs/ART-REQUEST-2026-11-19.md
     'mercenary-guard': 'masked-spectator-b', 'mercenary-priest': 'masked-spectator-a' // 2026-11-14: stand-ins until their own art (art brief: mercenary guard, mercenary priest)
   };
+  // 2026-11-20 美术第一波 (docs/ART-REQUEST-2026-11-20-wave1.md §3.3): these enemies have their own cell now → enemies/<own>.png is
+  // the first candidate, the old stand-in above stays the fallback (OWN_ENEMY_ART = false → the stand-ins only).
+  var OWN_ENEMY_ART = true;
+  var ENEMIES_OWN = { goblin: 'goblin', 'goblin-archer': 'goblin-archer', 'goblin-mage': 'goblin-mage', 'skeleton-mage': 'skeleton-mage', 'bell-guardian': 'bell-guardian',
+    'tower-bell': 'tower-bell', 'split-slime': 'split-slime', 'mercenary-blade': 'mercenary-blade', 'mercenary-archer': 'mercenary-archer' };
   var ROLE_ICON = { tank: 'shield', adc: 'bow', healer: 'chalice', mage: 'staff', rogue: 'dagger' };
   var MOOD_ICON = { '-2': 'mood-minus-2', '-1': 'mood-minus-1', '0': 'mood-neutral', '1': 'mood-plus-1', '2': 'mood-plus-2' };
-  var ITEM_ICON = { potion: 'reward-heart', smoke: 'storm-cloud', drum: 'reward-ribbon', holywater: 'chalice' };
+  var ITEM_ICON = { potion: 'item-potion', smoke: 'item-smoke', drum: 'item-drum', holywater: 'item-holywater', 'potion-big': 'item-potion-big', 'armor-potion': 'item-armor-potion', revive: 'item-revive', 'weak-powder': 'item-weak-powder', 'vuln-potion': 'item-vuln-potion', 'fire-bottle': 'item-fire-bottle' /* 2026-11-25 art request */ }; // 2026-11-20 own icons (was reward-heart / storm-cloud / reward-ribbon / chalice)
+  // 2026-11-20 美术第一波 (docs/ART-REQUEST-2026-11-20-wave1.md §3.5): a card / shop item with its own drawn icon → ui-icons/<id>.png
+  // (relics → ui-icons/relic-<id>.png). Only ids listed here (the files that exist), so nothing can show a broken image; the
+  // others (and everything when ICON_BY_ID is false) keep the old pick-by-type below.
+  var ICON_BY_ID = true;
+  var ID_ICONS = { 'bless-hp': 1, 'bless-atk': 1, 'bless-charge': 1, 'relic-lucky-coin': 1, 'relic-four-leaf': 1,
+    // 2026-11-20 物品图标全套 (art/raw/icons-20261120: two 4×4 grids, cut + keyed): relics, legendary charms, stat cards, shop services, curses
+    'relic-mothers-cord': 1, 'relic-old-badge': 1, 'relic-pocket-watch': 1, 'relic-whetstone-pendant': 1, 'relic-marginalia-book': 1, 'relic-doll-charm': 1,
+    'relic-blade-storm': 1, 'relic-hawk-eye': 1, 'relic-shield-wall': 1, 'relic-holy-spring': 1, 'relic-sear-flame': 1,
+    whetstone: 1, 'padded-cloak': 1, 'iron-ration': 1, marginalia: 1, 'guild-stew': 1,
+    'train-power': 1, 'train-level': 1, 'train-hp': 1, 'treat-mood': 1, 'hot-stew': 1, 'master-lesson': 1,
+    'cracked-blade': 1, 'tomb-chill': 1, 'bad-dream': 1, 'gallery-gaze': 1, 'public-blame': 1,
+    // 2026-11-25 docs/ART-REQUEST-2026-11-25-relics-items-bells.md (art/raw/icons-20261125). NOT 'guild-crest' itself: that file is the guild logo
+    'relic-lucky-charm': 1, 'relic-open-shield': 1, 'relic-short-string': 1, 'relic-turn-ring': 1, 'relic-flint': 1, 'relic-echo-earring': 1,
+    'relic-luck-charm': 1, 'relic-charge-charm': 1, 'relic-arrow-charm': 1, 'relic-war-banner': 1, 'relic-guild-crest': 1, 'relic-dice-cup': 1,
+    'relic-war-horn': 1, 'relic-hunter-mark': 1, 'relic-supply-cart': 1, 'relic-team-luck': 1, 'relic-team-power': 1, 'relic-team-vigor': 1,
+    'relic-bell-refuse': 1, 'relic-bell-rules': 1, 'mask-mark': 1 };
+  // the legendary charms carry a test- id in the shop and a core- id as reward cards: both → relic-<name>
+  var ICON_ALIAS = { 'test-blade-storm': 'relic-blade-storm', 'core-blade-storm': 'relic-blade-storm', 'test-hawk-eye': 'relic-hawk-eye', 'core-hawk-eye': 'relic-hawk-eye',
+    'test-shield-wall': 'relic-shield-wall', 'core-shield-wall': 'relic-shield-wall', 'test-holy-spring': 'relic-holy-spring', 'core-holy-spring': 'relic-holy-spring',
+    'test-sear-flame': 'relic-sear-flame', 'core-sear-flame': 'relic-sear-flame', 'lucky-charm': 'relic-lucky-charm' /* 2026-11-25 own icon (was relic-four-leaf) */,
+    'test-luck-charm': 'relic-luck-charm', 'core-luck-charm': 'relic-luck-charm', 'test-charge-charm': 'relic-charge-charm', 'core-charge-charm': 'relic-charge-charm', 'test-arrow-charm': 'relic-arrow-charm',
+    'team-luck': 'relic-team-luck', 'team-power': 'relic-team-power', 'team-vigor': 'relic-team-vigor',
+    'loot-whetstone': 'whetstone', 'loot-padded-cloak': 'padded-cloak', 'loot-iron-ration': 'iron-ration', 'loot-marginalia': 'marginalia', 'loot-guild-stew': 'guild-stew' };
+  var BELL_ICON_BY_KEY = { refuse: 'relic-bell-refuse', rules: 'relic-bell-rules', bell: 'relic-bell-curious' }; // 2026-11-25b 好奇之铃 new art (relic-bell.png = the old copper bell, kept as the fallback) // 2026-11-25 反抗之铃 / 公正之铃 / 好奇之铃
+  function idIcon(id) { if (!ICON_BY_ID || !id) return null; return ICON_ALIAS[id] || (ID_ICONS[id] ? id : ID_ICONS['relic-' + id] ? 'relic-' + id : null); }
 
   // ---- scenes: v4 ids (art/discussion-v4-scenes.md §2) → old 512px cells as the second candidate ----
   var SCENES = ['title', 'guild-hall-day', 'guild-hall-night', 'guild-desk', 'interview-room', 'stage-01-mill', 'stage-02-forest', 'stage-03-tomb-gate',
@@ -44,10 +76,10 @@
     opening: 'guild-hall-day', advisorAsks: 'guild-desk', leaderPrompt: 'guild-desk', advisorPrompt: 'guild-hall-day', interviewIntro: 'interview-room',
     sealing: 'sealing', sealRefuse: 'sealing', sealAccept: 'sealing', /* batch6 H2-8 (user fix): after the gate slam (its own low-res cine, A.gateArt) → the original 1080p high-gallery scene scenes/sealing.png */ belowTomb: 'stage-06-corridor', /* feedback-1112 #7/#17 */ debuffIntro: 'stage-04-names', sacrificeIntro: 'sacrifice-altar', sacrificeRandomTaken: 'taken', sacrificeRandomTakenOne: 'taken', rejectedReturn: 'stage-06-corridor',
     firstReturn: 'stage-08-arena', secondSacrificeIntro: 'sacrifice-altar', aftermath: 'sacrifice-altar-after', fakeBoss: 'stage-09-tavern',
-    advisorLeaves: 'advisor-gone', finalReveal: 'throne', victory: 'throne-fallen', gameOver: 'game-over',
+    advisorLeaves: 'advisor-gone', finalReveal: 'throne', victory: 'throne-fallen', gameOver: 'game-over', earlyDefeat: 'game-over', /* 2026-11-20 EARLY_DEFEAT_SIMPLE */
     // v2.2
     fairyWelcome: 'guild-hall-day', sacrificeSelf: 'sacrifice-altar', firstReturnSelf: 'stage-08-arena', secondSacrificeIntroSelf: 'sacrifice-altar',
-    bellEvent: 'camp-night', bellFollowed: 'stage-07-corridor-deep', trueDoor: 'throne-fallen', nobleChamber: 'noble-chamber', l11After: 'noble-chamber', trueEnding: 'noble-chamber-broken',
+    bellEvent: 'camp-night', bellFollowed: 'camp-night', /* 2026-11-19 流程修 L1: was stage-07-corridor-deep (spoiled L7 / wrong at L9) */ bellBlessing: 'stage-05-gate', bellBlessingAfter: 'stage-05-gate', /* 2026-11-19 流程修 H4: 小铃's blessing is at the gate, before the walk down */ trueDoor: 'throne-fallen', nobleChamber: 'noble-chamber', l11After: 'noble-chamber', trueEnding: 'noble-chamber-broken',
     normalEnding: 'throne-fallen',
     // feedback-1112 #35/#39: L9 → the door → the throne room; the white room is a scene of its own
     l9Freedom: 'stage-09-tavern', throneRoom: 'throne', throneAdvisor: 'throne', whiteRoom: 'white-room'
@@ -57,7 +89,7 @@
     7: 'stage-07-corridor-deep', 8: 'stage-08-arena', 9: 'stage-09-tavern', 10: 'throne', 11: 'noble-chamber' };
   // between levels (prep) is always a campfire rest, never the next battlefield: act 1 dusk, act 2 the cold crypt, act 3 night
   // 叙事节奏 2026-11-13: L11's night is a campfire too (the noble chamber shows from its scene intro on); march = old saves only
-  function prepScene(v) { if (v.camp && v.camp.march) return LEVEL_SCENE[v.level] || 'throne'; /* feedback-1112 #35: no campfire before L10 */ var a = v.act || 1; return a >= 3 ? 'camp-night' : a === 2 ? 'camp-cold' : 'camp-dusk'; }
+  function prepScene(v) { if (v.camp && v.camp.march) return LEVEL_SCENE[v.level] || 'throne'; /* feedback-1112 #35: no campfire before L10 */ if (v.camp && v.camp.first) return 'guild-hall-day'; /* 2026-11-19 流程修 M6: L1 has no campfire — the formation still at the guild */ var a = v.act || 1; return a >= 3 ? 'camp-night' : a === 2 ? 'camp-cold' : 'camp-dusk'; }
   // 修复 2026-11-13 第二幕首个篝火无背景: every campfire's chain stays campfire art (was: camp-night → the masked gallery cell);
   // the act-1 fire with a cold tint ('#cold', app.js setScene → .bg.cold) is the last campfire resort for the crypt / night camps
   var SCENE_FALLBACK = { 'camp-dusk': ['camp-night.png'], 'camp-cold': ['camp-night.png', 'camp-dusk.png#cold'], 'camp-night': ['camp-cold.png', 'camp-dusk.png#cold'],
@@ -75,7 +107,7 @@
       case 'prep': return prepScene(v);
       case 'battle': case 'battleResult': return LEVEL_SCENE[v.level] || 'stage-01-mill';
       case 'reward': return LEVEL_SCENE[v.level] || 'guild-hall-day';
-      case 'debuff': return 'stage-04-names';
+      case 'debuff': return v.level === 4 ? 'stage-04-names' : LEVEL_SCENE[v.level] || 'stage-04-names'; // 2026-11-19 流程修 M2: L6 / L7 keep their own battlefield
       case 'sacrifice': return 'sacrifice-altar';
       case 'ending': return endingScene(v.summary);
       case 'gameOver': return 'game-over';
@@ -92,6 +124,9 @@
     var o = opts || {}, v = o.variant || 'base';
     if (id === 'leader') {
       var lw = v === 'worn' ? [ALPHA + 'leader-worn.png', PORT + 'leader-worn.png#masked'] : [];
+      // 2026-11-19 小铃战 镜像: the leader's doll — no corrupted leader art is drawn, so leader-<variant>.png first (drop it in
+      // to light it up), then the normal art under the CSS corruption filter
+      if (v === 'vengeful' || v === 'possessed') return [ALPHA + 'leader-' + v + '.png', ALPHA + 'leader.png#cfilter-' + v, PORT + 'leader.png#masked cfilter-' + v];
       return lw.concat([ALPHA + 'leader.png', PORT + 'leader.png#masked']); // → crest placeholder
     }
     if (isFairy(id) || isMerchant(id)) return [ALPHA + id + '.png', PORT + id + '.png#masked'];
@@ -115,9 +150,10 @@
   // nearest drawn one, so the browser never asks for a file that cannot exist. When Codex draws a new expression, add it here.
   var BASE6 = ['calm', 'happy', 'upset', 'sad', 'shock', 'special'];
   var DARK6 = ['vengeful-sneer', 'vengeful-rage', 'vengeful-tears', 'possessed-grin', 'possessed-blank', 'possessed-flash'];
-  var LEADER6 = ['calm', 'happy', 'determined', 'sad', 'shock', 'hollow'];
+  var LEADER6 = ['calm', 'happy', 'determined', 'sad', 'shock', 'hollow', 'upset', 'special']; // 2026-11-24 fix-portraits: + upset / special (Codex)
+  var LEADER_DARK = ['possessed-grin', 'possessed-blank', 'possessed-flash']; // 2026-11-24 fix-portraits: the leader's doll faces (L11 镜·团长)
   var FLUO6 = ['calm', 'happy', 'sly', 'shock', 'sad', 'special'];
-  var LEADER_NEAR = { upset: 'sad', special: 'determined', angry: 'determined', cry: 'sad', smile: 'happy', surprised: 'shock' };
+  var LEADER_NEAR = { angry: 'upset', cry: 'sad', smile: 'happy', surprised: 'shock' }; // 2026-11-24: upset / special drawn now (were → sad / determined)
   function drawn(id) { return isMerchant(id) ? FLUO6 : id === 'leader' ? LEADER6 : isCand(id) ? BASE6.concat(DARK6) : isAdv(id) || isFairy(id) ? BASE6 : []; }
   function near(id, e) {
     var d = drawn(id); if (d.indexOf(e) >= 0) return e;
@@ -133,7 +169,7 @@
     var corrupt = /^(vengeful|possessed)/.exec(e), cv = o.variant === 'vengeful' || o.variant === 'possessed' ? o.variant : corrupt ? corrupt[1] : null;
     if (cv) {
       e = A.corruptExpr(cv, e); // G1 #7: sad → vengeful-tears, upset → vengeful-rage … (was: always the sneer)
-      return (isCand(id) ? [faceFile(id, e)] : []).concat(crop(portrait(id, { variant: cv })));
+      return (isCand(id) || (id === 'leader' && LEADER_DARK.indexOf(e) >= 0) ? [faceFile(id, e)] : []).concat(crop(portrait(id, { variant: cv }))); // the leader has possessed faces too
     }
     var out = drawn(id).length ? [faceFile(id, near(id, e))] : [];
     if (out.length && near(id, e) !== 'calm') out.push(faceFile(id, 'calm'));
@@ -145,7 +181,10 @@
       return (i < 0 ? p : p.slice(0, i)) + '#' + cls.concat('crop').join(' ');
     });
   }
-  function enemy(enemyId) { return [CELLS + 'enemies/' + (ENEMIES[enemyId] || 'blank-general') + '.png', CELLS + 'enemies/blank-general.png']; }
+  function enemy(enemyId) {
+    var own = OWN_ENEMY_ART && ENEMIES_OWN[enemyId], old = [CELLS + 'enemies/' + (ENEMIES[enemyId] || 'blank-general') + '.png', CELLS + 'enemies/blank-general.png'];
+    return own ? [CELLS + 'enemies/' + own + '.png'].concat(old) : old;
+  }
   function scene(id) {
     if (id === 'noble-gallery') return [CELLS + 'moments-16x9/noble-gallery.png#lores', CELLS + 'key-moments/noble-gallery.png#lores', ART + 'scenes/stage-04-names.png']; // batch6 H2-8: 高台 (the only gallery art: low-res moment; the L4 hall with its high gallery as fallback)
     if (id === 'sealing') return [ART + 'scenes/sealing.png']; // batch6 user fix: the story scenes after the slam show the original 1080p high gallery; the slam itself uses A.gateArt (old low-res gate)
@@ -165,7 +204,7 @@
     leaderBadge: function () { return icon('leader-badge'); },
     // v2.3 (art/discussion-v7.md): relic, camp-choice icons and the masked-noble gallery stands. Until Codex delivers them
     // the lists fall through to an existing icon or (nobles) to the caller's dark silhouette.
-    relicIcon: function (id) { return [icon('relic-' + (id || 'bell'))]; },
+    relicIcon: function (id, key) { if ((id || 'bell') === 'bell') return [icon(BELL_ICON_BY_KEY[key] || BELL_ICON_BY_KEY.bell), icon('relic-bell')]; return [icon(idIcon(id) || 'relic-' + (id || 'bell'))]; }, // 2026-11-25: the three bells share id 'bell' — key picks the picture // 2026-11-20 test- / core- charm ids → their relic-<name> icon
     campIcon: function (choice) { return [icon('camp-' + choice), icon({ rest: 'candle', explore: 'key', train: 'reward-sword' }[choice] || 'reward-skill')]; },
     noble: function (x) { return [ALPHA + 'noble-' + x + '.png', PORT + 'noble-' + x + '.png#masked']; },
     nobleFace: function (x, expr) { return [CELLS + 'faces/noble-' + x + '-' + (expr || 'delight') + '.png', CELLS + 'faces/noble-' + x + '-smile.png'].concat(crop([ALPHA + 'noble-' + x + '.png'])); },
@@ -173,6 +212,7 @@
     // reward / debuff card → icon
     cardIcon: function (card, heavy) {
       var e = (card && card.effect) || {}, neg = heavy || (e.delta != null && e.delta < 0);
+      var own = idIcon(card && card.id); if (own) return own; // 2026-11-20 ICON_BY_ID
       if (e.type === 'item') return ITEM_ICON[e.item] || 'reward-ribbon';
       if (e.type === 'stat' && e.stat === 'atk') return neg ? 'broken-sword' : 'reward-sword';
       if (e.type === 'stat' && (e.stat === 'maxHp' || e.stat === 'hp')) return neg ? 'cracked-heart' : 'reward-heart';
@@ -187,7 +227,7 @@
   // feedback-1113 (3rd batch) #4: every art URL carries ?v=ART_V. The dev server (python http.server) sends no Cache-Control,
   // so Chrome kept serving the old portraits from its heuristic cache after Codex replaced the files. Bump ART_V whenever
   // art is redrawn; the '#classes' suffix of a candidate stays after the query.
-  var ART_V = '20261114f'; // f: 芙洛 (fluo) portrait + faces · (was '20261114w': resized WebP copies in art/web/ (tools/make-web-art.mjs) put in front of the originals)
+  var ART_V = '20261125b'; // b: 好奇之铃新图 relic-bell-curious · (was '20261125a') a: 27 个新物品图标（遗物 / 道具 / 护符 / 全队道具 / 两个铃 / 面具印记，art/raw/icons-20261125） · (was '20261120d') d: 31 个物品图标（4 道具、6 信物、5 护符、11 加属性卡 / 商店服务、5 诅咒卡；ui-icons，网格原图 art/raw/icons-20261120） · (was '20261120c') c: 9 张新杂兵按女主角头像的画风重画成上半身 (浅暖灰底；1254 原图在 art/raw/enemies-20261120-heroine-style，旧图备份 art/backup-20261120/enemies) · (was '20261120a') a: 美术第一波 (docs/ART-REQUEST-2026-11-20-wave1.md: 9 enemies, 3 status, 5 card / relic icons) · (was '20261114f': 芙洛 (fluo) portrait + faces) · (was '20261114w': resized WebP copies in art/web/ (tools/make-web-art.mjs) put in front of the originals)
   // (was '20261113c': batch6 H2-8 高台 scene, H2-12/15 advisor enemy art)
   // (was '20261113b': v9 layered fairy animation, art/portraits/anim/)
   function ver(p) { if (typeof p !== 'string' || !/^\.\.\/(art|godot)\//.test(p) || p.indexOf('?') >= 0) return p; var i = p.indexOf('#'); return i < 0 ? p + '?v=' + ART_V : p.slice(0, i) + '?v=' + ART_V + p.slice(i); }
@@ -218,7 +258,7 @@
   // app.js preloads every layer and only swaps the static portrait for the layers once all of them loaded — any failure keeps
   // (or puts back) the static fairy.png, so a wingless half-fairy never shows.
   var FAIRY_ANIM = {
-    fairy: { durations: [70, 70, 70, 70, 70, 70] },               // 420ms a beat, light
+    fairy: { durations: [70, 70, 70, 70, 70, 70], sad: true },    // 420ms a beat, light · sad: 2026-11-25 face-sad + blink-sad-01/02 (expr 'sad')
     'fairy-demon': { durations: [140, 130, 130, 140, 130, 130] }  // 800ms, slow and heavy
   };
   function fairyAnim(id) {
@@ -226,11 +266,12 @@
     var dir = PORT + 'anim/' + id + '/', n = function (i) { return (i < 10 ? '0' : '') + i; }, w = [], i;
     for (i = 1; i <= 6; i++) w.push(dir + 'wings-' + n(i) + '.png');
     var body = dir + 'body.png', blink = [dir + 'blink-01.png', dir + 'blink-02.png'];
+    var sad = f.sad ? [dir + 'face-sad.png'] : [], sadBlink = f.sad ? [dir + 'blink-sad-01.png', dir + 'blink-sad-02.png'] : []; // 2026-11-25 小铃 伤心脸
     // the layers are one set (one canvas): all web copies, or all originals — never a mix of two scales
-    var px = function (p) { return ver(useWeb ? webOf(p) : p); }, useWeb = w.concat([body], blink).every(function (p) { return !!webOf(p); });
-    w = w.map(px); body = px(body); blink = blink.map(px);
-    return { id: id, wings: w, body: body, blink: blink, durations: f.durations.slice(),
-      cycle: f.durations.reduce(function (a, b) { return a + b; }, 0), all: w.concat([body], blink) };
+    var px = function (p) { return ver(useWeb ? webOf(p) : p); }, useWeb = w.concat([body], blink, sad, sadBlink).every(function (p) { return !!webOf(p); });
+    w = w.map(px); body = px(body); blink = blink.map(px); sad = sad.map(px); sadBlink = sadBlink.map(px);
+    return { id: id, wings: w, body: body, blink: blink, sad: sad[0] || null, sadBlink: sadBlink, durations: f.durations.slice(),
+      cycle: f.durations.reduce(function (a, b) { return a + b; }, 0), all: w.concat([body], blink, sad, sadBlink) };
   }
   // which wing frame (1..6) shows t ms into the loop
   function fairyFrameAt(id, t) {
@@ -250,8 +291,9 @@
     var a = fairyAnim(id); if (!a) return '';
     var img = function (src, c) { return '<img class="fa-l ' + c + '" src="' + escA(src) + '" alt="" draggable="false">'; };
     return '<span class="fanim ' + escA(cls || '') + '" data-fa="' + escA(id) + '" data-f="1" data-b="0" role="img" aria-label="' + escA(alt || '') + '">' +
-      a.wings.map(function (s, i) { return img(s, 'fa-w fa-w' + (i + 1)); }).join('') + img(a.body, 'fa-body') +
-      a.blink.map(function (s, i) { return img(s, 'fa-k fa-k' + (i + 1)); }).join('') + '</span>';
+      a.wings.map(function (s, i) { return img(s, 'fa-w fa-w' + (i + 1)); }).join('') + img(a.body, 'fa-body') + (a.sad ? img(a.sad, 'fa-sad') : '') +
+      a.blink.map(function (s, i) { return img(s, 'fa-k fa-k' + (i + 1)); }).join('') +
+      a.sadBlink.map(function (s, i) { return img(s, 'fa-ks fa-ks' + (i + 1)); }).join('') + '</span>';
   }
   // state: undefined (not tried) / 'pending' / 'ok' (every layer loaded) / 'bad' (any layer failed) → layers only when 'ok'
   function fairyUseLayers(id, state) { return !!FAIRY_ANIM[id] && state === 'ok'; }
@@ -403,7 +445,7 @@
     });
     return out;
   };
-  // ===== 第五批反馈 G1 (docs/SPEC-2026-11-13-rules-and-terms.md「G1 完成记录」; tests/g1-ui.test.cjs) =====
+  // ===== 第五批反馈 G1 (docs/archive/SPEC-2026-11-13-rules-and-terms.md「G1 完成记录」; tests/g1-ui.test.cjs) =====
   // a centred (translate -50%) box of width w at centre x, kept m px inside a W-wide stage
   A.clampX = function (x, w, W, m) { m = m == null ? 16 : m; W = W || 1920; var lo = m + w / 2, hi = W - m - w / 2; return lo > hi ? W / 2 : Math.min(hi, Math.max(lo, x)); };
   // G1 #2 the 「加成！ / 加成 ×N」 tag beside the charge orb: left of the orb (centre ax − 175) when it fits, else on the
@@ -531,6 +573,8 @@
     flame: '<path d="M12.2 2c.6 3.6 5.8 6.1 5.8 11.3A6 6 0 0 1 12 19.5a6 6 0 0 1-6-6.2c0-2.6 1.3-4.3 2.8-5.6.1 1.9.9 3.1 2.2 3.6-.6-3.4.3-6.6 1.2-9.3z"/><path style="fill:var(--holec);stroke:var(--holes,none)" d="M12 18.2a2.6 2.6 0 0 1-2.6-2.7c0-1.6 1.4-2.6 2.2-4 .5 1.8 3 2.4 3 4.2a2.6 2.6 0 0 1-2.6 2.5z"/>',
     bolt: '<path d="M13.6 1.8L4.2 13.6h6.4l-1.3 8.6 9.5-12.1h-6.5z"/>',
     block: '<path d="M12 2.2l8.2 3v6.2c0 5-3.6 9-8.2 10.9-4.6-1.9-8.2-5.9-8.2-10.9V5.2z"/>',
+    // 2026-11-20 幸运 (LUCK_STAT): a four-leaf clover — four round leaves and a curled stem, no letters
+    luck: '<circle cx="8.6" cy="7.6" r="3.9"/><circle cx="15.4" cy="7.6" r="3.9"/><circle cx="8.6" cy="14.4" r="3.9"/><circle cx="15.4" cy="14.4" r="3.9"/><path d="M12 11.5c.4 4.2 1.8 7.6 4.6 10.2" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round"/>',
     weak: '<path d="M15.5 2.5l-.5 3.4-5.6 5.6-2-2 5.6-5.6zM4.6 10.3l4.2 4.2-1.2 1.2-1-.8-2 2a1.3 1.3 0 0 1-1.9-1.9l2-2-.8-1z"/><path d="M17.5 12.5v6.2h-2.6l3.9 4 3.9-4h-2.6v-6.2z"/>',
     tough: '<path d="M12 2.2l8.2 3v6.2c0 5-3.6 9-8.2 10.9-4.6-1.9-8.2-5.9-8.2-10.9V5.2z"/><path style="fill:var(--holec);stroke:var(--holes,none)" d="M10.6 7.5h2.8v3.2h3.2v2.8h-3.2v3.2h-2.8v-3.2H7.4v-2.8h3.2z"/>',
     bonus: '<path d="M9.3 16.9l-1.4 1.4a3.4 3.4 0 0 1-4.8-4.8l3.2-3.2a3.4 3.4 0 0 1 4.8 0l.9.9-1.7 1.7-.9-.9a1 1 0 0 0-1.4 0l-3.2 3.2a1 1 0 0 0 1.4 1.4l1.4-1.4zM14.7 7.1l1.4-1.4a3.4 3.4 0 0 1 4.8 4.8l-3.2 3.2a3.4 3.4 0 0 1-4.8 0l-.9-.9 1.7-1.7.9.9a1 1 0 0 0 1.4 0l3.2-3.2a1 1 0 0 0-1.4-1.4l-1.4 1.4z"/><path d="M8.6 13.7l5.1-5.1 1.7 1.7-5.1 5.1z"/>',
@@ -541,12 +585,15 @@
     note: '<path d="M9 4.5l11-2.2v12.6a3 3 0 1 1-2.2-2.9V7.2L11.2 8.5v8.6a3 3 0 1 1-2.2-2.9z"/>',
     bubble: '<path d="M12 3c5.2 0 9.2 3.4 9.2 7.6S17.2 18.2 12 18.2c-.9 0-1.8-.1-2.6-.3L4.6 21l1.3-4.4C4 15.2 2.8 13 2.8 10.6 2.8 6.4 6.8 3 12 3z"/><path style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" d="M8.3 10.6q3.7 3.8 7.4 0"/>',
     daze: '<circle cx="12" cy="12" r="9.5"/><path style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" d="M12 12.2c0-.9.7-1.4 1.4-1.2.9.2 1.3 1.2.9 2.1-.6 1.2-2.3 1.4-3.3.6-1.3-1-1.3-3-.1-4.2 1.5-1.5 4-1.3 5.3.3 1.5 1.8 1.1 4.6-.8 6"/>',
+    // 2026-11-15 充能 (gives: a bolt with an arrow going out) / 蓄能 (takes more: a small battery with an arrow coming in)
+    charge: '<path d="M10.6 1.8L3 11.6h5.2l-1.1 7.2 7.7-10h-5.3z"/><path d="M15.2 13.6h4.4v-2.8l4.2 4.6-4.2 4.6v-2.8h-4.4z"/>',
+    store: '<path d="M9.5 5.5h7v-1.8h3v1.8h1.2a1.3 1.3 0 0 1 1.3 1.3v13.4a1.3 1.3 0 0 1-1.3 1.3h-11.2a1.3 1.3 0 0 1-1.3-1.3V6.8a1.3 1.3 0 0 1 1.3-1.3z"/><path style="fill:var(--holec);stroke:var(--holes,none)" d="M11.2 15.6h6.6v3.6h-6.6zM11.2 10.8h6.6v3.6h-6.6z"/><path d="M.8 10.6h3.6V7.9l3.8 4.2-3.8 4.2v-2.7H.8z"/>',
     coin: '<circle cx="12" cy="12" r="9.5"/><circle style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" cx="12" cy="12" r="6.3"/><path style="fill:none;stroke:var(--fxc);stroke-width:var(--fxw,1.8);stroke-linecap:round" d="M10 9.5l2-1.6 2 1.6M10 14.5l2 1.6 2-1.6"/>'
   };
   var POWER_GLYPH = 'bolt'; // 威力 (user 2026-11-14: bolt; also burst · star · flame) — not a sword: 威力 also sizes heals and 护甲
   var MOOD_GLYPH = 'face'; // 心情: still being chosen (face · sun · flower · note · bubble) — one switch
   // icon name → the keyword (keywords.json terms) whose tip it shows; every name here must have a glyph
-  A.GLYPHS = { hp: 'hp', maxhp: 'hp', /* its own tip: ui.json glyph.tip.maxhp */ mood: 'mood', power: 'power', block: 'block', weak: 'weak', tough: 'tough', bonus: 'bonus', level: 'level', cover: 'cover', coin: 'coin', daze: 'daze' };
+  A.GLYPHS = { hp: 'hp', maxhp: 'hp', /* its own tip: ui.json glyph.tip.maxhp */ mood: 'mood', power: 'power', block: 'block', weak: 'weak', tough: 'tough', bonus: 'bonus', level: 'level', cover: 'cover', coin: 'coin', daze: 'daze', charge: 'bonus', store: 'bonus', luck: 'luck' /* 2026-11-20 幸运 */ };
   var glyphPath = function (n) { return n === 'power' ? GLYPH_PATHS[POWER_GLYPH] : n === 'mood' ? GLYPH_PATHS[MOOD_GLYPH] : GLYPH_PATHS[n]; };
   // 2026-11-14 试玩 #6: 生命 / 生命上限 tell the two hearts apart in their tips (ui.json glyph.tip.*, before the keyword's own tip)
   var GLYPH_UI_TIP = { hp: 'ui.glyph.tip.hp', maxhp: 'ui.glyph.tip.maxhp' };
@@ -583,9 +630,19 @@
   };
   A.ICON_TOKEN = /\{i:([a-z]+)\}/g;
   A.iconize = function (html) { return String(html == null ? '' : html).replace(A.ICON_TOKEN, function (m, n) { return A.GLYPHS[n] ? A.glyph(n) : m; }); };
-  A.stripIcons = function (s) { return String(s == null ? '' : s).replace(A.ICON_TOKEN, ''); }; // plain-text contexts (tips, logs)
+  A.KW_TOKEN = /\{k:([a-zA-Z-]+)\}/g; // 2026-11-19 user: a keyword inside card text gets its own tip, e.g. {k:sear} → 灼烧 (keywords.json terms)
+  function kwTerm(n) { var K = root.CHOOSER_DATA && root.CHOOSER_DATA.keywords; return (K && K.terms && K.terms[n]) || null; }
+  A.kwLabel = function (s) { return String(s == null ? '' : s).replace(A.KW_TOKEN, function (m, n) { var t = kwTerm(n); return t ? t.label : m; }); };
+  A.kwMarkup = function (html) {
+    return String(html == null ? '' : html).replace(A.KW_TOKEN, function (m, n) {
+      var t = kwTerm(n); if (!t) return m;
+      var tip = String(t.tip || '').replace(/[&<>"']/g, '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      return '<b class="kw" data-rich="' + tip.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">' + t.label + '</b>';
+    });
+  };
+  A.stripIcons = function (s) { return A.kwLabel(String(s == null ? '' : s).replace(A.ICON_TOKEN, '')); }; // plain-text contexts (tips, logs)
   A.skillMarkup = function (html, vars) {
-    var s = A.iconize(html);
+    var s = A.kwMarkup(A.iconize(html));
     s = s.replace(/\*\*(.+?)\*\*/g, function (_, x) { return NUMLIKE.test(x) ? '<b class="sk-num">' + x + '</b>' : '<b>' + x + '</b>'; });
     if (vars) s = s.replace(/\{(\w+)\}/g, function (m, k) { return vars[k] != null && vars[k] !== '' ? '<b class="sk-num">' + String(vars[k]).replace(/[&<>"']/g, '') + '</b>' : m; });
     return s;
@@ -595,11 +652,12 @@
   // already at the top, which is how the line went missing). Returns { eff, flavor }: eff uses the **数字** rule (feed it
   // to richText / skillMarkup), flavor is the rest of the text. eff is never empty for a card with an effect or text.
   var EFF_STAT = { atk: 'ui.stat.atk', maxHp: 'ui.stat.maxHp', hp: 'ui.stat.hp', skillLv: 'ui.stat.skillLv', skillPower: 'ui.stat.skillLv' }; // text keys (looked up when used)
-  var EFF_ICON = { atk: 'power', maxHp: 'hp', hp: 'hp', skillLv: 'level', skillPower: 'level' };
+  var EFF_ICON = { atk: 'power', maxHp: 'hp', hp: 'hp', skillLv: 'level', skillPower: 'level', luck: 'luck' /* 2026-11-24 名单上的梦: 幸运 −2 had no icon */ };
   A.effLine = function (e) {
     if (!e) return '';
     if (e.text) return String(e.text);
     if (e.type === 'skillUp') return A.t('ui.effect.iconLine', { icon: '{i:level}', sign: '+', n: 1 });
+    if (e.type === 'xp') return A.t('ui.effect.statLine', { stat: A.t('ui.stat.xp'), sign: '+', n: +e.n || 0 }); // 2026-11-16 经验
     var d = +e.delta || 0, ic = e.type === 'mood' ? 'mood' : EFF_ICON[e.stat];
     if (ic) return A.t('ui.effect.iconLine', { icon: '{i:' + ic + '}', sign: d < 0 ? '−' : '+', n: Math.abs(d) }); // 2026-11-14: icon + number, the word lives in the tip
     var n = EFF_STAT[e.stat] ? A.t(EFF_STAT[e.stat]) : e.stat || '';
@@ -610,7 +668,9 @@
     var c = card || {}, text = String(c.text || '').trim(), e = c.effect, eff = '', flavor = text;
     var leader = '', lm = text.match(new RegExp(A.t('ui.cardFace.leaderNoteRe'))); // 「（给团长：…）」 belongs to the effect line
     if (lm) { leader = lm[0].replace(/^[（(]|[）)]\s*$/g, ''); flavor = text.slice(0, lm.index).trim(); }
-    var structured = e && (e.type === 'stat' || e.type === 'mood' || e.type === 'skillUp') ? A.effLine(e) : '';
+    var structured = e && (e.type === 'stat' || e.type === 'mood' || e.type === 'skillUp' || e.type === 'xp') ? A.effLine(e) : ''; // 2026-11-18: training cards are xp now
+    if (structured && c.extra) structured += A.t('ui.cardFace.effJoin') + A.effLine(c.extra); // 夸她 / 加餐: 经验 +3 and 心情 +1
+    if (structured && e && e.type === 'stat' && e.mood) structured += A.t('ui.cardFace.effJoin') + A.effLine({ type: 'mood', delta: e.mood }); // 2026-11-24 用户「难吃的口粮没有减心情的介绍」: the side cost (CARD_SIDE_MOOD) on the effect line
     if (structured) { // the data text may open with the same effect: 「攻击 +1。铁匠铺…」 — drop that sentence from the flavour
       eff = structured;
       flavor = flavor.replace(new RegExp(A.t('ui.cardFace.statSentenceRe')), '');
@@ -644,6 +704,19 @@
     var scale = 1 + (reduced ? 0.04 : SAC_CONFIRM.scaleMax - 1) * e, rot = reduced ? 0 : Math.sin((+now || 0) / SAC_CONFIRM.swayPeriod) * SAC_CONFIRM.swayDeg * e;
     var dark = Math.round(SAC_CONFIRM.darkMax * e * 1000) / 1000;
     return { t: t, scale: scale, dark: dark, rot: rot, transform: 'scale(' + scale.toFixed(4) + ') rotate(' + rot.toFixed(3) + 'deg)' };
+  };
+  // 2026-11-19 交给规则·老虎机: the highlight frame jumps card to card (left → right, cycling), fast then slowing (ease-out),
+  // and lands on the card the engine already picked. Pure timing: [{ index, delayMs }] — delayMs = the wait before that jump
+  // lights up (non-decreasing). The last entry is always targetIndex. SAC_SPIN_LOCK = the hold / pulse on the landed card.
+  A.SAC_SPIN_LOCK = 300;
+  A.spinPlan = function (n, targetIndex, reduced, startIndex) {
+    n = Math.max(1, Math.floor(n) || 1);
+    var t = Math.min(n - 1, Math.max(0, Math.floor(targetIndex) || 0)), s = Math.min(n - 1, Math.max(0, Math.floor(startIndex) || 0));
+    var minJ = reduced ? Math.min(4, n + 1) : Math.max(15, 3 * n + 3), lo = reduced ? 80 : 60, hi = reduced ? 220 : 500, pw = reduced ? 1 : 2.2;
+    var J = minJ; while ((s + J - 1) % n !== t) J++;
+    var out = [];
+    for (var k = 0; k < J; k++) { var f = J > 1 ? k / (J - 1) : 1; out.push({ index: (s + k) % n, delayMs: Math.round(lo + (hi - lo) * Math.pow(f, pw)) }); }
+    return out;
   };
   A.sacBreakPlan = function (reduced) {
     var p = reduced ? { fadeMs: 400, holdMs: 0, shatterMs: 0, blackMs: 100, fadeInMs: 400 } : { fadeMs: 450, holdMs: 250, shatterMs: 650, blackMs: 250, fadeInMs: 600 };
@@ -746,10 +819,108 @@
       comboName: pick('comboName') || combo.name || '', comboText: pick('bonusText') || combo.text || '',
       keepsakes: toks.map(function (name) {
         var c = cards.filter(function (x) { return x && x.effect && x.effect.type === 'token' && x.effect.tokenName === name; })[0];
-        return { name: name, text: c ? c.text || '' : '' };
+        return { name: name, text: c ? c.text || '' : '', icon: c ? A.icon(A.cardIcon(c)) : null }; // 2026-11-25: her keepsake's picture (no card found → none)
       }),
       statuses: (pick('statuses') || []).slice()
     };
+  };
+  // ---- 2026-11-19 路线图 (battle route map): pure parts. The picture art/scenes/route-map.png carries NO text and no markers;
+  // nodes, path, labels and the party marker are drawn by app.js on top. x / y are fractions of the 16:9 picture.
+  // level 0 = the guild (start). L10 (throne) and L11 (the noble chamber, true route) stay hidden until the party reaches them.
+  var ROUTE_NODES = [
+    { level: 0, key: 'guild', x: 0.132, y: 0.802 },
+    { level: 1, key: 'mill', x: 0.152, y: 0.446 },
+    { level: 2, key: 'forest', x: 0.287, y: 0.654 },
+    { level: 3, key: 'tomb-gate', x: 0.440, y: 0.292 },
+    { level: 4, key: 'floor-1', x: 0.568, y: 0.260 },
+    { level: 5, key: 'stone-gate', x: 0.682, y: 0.330 },
+    { level: 6, key: 'corridor', x: 0.813, y: 0.393 },
+    { level: 7, key: 'corridor-deep', x: 0.634, y: 0.478 },
+    { level: 8, key: 'arena', x: 0.478, y: 0.563 },
+    { level: 9, key: 'tavern', x: 0.652, y: 0.685 },
+    { level: 10, key: 'throne', x: 0.861, y: 0.850, hidden: true },
+    { level: 11, key: 'secret', x: 0.933, y: 0.574, hidden: true }
+  ];
+  var ROUTE_CP = [3, 5, 8]; // enemy-curve checkpoints when the scenario does not list its own anchors
+  A.ROUTE_NODES = ROUTE_NODES;
+  A.routeArt = function () { return withWeb([ART + 'scenes/route-map.png']).map(ver); }; // registered like the scenes (web copy first when listed, ?v=ART_V)
+  A.routeCheckpoints = function (scenario) {
+    var an = scenario && scenario.enemyCurve && scenario.enemyCurve.anchors, ks = an ? Object.keys(an).map(Number).filter(function (n) { return n > 0; }) : [];
+    return ks.length ? ks.sort(function (a, b) { return a - b; }) : ROUTE_CP.slice();
+  };
+  // the nodes the map shows for a run standing at `level` (prep for level N: the party camps at node N, its next fight).
+  // reached = the deepest level ever reached (defaults to level). Each node: { level, key, x, y, state: done|current|upcoming, cp }
+  A.routeNodes = function (level, o) {
+    o = o || {}; var cur = Math.max(0, level | 0), reached = Math.max(cur, o.reached | 0), cps = o.checkpoints || ROUTE_CP;
+    return ROUTE_NODES.filter(function (n) { return !n.hidden || n.level <= reached; }).map(function (n) {
+      return { level: n.level, key: n.key, x: n.x, y: n.y, hidden: !!n.hidden, cp: cps.indexOf(n.level) >= 0,
+        state: n.level < cur ? 'done' : n.level === cur ? 'current' : 'upcoming' };
+    });
+  };
+  // the hidden nodes still under fog for this run (the map draws mist over their spot)
+  A.routeFogged = function (level, o) {
+    var reached = Math.max(level | 0, (o && o.reached) | 0);
+    return ROUTE_NODES.filter(function (n) { return n.hidden && n.level > reached; }).map(function (n) { return n.key; });
+  };
+  function routeNode(lv) { for (var i = 0; i < ROUTE_NODES.length; i++) if (ROUTE_NODES[i].level === lv) return ROUTE_NODES[i]; return null; }
+  // should the move play when prep for `level` opens? lastShown = the level whose move was shown last for this run (or null)
+  A.routeWants = function (level, lastShown) { var l = level | 0; return l >= 2 && !!routeNode(l) && !!routeNode(l - 1) && (lastShown == null || lastShown < l); };
+  // the move from node `from` to node `to`: { from, to, pts: [{x,y}], ms, jump, fog, reveal }. reduced motion → jump (ms 0).
+  // o.seen = the deepest level the map was shown at (default from): fog = what was still hidden then, reveal = what this move uncovers
+  A.routeAnimPlan = function (from, to, o) {
+    o = o || {}; var a = routeNode(from), b = routeNode(to); if (!a || !b || from === to) return null;
+    var pts = [{ x: a.x, y: a.y }, { x: b.x, y: b.y }], len = A.routeLen(pts);
+    var ms = o.reduced ? 0 : Math.round(Math.max(1500, Math.min(2500, 1500 + len * 2600)));
+    var fog = A.routeFogged(Math.min(from, o.seen != null ? o.seen : from)), still = A.routeFogged(to);
+    return { from: from, to: to, pts: pts, ms: ms, jump: !!o.reduced, fog: fog, reveal: fog.filter(function (k) { return still.indexOf(k) < 0; }) };
+  };
+  // ---- 2026-11-19 路线图 v2 (user: 「路线动画好难看」): no party marker, no walk. The map shows; the path from the last place to
+  // the new one draws itself in ink; the new place lights up; one tap enters. Pure parts below; app.js routePlay2 / routeOpen2.
+  // 2026-11-19 路线图 v2: a hand-drawn ink path a → b in the 1920×1080 picture space: one gentle quadratic bow (side alternates
+  // by the target level, so a chain of segments wanders like a pen line instead of a ruler line)
+  A.routeInkPath = function (a, b) {
+    var ax = a.x * 1920, ay = a.y * 1080, bx = b.x * 1920, by = b.y * 1080, dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy) || 1;
+    var side = ((b.level | 0) % 2 ? 1 : -1), off = Math.min(70, d * 0.14) * side;
+    var cx = (ax + bx) / 2 - dy / d * off, cy = (ay + by) / 2 + dx / d * off, f = function (v) { return v.toFixed(1); };
+    return 'M' + f(ax) + ' ' + f(ay) + ' Q' + f(cx) + ' ' + f(cy) + ' ' + f(bx) + ' ' + f(by);
+  };
+  // 2026-11-19 路线图 v2: the reveal before a new campfire. { from, to, seg: { from, to, d }, highlight (node key), fog (hidden
+  // at the start), reveal (uncovered now: the fog clears first, then the path draws), hidden (still hidden at the end),
+  // t: { fog, drawAt, drawMs, glowAt, hintAt } ms from the moment the decoded map shows, focusX (portrait centring), reduced }
+  A.routeRevealPlan = function (from, to, o) {
+    o = o || {}; var base = A.routeAnimPlan(from, to, { seen: o.seen }); if (!base) return null;
+    var a = routeNode(from), b = routeNode(to), rv = base.reveal.length > 0, len = A.routeLen(base.pts);
+    var drawMs = Math.max(620, Math.min(850, Math.round(560 + len * 1200))), drawAt = rv ? 550 : 200;
+    var t = o.reduced ? { fog: 0, drawAt: 0, drawMs: 0, glowAt: 0, hintAt: 0 } : { fog: rv ? 600 : 0, drawAt: drawAt, drawMs: drawMs, glowAt: drawAt + drawMs - 150, hintAt: drawAt + drawMs + 200 };
+    return { from: from, to: to, seg: { from: from, to: to, d: A.routeInkPath(a, b) }, highlight: b.key, fog: base.fog, reveal: base.reveal,
+      hidden: A.routeFogged(to), t: t, focusX: (a.x + b.x) / 2, reduced: !!o.reduced };
+  };
+  // 2026-11-19 路线图 v2: portrait (the stage turned upright): the board is the picture at full height, wider than the view;
+  // the left offset (px) that centres focus x (0..1), clamped so the picture always covers the view
+  A.routeShift = function (fx, viewW, boardW) { if (!(boardW > viewW)) return 0; return Math.round(Math.max(viewW - boardW, Math.min(0, viewW / 2 - fx * boardW))); };
+  A.routeLen = function (pts) { var s = 0; for (var i = 1; i < pts.length; i++) s += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); return s; };
+  // where the marker is at t ∈ [0, 1] (eased, along the polyline by length)
+  A.routePointAt = function (pts, t) {
+    if (!pts || !pts.length) return null; var e = A.tfEase(t), total = A.routeLen(pts), want = e * total;
+    for (var i = 1; i < pts.length; i++) {
+      var d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      if (want <= d || i === pts.length - 1) { var k = d ? Math.min(1, want / d) : 1; return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k }; }
+      want -= d;
+    }
+    return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
+  };
+  // 2026-11-19 用户亲测 界面 战报: the small 经验 bar of one result row. x = the engine's xpInfo after the battle (xp, xpLvStart,
+  // xpNext, maxed, overStart / overNext), gain = this battle's +经验 → { pct: the part she had before, add: the part just gained }
+  // in % of her current level (a level-up starts the bar again from the new level). null = no xp info
+  A.xpSpan = function (x, gain) {
+    if (!x || x.xp == null) return null;
+    var over = !!x.maxed && x.overStart != null;
+    if (x.maxed && !over) return { pct: 100, add: 0 };
+    var st = over ? x.overStart : x.xpLvStart, nx = over ? x.overNext : x.xpNext;
+    if (st == null || nx == null) return null;
+    var span = Math.max(1, nx - st), now = Math.max(0, Math.min(span, x.xp - st)), g = Math.max(0, Math.min(now, +gain || 0));
+    var a = Math.round((now - g) * 100 / span), b = Math.round(now * 100 / span);
+    return { pct: a, add: b - a };
   };
   // i18n (docs/I18N.md): the one lookup lives in the engine; A.t / T() only delegate (engine.js loads after this file)
   A.t = function (k, v) { var f = (root.ChooserEngine && root.ChooserEngine.t) || root.T || nodeT(); return f ? f(k, v) : k; }; // root.T: the real engine's, even under ?stub

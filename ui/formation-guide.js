@@ -1,4 +1,4 @@
-// Formation guide (docs/DESIGN-2026-11-14-formation-guide.md): the first time the player reaches the formation
+// Formation guide (docs/archive/DESIGN-2026-11-14-formation-guide.md): the first time the player reaches the formation
 // screen, the advisor asks whether to explain it; on yes, a few small diagram + one-sentence pages.
 // Self-contained: renders its own overlay inside #stage (stage px), never touches #modal or app.js state.
 // Every visible word comes from data/text/<locale>/ui.json via t() (keys ui.fguide.*); diagrams are inline SVG.

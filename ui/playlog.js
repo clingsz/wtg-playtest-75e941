@@ -62,6 +62,7 @@
     if (nv.level && nv.level !== (pv && pv.level)) out.push({ k: 'levelStart', lv: nv.level });
     (nv.events || []).forEach(function (e) {
       if (e && e.kind === 'sacrifice') out.push(clean({ k: 'sacrifice', mode: small(e.mode), ids: small(e.ids) }));
+      if (e && e.kind === 'hirePay') out.push(clean({ k: 'hirePay', id: small(e.id), price: num(e.price), gold: num(e.gold) })); // 2026-11-20 招人花钱: one per hire
       if (e && e.kind === 'shopBuy') out.push(clean({ k: 'shopBuy', lv: num(e.level), item: small(e.itemId), to: small(e.target), price: num(e.price), gold: num(e.gold) })); // 2026-11-14 芙洛的店: one per purchase
     });
     var pk = (pv && pv.keys) || {}, nk = nv.keys || {};
@@ -132,6 +133,18 @@
       }
       return s;
     }
+    // 2026-11-19 本地自动存 playlog (user: 「每次自己亲自测试 你都得记下来我最近的playlog」): on a local dev host only,
+    // also POST the log to the dev server (tools/dev-server.py writes logs/playlog/). Silent when the server has no sink.
+    // 2026-11-20 用户「每过一关自动存，存一个folder里（按时间分）」: devSink(s, tag) posts only when tagged (a level change /
+    // run end, see api.devSave); every host except the public site (github.io / file:) — the old localhost-only check never fired.
+    var luSent = false; // the lineup records go out on the page's first save and on every 出发 only (they change only then; ~2 MB)
+    var DEV_SNAP = true; // 2026-11-21: the local save files carry the run + lineup records (false = old: the log only)
+    function devSink(s, tag) {
+      try {
+        var loc = root.location; if (!tag || !loc || !root.fetch || !/^https?:$/.test(loc.protocol) || /github\.io$/.test(loc.hostname)) return;
+        root.fetch('/__playlog?tag=' + encodeURIComponent(tag), { method: 'POST', body: s, headers: { 'Content-Type': 'application/json' } }).catch(function (e) { try { root.console && root.console.warn('playlog sink', e); } catch (e2) { /* */ } });
+      } catch (e) { /* */ }
+    }
     function flush() {
       if (!on || !st || writing) { if (writing) stats.skipped++; return false; }
       if (timer && o.clearTimeout) { try { o.clearTimeout(timer); } catch (e) { /* */ } }
@@ -148,11 +161,26 @@
     function flushSoon() { if (flushMs > 0 && now() - lastWrite < FLUSH_MIN) { dirty(); return false; } return flush(); }
     function findRun(seed) { for (var i = log.runs.length - 1; i >= 0; i--) if (log.runs[i].seed === seed) return log.runs[i]; return null; }
     function newRun(r) { log.runs.push(r); if (log.runs.length > RUNS_MAX) { var c = log.runs.length - RUNS_MAX; log.runs.splice(0, c); log.dropped = (log.dropped || 0) + c; } }
-    function guard(fn) { return function (a, b, c) { if (!on) return undefined; try { return fn(a, b, c); } catch (e) { return undefined; } }; }
+    function guard(fn) { return function () { if (!on) return undefined; try { return fn.apply(null, arguments); } catch (e) { return undefined; } }; } // 2026-11-20: every argument (was a, b, c only — actFail's stack / run were dropped)
 
     var api = {
       enabled: on, key: key, maxBytes: max, stats: stats,
       data: function () { return log; },
+      // 2026-11-21 用户「要以我打的阵容强度、状态为基准」: every local save also carries the run itself (snap.run, the save as it stands)
+      // and the 出发 lineup records (localStorage chooser.lineups.v1), so a test can start from the player's own team. Local dev host only.
+      devSave: function (tag, runObj, profile) {
+        try {
+          if (!log) return;
+          var body = log;
+          if (DEV_SNAP) {
+            var lu = null; if (!luSent || /^go-/.test(String(tag))) try { luSent = true; lu = JSON.parse((root.localStorage && root.localStorage.getItem('chooser.lineups.v1')) || 'null'); } catch (e) { lu = null; }
+            body = {}; for (var k in log) body[k] = log[k];
+            body.snap = { tag: String(tag || 'save'), at: now(), profile: profile || '', run: runObj || null };
+            body.lineups = lu;
+          }
+          devSink(JSON.stringify(body), String(tag || 'save'));
+        } catch (e) { /* */ }
+      }, // 2026-11-20 本地自动存
       current: function () { return cur; },
       // one page load: build, window size, touch, language, browser family (never the full user agent, never the URL)
       session: guard(function (env, nav) {
@@ -196,7 +224,7 @@
         if (action && action.type && !SKIP_ACT[action.type]) { var e = snap(pv); delete e.rd; delete e.wv; e.k = 'act'; e.a = actionOf(action); push(e); }
         observe(pv, action, nv).forEach(push);
       }),
-      actFail: guard(function (action, pv, msg) { var e = snap(pv); e.k = 'actFail'; e.a = actionOf(action); e.msg = clip(msg, 120); push(e); }),
+      actFail: guard(function (action, pv, msg, stack, runJson) { var e = snap(pv); e.k = 'actFail'; e.a = actionOf(action); e.msg = clip(msg, 120); if (stack) e.stack = clip(stack, 900); if (runJson && runJson.length < 400000) e.run = runJson; push(e); }), // 2026-11-20 牧师倒下报错: stack + the run before the action, so it can be replayed
       event: guard(function (k, data) {
         if (!EVENT_OK[k]) return;
         var e = {}, d = data || {}; for (var x in d) { var s = small(d[x]); if (s !== undefined) e[x] = s; }

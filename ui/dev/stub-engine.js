@@ -1,4 +1,4 @@
-// DEV ONLY — a fake v2 ChooserEngine (docs/V2-CONTRACT.md) with toy rules, so the UI can build every screen
+// DEV ONLY — a fake v2 ChooserEngine (docs/archive/V2-CONTRACT.md) with toy rules, so the UI can build every screen
 // before the real engine lands. Exposes globalThis.ChooserStubEngine (browser) / module.exports (node).
 (function (root) {
   'use strict';

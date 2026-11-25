@@ -3,6 +3,9 @@
 // All coordinates are stage px (the fixed 1920×1080 frame; app.js stagePt()). Respects prefers-reduced-motion.
 (function () {
   'use strict';
+  // 2026-11-20b 用户: the warrior's (盾 / kind 'guard') strike lands with the rogue's crossed backstab slashes; the shield mark stays.
+  // false = the 2026-11-20 single slash for a guard strike, kept as backup
+  var GUARD_ROGUE_HIT = true;
   var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var cv = null, ctx = null, fxs = [], parts = [], raf = 0, last = 0;
   var shake = { amp: 0, t0: 0, dur: 1, f: 24, p1: 0, p2: 0, dir: 1, el: null };
@@ -77,13 +80,16 @@
       ctx.globalAlpha = 1 - p; ctx.strokeStyle = col; ctx.lineWidth = (o.w || 14) * (1 - p) + 1; ctx.beginPath(); ctx.ellipse(at.x, at.y, Math.max(0, r), Math.max(0, r * (o.flat || 0.8)), 0, 0, 7); /* feedback-1112: a negative radius threw */ ctx.stroke(); ctx.globalAlpha = 1;
     });
   }
+  // 2026-11-20 用户亲测 (猎人「软绵绵」): the hunter's shot = a fast, straight, thick streak, a hard flash, a sharper knock + shake.
+  // false = the 2026-11-19 shot (a 260 ms arcing streak, the normal knock)
+  var AIM_PUNCH = true;
   function streak(from, to, dur) { // an arrow: a bright head with a trail
     var P = pal();
     addFx(dur, function (p) {
-      var hp = Math.min(1, p / 0.55), hx = from.x + (to.x - from.x) * hp, hy = from.y + (to.y - from.y) * hp - Math.sin(hp * Math.PI) * 30;
+      var hp = Math.min(1, p / 0.55), hx = from.x + (to.x - from.x) * hp, hy = from.y + (to.y - from.y) * hp - (AIM_PUNCH ? 0 : Math.sin(hp * Math.PI) * 30);
       var tl = Math.min(hp, 0.35), tx = from.x + (to.x - from.x) * (hp - tl), ty = from.y + (to.y - from.y) * (hp - tl);
       var g = ctx.createLinearGradient(tx, ty, hx, hy); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, P.core);
-      ctx.globalAlpha = p < 0.55 ? 1 : 1 - (p - 0.55) / 0.45; ctx.strokeStyle = g; ctx.lineWidth = 7; ctx.lineCap = 'round';
+      ctx.globalAlpha = p < 0.55 ? 1 : 1 - (p - 0.55) / 0.45; ctx.strokeStyle = g; ctx.lineWidth = AIM_PUNCH ? 10 : 7; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke(); ctx.fillStyle = P.glow; ctx.beginPath(); ctx.arc(hx, hy, 9, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     });
   }
@@ -148,9 +154,10 @@
     if (!card) return 0;
     var t = T[o.tier] || T.normal, dir = o.dir || 1, at = center(card, 0.38), sc = o.scale || 1, kind = o.kind || 'strike';
     if (kind === 'heal') { sparks(at, 10, { kind: 'star', spread: 6.3, speed: 260, up: 160, g: -200, life: 700, size: 9, col: '#c8ffc0' }); return 0; }
-    if (kind === 'aim' && o.from) streak(o.from, at, 260);
+    if (kind === 'aim' && o.from) streak(o.from, at, AIM_PUNCH ? 150 : 260);
+    if (kind === 'aim' && AIM_PUNCH) { ring(at, { r0: 10, r1: 150, w: 12, col: '#fff', dur: 220, flat: 1 }); sparks(at, 16, { dir: (o.dir || 1) > 0 ? 0 : Math.PI, spread: 0.9, speed: 1300, g: 200, life: 260, size: 5 }); }
     if (kind === 'spark') { ring(at, { r1: 190 * sc, w: 18 }); ring(at, { r0: 40, r1: 130 * sc, w: 8, col: '#fff', dur: 260 }); sparks(at, Math.round(t.sparks * sc), { spread: 6.3, speed: 600, g: 300, kind: 'star', size: 8 }); }
-    else if (kind === 'backstab') { slash(at, { R: t.R * 0.9, W: t.W, a0: -2.5, a1: 0.4 }); slash({ x: at.x, y: at.y - 10 }, { R: t.R * 0.9, W: t.W, a0: 2.5, a1: -0.4, dur: 340 }); }
+    else if (kind === 'backstab' || (GUARD_ROGUE_HIT && kind === 'guard')) { slash(at, { R: t.R * 0.9, W: t.W, a0: -2.5, a1: 0.4 }); slash({ x: at.x, y: at.y - 10 }, { R: t.R * 0.9, W: t.W, a0: 2.5, a1: -0.4, dur: 340 }); }
     else if (kind === 'aim') ring(at, { r1: 90, w: 7, flat: 1 });
     else slash(at, { R: t.R * sc, W: t.W * sc, a0: dir > 0 ? -2.4 : -0.7, a1: dir > 0 ? 0.6 : -3.7 });
     if (kind === 'guard') shield(center(card, 0.45));
@@ -164,8 +171,9 @@
   function after(card, o, shakeEl) {
     if (!card) return; var t = T[o.tier] || T.normal, sc = o.scale || 1, dir = o.dir || 1;
     if (o.kind === 'heal') return;
-    knock(card, t.knock * sc, t.squash, dir);
-    if (shakeEl) doShake(shakeEl, t.shake * sc, t.sdur, dir);
+    var punch = AIM_PUNCH && o.kind === 'aim' ? 1.6 : 1;
+    knock(card, t.knock * sc * punch, t.squash, dir);
+    if (shakeEl) doShake(shakeEl, t.shake * sc * punch, t.sdur, dir); else if (punch > 1) doShake(card, 10, 220, dir);
   }
   // a foe drops: shards, a white ring and the 「击倒」 stamp (allies fall quietly: app.js keeps its own small fall)
   function ko(card, stampHost) {

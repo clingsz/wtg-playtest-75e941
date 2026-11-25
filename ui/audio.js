@@ -1,4 +1,4 @@
-// 《欢迎加入冒险者公会！》 — audio (docs/V2.1-CONTRACT.md §G, docs/V2.2-CONTRACT.md §7, docs/MUSIC-PLAN.md).
+// 《欢迎加入冒险者公会！》 — audio (docs/archive/V2.1-CONTRACT.md §G, docs/archive/V2.2-CONTRACT.md §7, docs/MUSIC-PLAN.md).
 // Classic script, no modules. Every public call is wrapped so it never throws: unknown cues, calls before init(),
 // missing music files and browsers without WebAudio all degrade to silence.
 //
@@ -7,7 +7,7 @@
 //                                     sequential fades (V2.4 [6]): old track out over 1.2 s, THEN new one in over 1.5 s, never
 //                                     overlapping; a newer request while fading replaces the pending one; same track never restarts
 //                                     opts.delay = ms to wait before the crossfade starts (values <= 10 are read as seconds);
-//                                     a newer scene() call cancels a pending delayed one (docs/V2.3-CONTRACT.md §F)
+//                                     a newer scene() call cancels a pending delayed one (docs/archive/V2.3-CONTRACT.md §F)
 //   CHOOSER_AUDIO.playResult(kind, act, battleId)  kind 'victory'|'defeat' → victory / victory-dark (act >= 2) / defeat, once;
 //                                     a repeat call with the same battleId is ignored (V2.4 [16]). scene() never starts victory music.
 //                                     result music (victory / victory-dark / defeat) plays once, not looped; a missing file
@@ -27,7 +27,7 @@
   var PROF = (/[?&]profile=([^&#]*)/.exec(QS) || [])[1] || ''; try { PROF = decodeURIComponent(PROF).replace(/[^\w-]/g, ''); } catch (e) { PROF = ''; }
   var STORE = 'chooser.audio.v2' + (PROF ? '.' + PROF : ''), SESSION_MUTE = /[?&]mute=1(?:[&#]|$)/.test(QS), noSave = false;
   var TRACKS = ['guild-day', 'guild-hall', 'interview', 'battle-light', 'dread', 'battle-dark', 'sacrifice', 'camp-night', 'throne', 'dawn',
-    'victory', 'victory-dark', 'defeat', 'themeSong'];
+    'guild-dark', /* 2026-11-19 小铃战 镜像: her fight (L11, both waves) */ 'victory', 'victory-dark', 'defeat', 'themeSong'];
   // 2026-11-14 真结局片尾: 'themeSong' = the ending song 《写下你的名字》 at music/theme-song.mp3 (docs/THEME-SONG.md). Until the
   // file exists it falls back silently to dawn (LOOP_FALLBACK below). Track ids whose file name differs from the id:
   var FILE = { themeSong: 'theme-song' };
@@ -36,9 +36,9 @@
   var ONE_SHOT = { 'victory': 'victoryTheme', 'victory-dark': 'victoryTheme', 'defeat': 'defeatTheme' };
   var CUES = ['hover', 'click', 'confirm', 'cancel', 'pick', 'type', 'advance',
     'side', 'hire', 'reject',
-    'enemyEnter', 'allyAttack', 'enemyAttack', 'hit', 'bigHit', 'crit', 'heal', 'miss', 'guard', 'chargeTick', 'chargeRelease', 'combo', 'kill',
+    'enemyEnter', 'allyAttack', 'enemyAttack', 'hit', 'bigHit', 'crit', 'heal', 'miss', 'guard', 'chargeTick', 'chargeRelease', 'combo', 'kill', 'stackRow', 'stackMul', 'stackLand', 'stackMerge', 'stackHeavy',
     'allyDown', 'pause', 'move', 'advisorSkill', 'item', 'frenzy', 'victory', 'defeat',
-    'reward', 'debuff', 'darkTransition', 'rainStart', 'rainStop', 'sacrificeConfirm', 'nameStrike', 'reckoning', 'debtDot', 'flashback',
+    'reward', 'levelUp' /* 2026-11-19 用户亲测 界面: 升级页 */, 'debuff', 'darkTransition', 'rainStart', 'rainStop', 'sacrificeConfirm', 'nameStrike', 'reckoning', 'debtDot', 'flashback',
     'moodDown', 'moodUp', 'gallery', 'fireStart', 'fireStop', 'fire',
     'bell', 'shopBell', 'giggle', 'transform', 'whiteout', 'turncoat', 'phase2',
     'victoryTheme', 'defeatTheme'];
@@ -235,7 +235,7 @@
   var STORY_TRACK = {
     // V2.4 [1]: in-game act-1 stories use the everyday guild-hall track (fallback guild-day); title + fairyWelcome keep guild-day
     opening: 'guild-hall', advisorAsks: 'guild-hall', leaderPrompt: 'guild-hall', advisorPrompt: 'guild-hall', interviewIntro: 'interview',
-    sealing: 'dread', sealRefuse: 'dread', sealAccept: 'dread', belowTomb: 'dread', pathOn: 'sacrifice', pathOnTaken: 'sacrifice', /* feedback-1112 #7/#16/#17 */ debuffIntro: 'dread', rejectedReturn: 'dread', fakeBoss: 'dread', advisorLeaves: 'dread', gameOver: 'dread',
+    sealing: 'dread', sealRefuse: 'dread', sealAccept: 'dread', belowTomb: 'dread', pathOn: 'sacrifice', pathOnTaken: 'sacrifice', /* feedback-1112 #7/#16/#17 */ debuffIntro: 'dread', rejectedReturn: 'dread', fakeBoss: 'dread', advisorLeaves: 'dread', gameOver: 'dread', earlyDefeat: 'dread',
     sacrificeIntro: 'sacrifice', sacrificeRandomTaken: 'sacrifice', sacrificeRandomTakenOne: 'sacrifice', secondSacrificeIntro: 'sacrifice', aftermath: 'sacrifice',
     firstReturn: 'dread', finalReveal: 'throne', victory: 'dawn', // feedback-1112 #32: throne is kept for the advisor and the fairy
     // v2.2
@@ -243,8 +243,16 @@
     // feedback-1112 #35/#37/#39: L9 → the throne room; she is carried off to music; the white room is quiet but not silent
     l9Freedom: 'dread', /* batch6 H2-11: was guild-hall — after L9 the music stays dark (same track as throneRoom, no switch) */ throneRoom: 'dread', throneAdvisor: 'throne', rejectedSecond: 'dread', rejectedDefeat: 'dread', /* SPEC-2026-11-13 E3 */
     normalEnding: 'dread', whiteRoom: 'camp-night',
+    // 2026-11-19 流程修 H4: 小铃's blessing at the gate keeps the sacrifice track (taken → blessing → pathOn, no switch back and forth)
+    bellBlessing: 'sacrifice', bellBlessingAfter: 'sacrifice',
+    sideDoor: 'throne', sideDoorPass: 'dread', // 2026-11-19 流程修 L3: the small door stays on the throne track (was the dread fallback)
+    // 2026-11-21 用户「奥德丽结束剧情 → 说可以走了 → 换音乐 → 走的时候发现这个门」: her fall stays on throne; from 「你们自由了」 the quiet
+    // camp-night track (same as the white room) through the door and the normal ending; going in → dread (L10_EXIT_TRACKS below; old: sideDoor throne, sideDoorPass / normalEnding dread, trueDoor throne)
+    l10Fall: 'throne', l10Free: 'camp-night',
     whiteout: null // the whiteout cinematic: the music fades out to silence
   };
+  var L10_EXIT_TRACKS = true; if (L10_EXIT_TRACKS) { STORY_TRACK.sideDoor = 'camp-night'; STORY_TRACK.sideDoorPass = 'camp-night'; STORY_TRACK.normalEnding = 'camp-night'; STORY_TRACK.trueDoor = 'dread'; }
+  var EXIT_WALK_CALM = true; // false = old: the L10 intro (route map to 出口) already played throne
   var SCENE_TRACK = { 'noble-chamber': 'throne', 'noble-chamber-broken': 'throne', 'white-room': null }; // by background scene id
   function sceneId(c) { return c.scene || c.sceneId || c.bg || null; }
   function isTrue(c) { return c.outcome === 'true' || c.outcome === true || c.outcome === 'trueEnding'; }
@@ -276,10 +284,14 @@
       return ph === 'gameOver' ? 'defeat' : 'dread'; // V2.3 §F.3: gameOver plays the one-shot defeat track in place of dread
     }
     if (ph === 'title') return 'guild-day';
+    if (EXIT_WALK_CALM && c.exitWalk && ph === 'story') return STORY_TRACK.l9Freedom; // (she turns: the costume scene switches to throne)
     if (ph === 'story' && sid && Object.prototype.hasOwnProperty.call(STORY_TRACK, sid)) return STORY_TRACK[sid];
+    // 2026-11-21 用户「叛变之前路线图竟然出现战斗王座的音乐了，应该改成普通的背景音乐（跟刚进去出口一样）」: the walk to the exit (before she turns) stays on l9Freedom's track
+    if (c.mirror && lv === 11 && (c.battle || ph === 'battle' || ph === 'battleResult')) return 'guild-dark'; // 2026-11-19 小铃战 镜像 (「这场战斗的音乐是小铃做的哦」)
     if (sc && Object.prototype.hasOwnProperty.call(SCENE_TRACK, sc)) return SCENE_TRACK[sc];
     if (lv === 11 && ph !== 'prep') return 'throne'; // 叙事节奏 2026-11-13: the night before L11 is a campfire like any other
     if (ph === 'sacrifice') return 'sacrifice';
+    if (ph === 'reward' && c.blessing) return 'sacrifice'; // 2026-11-19 流程修 H4: the blessing pick (same night as the loss, at the gate)
     // V2.4 [16]: a battle result no longer starts victory music here; only playResult() does (when the panel appears)
     // 叙事节奏 2026-11-13: the scene intro (after 「出发」) already plays the level's battle track
     if (c.battle || ph === 'battle' || ph === 'battleResult' || (ph === 'story' && sid === 'levelIntro')) {
@@ -312,7 +324,7 @@
   // `type` is exempt from the global budget (its own 45 ms throttle, near-silent) so typing never starves real cues.
   var THROTTLE = { type: 45, hover: 120, debtDot: 90, move: 100 };
   var SAME_MIN = 80, BUDGET = 6, BUDGET_WINDOW = 1000, recent = [];
-  var BUDGET_FREE = { chargeTick: 1, chargeRelease: 1, crit: 1 }; // DESIGN-skill-level 收尾: a crit always sounds
+  var BUDGET_FREE = { chargeTick: 1, chargeRelease: 1, crit: 1, stackRow: 1, stackMul: 1, stackLand: 1, stackMerge: 1, stackHeavy: 1 }; // DESIGN-skill-level 收尾: a crit always sounds
   var rain = null, rainWanted = false;
   var fire = null, fireWanted = false;
 
@@ -422,7 +434,7 @@
 
   // --- cues: fn(t, P, detail) ---
   var C = {
-    // ---- v2.2 (docs/V2.2-CONTRACT.md §7) ----
+    // ---- v2.2 (docs/archive/V2.2-CONTRACT.md §7) ----
     shopBell: function (t, P) { // 2026-11-15 芙洛's lantern bells: 叮—玲—玲, three small bright bells, quick and light
       [[0, 1568], [0.13, 1760], [0.24, 2093]].forEach(function (b) { chime(P, t + b[0], b[1], 0.045, 0.9); chime(P, t + b[0] + 0.01, b[1] * 2.01, 0.012, 0.5); });
     },
@@ -539,6 +551,23 @@
       [[1, 0.05, 0.25], [2.4, 0.03, 0.18], [3.9, 0.02, 0.12], [5.3, 0.012, 0.08]].forEach(function (p) { osc(t, { f: f * p[0], a: 0.001, d: p[2], g: p[1] }); });
       thump(t, 200, 0.14, 0.06, 120);
     },
+    // 2026-11-20 BONUS_STACK (mockup-bonus-v5): a bonus row pops (pitch rises with the row), a multiplier row lands heavier,
+    // the last row settles, the rows merge, a ×6+ hit thumps the screen
+    stackRow: function (t, P, d) {
+      var i = Math.max(0, Math.min(7, (d && +d.i) || 0)), f = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5][i];
+      osc(t, { f: f, type: 'triangle', a: 0.004, d: 0.1, g: 0.1 }); osc(t, { f: f * 2, a: 0.003, d: 0.06, g: 0.03 });
+    },
+    stackMul: function (t, P, d) {
+      var i = Math.max(0, Math.min(7, (d && +d.i) || 0)), f = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5][i];
+      osc(t, { f: f, type: 'triangle', a: 0.004, d: 0.16, g: 0.12 }); osc(t + 0.04, { f: f * 1.5, type: 'triangle', a: 0.004, d: 0.14, g: 0.06 });
+      osc(t, { f: f / 2, type: 'square', a: 0.004, d: 0.2, g: 0.03, lp: 2400 }); thump(t, 150, 0.16, 0.22, 60); nz(t, { ft: 'lowpass', f: 2500, d: 0.08, g: 0.08 });
+    },
+    stackLand: function (t, P) { thump(t, 95, 0.22, 0.22, 55); nz(t, { ft: 'lowpass', f: 700, d: 0.07, g: 0.09 }); },
+    stackMerge: function (t, P, d) {
+      var i = Math.max(0, Math.min(7, (d && +d.i) || 0)), f = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5][i];
+      osc(t, { f: f / 2, f2: f * 1.5, type: 'sawtooth', a: 0.01, d: 0.26, g: 0.03, lp: 3000, glide: 0.26 }); osc(t + 0.12, { f: f, type: 'triangle', a: 0.004, d: 0.18, g: 0.07 });
+    },
+    stackHeavy: function (t, P) { thump(t, 110, 0.32, 0.55, 30); osc(t, { f: 70, f2: 30, type: 'square', a: 0.004, d: 0.5, g: 0.05, lp: 900 }); nz(t, { ft: 'lowpass', f: 900, d: 0.4, g: 0.22 }); },
     chargeTick: function (t, P, d) {
       var n = Math.max(0, Math.min(16, (d && +d.n) || 0)), f = (P.act === 3 ? 220 : 330) * Math.pow(2, n * 2 / 12);
       osc(t, { f: f, a: 0.002, d: 0.06, g: 0.05 }); osc(t, { f: f * 2, a: 0.001, d: 0.025, g: 0.012 });
@@ -586,6 +615,16 @@
     reward: function (t, P) {
       chime(P, t, N(P, 7), 0.05, 0.5); chime(P, t + 0.08, N(P, 9), 0.05, 0.7);
       nz(t, { ft: 'highpass', f: 7000, a: 0.05, d: 0.3, g: 0.012 });
+    },
+    coin: function (t, P) { // 2026-11-20c GOLD_CLAIM 领取: a short shower of bright coin clinks, landing in the purse
+      [0, 0.07, 0.13, 0.2, 0.26, 0.34].forEach(function (d, i) { var f = 2400 + (i % 3) * 380 + Math.random() * 120; osc(t + d, { f: f, a: 0.001, d: 0.09, g: 0.03 }); osc(t + d, { f: f * 2.76, a: 0.001, d: 0.05, g: 0.01 }); nz(t + d, { ft: 'highpass', f: 6500, d: 0.012, g: 0.012 }); });
+      chime(P, t + 0.42, N(P, 9), 0.04, 0.6);
+    },
+    levelUp: function (t, P) { // 2026-11-19 用户亲测 界面: 升级页 — a short rising arpeggio to a held bright chord + a soft sparkle
+      [0, 2, 4, 7].forEach(function (deg, i) { chime(P, t + i * 0.085, N(P, deg) * 2, 0.05, 0.55); });
+      [0, 4, 7].forEach(function (deg) { osc(t + 0.36, { f: N(P, deg), a: 0.03, d: 1.1, g: 0.03 }); });
+      chime(P, t + 0.42, N(P, 9) * 2, 0.04, 1.0);
+      nz(t + 0.34, { ft: 'highpass', f: 7000, a: 0.06, d: 0.5, g: 0.012 });
     },
     debuff: function (t, P) {
       var f = N(P, 0) / 2;

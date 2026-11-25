@@ -259,7 +259,7 @@ body.act-3 .ch-head { filter: saturate(.45) sepia(.25); }
 .choice .rows .r.none .rv { color: #8a7660; }
 
 /* --- tooltip --- */
-.tip { position: absolute; max-width: 420px; padding: var(--sp-3) var(--sp-4); font: 400 var(--fs-text)/1.5 var(--font-body); color: var(--c-ink);
+.tip { position: absolute; width: max-content; max-width: 420px; /* 2026-11-20 用户「字爆掉了」: near the right edge an auto width shrank to one character a line — max-content keeps it whole */ padding: var(--sp-3) var(--sp-4); font: 400 var(--fs-text)/1.5 var(--font-body); color: var(--c-ink);
   background: rgba(20,14,28,.97); border: 1px solid var(--c-line); border-radius: var(--r-2); transform: translate(-50%, -100%); box-shadow: var(--sh-2); pointer-events: none; white-space: pre-line; }
 .tip.below { transform: translate(-50%, 0); }
 .tip.rich { white-space: normal; width: 420px; }
@@ -526,8 +526,21 @@ body.act-3 .heading.grim h2 { color: #c9a39a; }
 .lane-ally .bcard { --cw: 196px; }
 .small-hint { font-size: var(--fs-text); color: var(--c-ink-2); margin-bottom: var(--sp-2); text-shadow: 0 1px 3px #000; letter-spacing: .1em; }
 .bcard.pre-enter { opacity: 0; transform: translateX(140px) scale(.9); }
+.bcard.pre-split { display: none; } /* 2026-11-20 分裂史莱姆: a split piece takes no room until its split beat (splitSlide) */
 .bcard.enter { animation: enter .55s cubic-bezier(.2,1.2,.4,1) backwards; } /* batch6 H2-6: was 'both' — the forwards fill held opacity 1 over .down */
 .bcard.gone { display: none; }
+/* 2026-11-16 露西安召唤: up to 8 foes — tighter lane, smaller cards; summoned minions pop in */
+.foes-many .lane-foe { gap: var(--sp-2); } .foes-many .lane-foe .bcard.foe { --cw: 170px; } .foes-many .lane-foe .bcard.foe.is-boss { --cw: 190px; }
+.foes-crowd .lane-foe { gap: 6px; } .foes-crowd .lane-foe .bcard.foe { --cw: 150px; } .foes-crowd .lane-foe .bcard.foe.is-boss { --cw: 172px; }
+.bcard.summon-in { animation: summonIn .45s cubic-bezier(.2,1.3,.4,1) backwards; }
+/* 2026-11-18 #5: her new minions fade + scale in from her side (the right); old: @keyframes summonIn { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: none; } } */
+@keyframes summonIn { from { opacity: 0; transform: translateX(90px) scale(.55); filter: brightness(1.8); } 60% { opacity: 1; } to { opacity: 1; transform: none; filter: none; } }
+/* 2026-11-18 #2 露西安「契约庇护」: light-blue frame while her summons stand (status chip 'ward' carries the tooltip) */
+.bcard.foe.warded { box-shadow: 0 0 0 3px #9fd8ff, 0 0 22px rgba(140,210,255,.75); }
+.bcard.foe.warded .st-ic[data-st="ward"] { color: #9fd8ff; }
+/* 2026-11-18 #5: the roll-call line is a short, small note (not the 128px banner word) */
+.banner.summon-note { top: 300px !important; animation: banner 1.6s both; }
+.banner.summon-note .fx-word { font: 400 var(--fs-xl)/1.2 var(--font-display); filter: drop-shadow(0 2px 0 rgba(20,20,40,.85)) drop-shadow(0 0 12px rgba(140,200,255,.6)); }
 .bcard.down { opacity: .38; filter: grayscale(1) brightness(.7); transform: translateY(10px) rotate(-1deg); }
 .bcard.acting { transform: translateY(-34px) scale(1.06); box-shadow: 0 0 0 3px var(--c-gold-hi), 0 0 36px rgba(246,210,122,.85); z-index: 4; } /* v36: the acting card rises (one actor at a time, chains too) */
 .bcard.foe.acting { transform: translateY(-22px) scale(1.06); box-shadow: 0 0 0 3px #ff9a8a, 0 0 36px rgba(255,90,80,.8); }
@@ -566,11 +579,14 @@ body.act-3 .hpbar .fill { background: linear-gradient(180deg, #b8c890, #6a7a48);
 .pbtn.go .pb-ic, .pbtn.go b { color: #fff3d6; }
 .pausebar.moding .pbtn { opacity: .35; pointer-events: none; }
 .pause-sub { position: absolute; right: 0; bottom: 170px; }
+/* 2026-11-16 开场暂停: one line over the bar before round 1 */
+.pause-open { position: absolute; right: 0; bottom: 100%; margin-bottom: var(--sp-2); max-width: 700px; padding: 6px 16px; border-radius: 12px; background: rgba(20, 16, 28, .82); color: #ffe7b0; font-size: 24px; line-height: 1.35; animation: fadeIn .35s both; pointer-events: none; }
 .psub { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-s); white-space: nowrap; animation: fadeIn .25s both; }
 .psub b { color: var(--c-gold-hi); }
 .item-btn { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-s); padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1); border-radius: var(--r-pill); }
 .item-btn img { width: 40px; height: 40px; border-radius: 50%; }
-.battle[data-mode="move"] .bcard.ally, .battle[data-mode="itemTarget"] .bcard.ally:not(.down) { cursor: pointer; box-shadow: 0 0 0 3px rgba(246,210,122,.6), 0 0 22px rgba(246,210,122,.4); }
+.battle[data-mode="move"] .bcard.ally, .battle[data-mode="itemTarget"]:not([data-item-aim="enemy"]):not([data-item-aim="fallen"]) .bcard.ally:not(.down),
+.battle[data-mode="itemTarget"][data-item-aim="enemy"] .bcard.foe:not(.down), .battle[data-mode="itemTarget"][data-item-aim="fallen"] .bcard.ally.down { cursor: pointer; box-shadow: 0 0 0 3px rgba(246,210,122,.6), 0 0 22px rgba(246,210,122,.4); }
 .battle[data-mode="move"] .bcard.ally:hover, .battle[data-mode="itemTarget"] .bcard.ally:hover { transform: translateY(-8px); }
 /* battle result */
 .result-wrap { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(10,6,16,.55); animation: fadeIn .4s both; }
@@ -625,6 +641,12 @@ body.act-3 .hpbar .fill { background: linear-gradient(180deg, #b8c890, #6a7a48);
 .sr-face img { width: 100%; height: 100%; object-fit: cover; }
 .sr-name { flex: 1; font: 400 var(--fs-l) var(--font-display); letter-spacing: .12em; }
 .sac-row.sel { border-color: var(--c-gold-hi); background: linear-gradient(180deg, rgba(70,50,56,.94), rgba(40,28,34,.94)); box-shadow: 0 0 0 1px var(--c-gold-hi), 0 0 28px rgba(246,190,80,.45); }
+/* 2026-11-19 交给规则·老虎机 (sacSpinFx): the frame jumps row to row with no easing, then the landed row pulses once */
+#app.sac-spinning .sac-row { transition: none; }
+#app.sac-spinning .sac-row.spin-on { border-color: #ff6a4a; box-shadow: 0 0 0 3px #ff6a4a, 0 0 32px rgba(255,90,60,.55); background: linear-gradient(180deg, rgba(84,40,40,.95), rgba(44,22,26,.95)); }
+#app.sac-spinning .sac-row.spin-lock { animation: sacSpinLock 300ms ease-out both; }
+@keyframes sacSpinLock { 0% { transform: scale(1); filter: brightness(1); } 35% { transform: scale(1.05); filter: brightness(1.8); } 100% { transform: scale(1.02); filter: brightness(1.15); } }
+@media (prefers-reduced-motion: reduce) { #app.sac-spinning .sac-row.spin-lock { animation: none; filter: brightness(1.3); } }
 .warn-btn { margin-top: var(--sp-2); font-size: var(--fs-s); }
 .warn-btn img { width: 30px; height: 30px; border-radius: var(--r-1); }
 .sac-actions { position: absolute; right: var(--sp-6); bottom: var(--sp-6); width: 500px; display: flex; gap: var(--sp-4); justify-content: flex-end; }
@@ -696,6 +718,7 @@ body.act-3 .spark:not(.heal):not(.debt) { background: radial-gradient(circle, #f
 /* 2026-11-14 伤害数字「先飞后结算」: the full amount lands, then shrinks to the hp damage (a crack on the 护甲 badge); fully
    absorbed → a grey 0 with a shield clank, no red */
 .float .rv { display: inline-block; }
+.float { text-align: center; } /* 2026-11-24: the number sits centred under its tag (「誓盾 护甲」 / +3) */
 .float.resolved .rv { animation: numResolve .32s ease-out; }
 .float.clank { color: #c8d4e2; text-shadow: 0 3px 0 #1c2632, 0 0 12px rgba(160,190,230,.85); }
 .float.clank .rv { animation: numClank .36s ease-out; }
@@ -865,7 +888,7 @@ body.epi-on .topbar { display: none; }
 .lg-card .rows { gap: var(--sp-3); }
 .lg-card .rows .r { grid-template-columns: 1fr; gap: 2px; text-align: center; }
 
-/* ===== v2.2: the bell fairy and the true route (docs/V2.2-CONTRACT.md §6) ===== */
+/* ===== v2.2: the bell fairy and the true route (docs/archive/V2.2-CONTRACT.md §6) ===== */
 /* title: 小铃 floats at the guild door (over the painted one), bobbing; click → giggle + one line */
 .title-fairy { position: absolute; left: 1252px; top: 478px; width: 345px; height: 460px; padding: 0; border: 0; background: none; border-radius: 50%; z-index: 3; cursor: pointer; }
 .title-fairy:hover:not(:disabled) { filter: brightness(1.08) drop-shadow(0 0 18px rgba(255,230,150,.7)); }
@@ -931,6 +954,9 @@ body.epi-on .topbar { display: none; }
 .light-burst { position: absolute; width: 520px; height: 520px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
   background: radial-gradient(circle, rgba(255,255,255,.95), rgba(255,236,170,.7) 22%, rgba(255,210,120,.25) 45%, transparent 68%); animation: burst 1.3s ease-out both; }
 .light-burst.small { width: 340px; height: 340px; }
+/* 2026-11-20 反水: her card flashes white as she lands in our row (app.js TURN_FLIP_FLASH) */
+.ucard.turn-flash { animation: turn-flash .8s ease-out; }
+@keyframes turn-flash { 0% { filter: brightness(2.6) saturate(.3); } 100% { filter: none; } }
 .float.turn { font: 400 var(--fs-xl) var(--font-display); color: #fff6d6; letter-spacing: .08em; text-shadow: 0 3px 0 #6a4a10, 0 0 18px rgba(255,220,140,.95); animation-duration: 1.8s; }
 /* normal ending: the whiteout */
 .cine.whiteout, .cine.true-end { display: block; pointer-events: auto; cursor: pointer; }
@@ -986,6 +1012,7 @@ body.end-hold .screen-ending { visibility: hidden; }
 .st-ic.buff { background: radial-gradient(circle at 40% 35%, #fff0c0, #c9a46a 60%, #7a5a26); box-shadow: 0 0 0 1px #f1d79a, 0 1px 3px rgba(0,0,0,.6); }
 .st-ic.bad { background: radial-gradient(circle at 40% 35%, #8a6a70, #3a1c24 65%, #1a0a10); box-shadow: 0 0 0 1px #b07a80, 0 1px 3px rgba(0,0,0,.6); }
 .st-ic .st-img { width: 100%; height: 100%; object-fit: contain; }
+.st-ic .st-svg { width: 76%; height: 76%; } /* 2026-11-20 铜钟倒数 bell (shapes only) */
 .st-ic .pic-fb { border-radius: 50%; }
 .st-g { font: 400 var(--fs-label)/1 var(--font-display); font-style: normal; }
 .st-ic.buff .st-g { color: #3b2410; } .st-ic.bad .st-g { color: #f0d8da; }
@@ -1058,11 +1085,15 @@ body.end-hold .screen-ending { visibility: hidden; }
 .rs-face { position: relative; width: 52px; height: 52px; flex: none; border-radius: 50%; overflow: hidden; border: 2px solid var(--c-paper-trim); background: #2a2138; }
 .rs-face img { width: 100%; height: 100%; object-fit: cover; }
 .rs-crown { width: 34px; height: 34px; mix-blend-mode: multiply; }
+.rs-table td.rs-xp { white-space: nowrap; } /* 2026-11-19 战报 XP 栏 */
+.rs-xp-n { display: block; font: 400 var(--fs-l) var(--font-num); color: #3a6a20; }
+.rs-xp-up { display: block; font: 400 var(--fs-s) var(--font-display); color: #a0500a; }
+.rs-xp-st { display: block; font-size: var(--fs-s); color: #6a4a20; }
 .rs-table tr.is-mvp td { background: linear-gradient(90deg, rgba(246,200,90,.28), rgba(246,200,90,.12)); }
 .rs-table tr.is-mvp .rs-face { border-color: #c08a20; box-shadow: 0 0 0 2px #f1d79a; }
 /* §H cheat on defeat */
 
-/* ===== v2.3 screens (ui-screens; docs/V2.3-CONTRACT.md §E) ===== */
+/* ===== v2.3 screens (ui-screens; docs/archive/V2.3-CONTRACT.md §E) ===== */
 /* §E3 scene transitions: black in ~400 ms, out ~500 ms */
 .scene-black { position: absolute; inset: 0; z-index: 44; background: #000; opacity: 0; pointer-events: none; transition: opacity .5s ease-out; }
 .scene-black.on { opacity: 1; pointer-events: auto; transition: opacity .4s ease-in; }
@@ -1539,6 +1570,30 @@ body.act-3 .vn-box.tone-bewildered { background: linear-gradient(170deg, #e8eef6
 @keyframes sdGlyph { from { opacity: .55; transform: scale(.85); } 60% { transform: scale(1.18); } to { opacity: 1; transform: scale(1); } }
 .sd-go[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .sd-open.lit .sd-slot.got, .sd-open.lit .sd-slot.got .gi { animation-duration: .01s; animation-delay: 0s; } }
+/* 2026-11-20 铃之门 (app.js bellDoorHtml): each slot shows the bronze bell (relic-bell icon); missing = dark + faint, got = lit */
+.bd-slot { position: relative; }
+.bd-slot .pic.bd-bell { width: 46px; height: 46px; object-fit: contain; filter: grayscale(1) brightness(.35); opacity: .6; transition: filter .4s, opacity .4s; }
+.bd-slot .pic-fb .gi { width: 42px; height: 42px; }
+.side-door.lit .bd-slot.got .pic.bd-bell { filter: none; opacity: 1; }
+.bd-slot.missing { outline: 2px dashed rgba(255,215,140,.25); }
+.bd-slot:hover, .bd-slot:focus-visible { box-shadow: inset 0 4px 10px rgba(0,0,0,.8), 0 0 0 3px rgba(255,215,140,.6); }
+.bd-count { font-size: 1.2rem; font-weight: 700; color: #ffe6b0; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+.bd-info { min-height: 2.8em; max-width: 340px; margin: 0; text-align: center; color: #fff3da; text-shadow: 0 2px 6px rgba(0,0,0,.9); }
+/* 2026-11-25b 用户「布置不好看 铃铛太小 button 也有问题」(BELL_DOOR_V2 look; delete this block = the old stacked small slots):
+   three round niches in an arc on the upper door (top, lower-left, lower-right), bells ~90px; buttons same width side by side */
+.side-door.bell-door { width: 520px; margin-left: -260px; }
+.bell-door .sd-ring { top: 350px; }
+.bell-door .sd-slots { left: 0; right: 0; top: 52px; transform: none; height: 250px; display: block; }
+.bell-door .sd-slot { position: absolute; width: 112px; height: 112px; border-radius: 50%; border: 5px solid #3b2a1c; box-sizing: border-box; }
+.bell-door .sd-slot:nth-child(1) { left: 50%; margin-left: -56px; top: 0; }
+.bell-door .sd-slot:nth-child(2) { left: 22px; top: 122px; }
+.bell-door .sd-slot:nth-child(3) { right: 22px; top: 122px; }
+.bell-door .bd-slot .pic.bd-bell { width: 90px; height: 90px; }
+.bell-door .bd-slot .pic-fb .gi { width: 70px; height: 70px; }
+.bell-door .bd-info { max-width: 480px; min-height: 4.8em; } /* fixed room for up to 3 lines so the buttons never move */
+.bell-door .sd-go { display: flex; justify-content: center; gap: var(--sp-4); width: 100%; }
+.bell-door .sd-go[hidden] { display: none; }
+.bell-door .sd-go .btn { flex: 0 0 220px; min-width: 0; padding-left: var(--sp-3); padding-right: var(--sp-3); }
 /* #12 the first sacrifice is broadcast like an old TV: black first, then a slow fade-in; scanlines, dark corners, only the middle sharp,
    a small roll every few seconds; every other piece of chrome is hidden */
 .cine.tvin { background: #000; opacity: 1; transition: opacity 1.8s ease-in; }
@@ -1611,6 +1666,11 @@ body[data-story="whiteRoom"] .stage1080::after { display: none; }
 .fanim[data-f="4"] .fa-w4, .fanim[data-f="5"] .fa-w5, .fanim[data-f="6"] .fa-w6,
 .fanim[data-b="1"] .fa-k1, .fanim[data-b="2"] .fa-k2 { visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .fanim .fa-w { visibility: hidden; } .fanim .fa-w1 { visibility: visible; } .fanim .fa-k { visibility: hidden; } }
+/* 2026-11-25 小铃 伤心脸: a line with expr 'sad' → face-sad over the body, and the sad blinks instead of the happy ones */
+.stand.e-sad .fanim .fa-sad { visibility: visible; }
+.stand.e-sad .fanim .fa-k { visibility: hidden; }
+.stand.e-sad .fanim[data-b="1"] .fa-ks1, .stand.e-sad .fanim[data-b="2"] .fa-ks2 { visibility: visible; }
+@media (prefers-reduced-motion: reduce) { .stand.e-sad .fanim .fa-ks { visibility: hidden; } }
 /* 2026-11-13 休息回血提示: per-member heal chips on the rest card + the after-rest summary */
 .cc-heals { margin-top: auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; }
 .rh-chip { display: inline-flex; align-items: center; gap: 4px; }
@@ -1666,7 +1726,7 @@ body[data-story="whiteRoom"] .stage1080::after { display: none; }
 .title-fairy.tf-wiggle .tf-tilt { animation: tfWiggle 1s ease-in-out; }
 @keyframes tfWiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
 
-/* ===== 第五批反馈 G1 (docs/SPEC-2026-11-13-rules-and-terms.md「G1 完成记录」) ===== */
+/* ===== 第五批反馈 G1 (docs/archive/SPEC-2026-11-13-rules-and-terms.md「G1 完成记录」) ===== */
 /* #1 identity: three short cards in the class step's frame (left 640 / right 96 → 1184 px wide), 360 × 440, top 236 → bottom 676 */
 .lg-cards.lg-id { left: 640px; right: 96px; top: 236px; gap: var(--sp-3); }
 .lg-cards.lg-id .lg-card { flex: 0 1 360px; max-width: 360px; height: 440px; max-height: 440px; padding: var(--sp-3); }
@@ -2000,6 +2060,29 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .gold-chip .gi { width: 30px; height: 30px; }
 .gold-chip .gi svg { fill: #e8b84a; }
 .gold-chip .gc-n { font: 700 var(--fs-m) var(--font-num); font-variant-numeric: tabular-nums; }
+/* 2026-11-20b WIN_GOLD_LINE (ui/app.js): the loot screen's 「+N 本战所得」 + the purse */
+.win-gold { display: flex; justify-content: center; align-items: center; gap: var(--sp-3); margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); }
+.win-gold .wg-won { display: inline-flex; align-items: center; gap: var(--sp-1); color: var(--c-gold-hi); }
+.win-gold .wg-won .gi { width: 38px; height: 38px; }
+.win-gold .wg-won .gi svg { fill: #e8b84a; }
+.win-gold .wg-n { font: 800 var(--fs-l, 40px) var(--font-num); font-variant-numeric: tabular-nums; }
+.win-gold .wg-l { font-size: var(--fs-s, 22px); opacity: .85; }
+/* 2026-11-20c GOLD_CLAIM: the loot screen's reward block — under the three cards, centred; 领取 flies coins into the top-bar purse */
+.gold-claim { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4); border-radius: var(--r-pill); border: 2px solid var(--c-gold-lo); background: rgba(24,18,34,.9); color: var(--c-gold-hi); box-shadow: 0 0 36px rgba(246,190,80,.35); transition: opacity .4s, transform .4s; white-space: nowrap; }
+.gold-claim .gcl-coin { display: inline-flex; animation: gclBob 1.6s ease-in-out infinite; filter: drop-shadow(0 0 12px rgba(246,210,122,.7)); }
+.gold-claim .gcl-coin .gi { width: 76px; height: 76px; }
+.gold-claim .gcl-coin .gi svg, .coin-fly .gi svg { fill: #e8b84a; }
+.gold-claim .gcl-t { font: 400 var(--fs-l, 40px) var(--font-display); letter-spacing: .06em; }
+.gold-claim .gcl-n { font: 800 var(--fs-xl, 56px) var(--font-num); font-variant-numeric: tabular-nums; margin: 0 .25em; color: #f6d27a; }
+.gold-claim .gcl-btn { min-width: 160px; }
+.gold-claim.claimed { opacity: 0; transform: translateX(-50%) scale(.92); pointer-events: none; }
+@keyframes gclBob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-6px) rotate(-8deg); } }
+.coin-fly { position: absolute; z-index: 58; width: 46px; height: 46px; pointer-events: none; transform: translate(-50%,-50%); filter: drop-shadow(0 0 10px rgba(246,210,122,.85)); }
+.coin-fly .gi { width: 100%; height: 100%; }
+.gold-chip.gold-hit { box-shadow: 0 0 22px rgba(246,210,122,.8); }
+.gold-chip.gold-bump { animation: goldBump .5s cubic-bezier(.3,1.6,.5,1); }
+@keyframes goldBump { 0% { transform: scale(1); } 40% { transform: scale(1.28); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .gold-claim .gcl-coin, .gold-chip.gold-bump { animation: none; } }
 .gold-chip.big { min-height: 64px; padding: 0 var(--sp-4); }
 .gold-chip.big .gi { width: 40px; height: 40px; }
 .gold-chip.big .gc-n { font-size: var(--fs-l); }
@@ -2016,7 +2099,7 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .shop-say b { font: 400 var(--fs-s) var(--font-display); letter-spacing: .1em; color: var(--c-gold-hi); }
 .shop-say q { font-size: var(--fs-m); line-height: 1.5; quotes: '「' '」'; }
 .shop-intro { background: radial-gradient(ellipse at 70% 60%, rgba(255,176,80,.18), transparent 55%); } /* 2026-11-15 芙洛's intro beat: her lantern glow behind the stand */
-.shop-main { position: absolute; left: 700px; right: var(--sp-6); top: 96px; bottom: 150px; }
+.shop-main { position: absolute; left: 700px; right: var(--sp-6); top: 96px; bottom: 150px; overflow-y: auto; overscroll-behavior: contain; padding: 18px 12px 24px; box-sizing: border-box; } /* 2026-11-25 用户「商店物品上面还是有被截断」: room for the card frame / hover lift inside the scroll box */ /* 2026-11-24 用户「商店道具多于六个时新的写在下面」: a 3rd row scrolls into view (was clipped) */
 .shop-offers { display: flex; flex-wrap: wrap; gap: var(--sp-4); justify-content: center; align-content: flex-start; }
 .shop-card { width: 340px; min-height: 340px; justify-content: flex-start; padding: var(--sp-4); }
 .shop-card .ch-head { height: 120px; }
@@ -2034,6 +2117,18 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .shop-card.off .sc-price { color: #9a5a3c; } /* 买不起: dull rust, not pink */
 .shop-card.sold { opacity: .55; }
 .shop-card.small:disabled { opacity: 1; filter: none; cursor: default; }
+.shop-n3 { gap: var(--sp-3); } /* 2026-11-24 用户「6 个物品的时候也有 scroll」: 4–6 items, two rows that fit the 834px panel (each ≤ 400px) */
+.shop-n3 .shop-card { min-height: 0; height: 400px; overflow: hidden; padding: var(--sp-3); }
+.shop-n3 .shop-card .ch-head { height: 100px; }
+.shop-n4 { gap: var(--sp-3); } /* 2026-11-24: 7+ items — four cards a row so they fit one screen */
+.shop-n4 .shop-card { width: 272px; min-height: 320px; padding: var(--sp-3); }
+.shop-n4 .shop-card .ch-head { height: 96px; }
+.shop-dense .shop-card { min-height: 0; height: 256px; overflow: hidden; } /* 9+: three rows in the 834px panel */
+.shop-dense .shop-card .ch-head { height: 64px; }
+.shop-dense .shop-card .ch-name { font-size: var(--fs-m); }
+.shop-dense .shop-card .ch-eff, .shop-dense .shop-card .ch-text { font-size: var(--fs-s); line-height: 1.3; }
+.shop-dense .shop-card .sc-price { font-size: var(--fs-m); }
+.shop-dense .shop-card .sc-price .gi { width: 26px; height: 26px; }
 .shop-card.nope, .shop-who.nope { animation: dfNope .4s; }
 .shop-main .heading { position: absolute; left: 0; right: 0; top: 0; }
 .shop-main .picked { left: 0; top: 110px; }
@@ -2051,6 +2146,9 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
   font: 400 var(--fs-label) var(--font-body); letter-spacing: .04em; cursor: pointer; }
 .story-skip:hover, .story-skip:focus-visible { border-color: var(--c-gold-hi); background: rgba(40,28,52,.92); }
 .story-skip[hidden] { display: none; }
+/* 2026-11-15 快速模式 (?quick=1): a small corner tag so the tester knows the story is off */
+.quick-tag { position: absolute; left: var(--sp-4); bottom: var(--sp-4); z-index: 86; padding: 4px 16px; border-radius: var(--r-pill); pointer-events: none;
+  background: rgba(150,40,40,.85); color: #fff4dc; font-size: 22px; letter-spacing: .06em; }
 /* 一页招完人: one row per interview pair, two candidate cards each; 「确定」 once every row is picked */
 .qr-head { top: 96px; }
 .qr-head h2 { font-size: var(--fs-xl); }
@@ -2096,3 +2194,622 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .who-head .sw-stat { display: flex; align-items: center; gap: 6px; font-size: 21px; color: var(--c-ink-2); }
 .who-head .sw-stat .ic, .who-head .sw-stat svg { width: 20px; height: 20px; }
 .who-head .sw-lv { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; }
+/* DESIGN-2026-11-15-charge §4: the 充能 bar — 10 thin segments under the hp bar; a part-filled one is the fraction */
+/* its own row under the hp bar: the 护甲 badge (34px, centred on the 12px hp bar) hangs ~11px below it, so the bar starts below that */
+.chg-bar { position: relative; z-index: 3; display: flex; gap: 2px; height: 9px; margin: 14px 2px 0 22px; padding: 1px; border-radius: 4px; background: rgba(20,12,4,.55); }
+.chg-seg { flex: 1; position: relative; overflow: hidden; border-radius: 2px; background: rgba(255,255,255,.12); }
+.chg-seg b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(180deg, #fff2a8, #f0b830); transition: width .35s ease-out; }
+.chg-bar.full .chg-seg b { background: linear-gradient(180deg, #fffbe0, #ffd860); box-shadow: 0 0 6px rgba(255,216,96,.9); }
+.chg-bar.gain { animation: chgGain .6s ease-out; }
+.chg-bar.flash { animation: chgFlash .7s ease-out; }
+@keyframes chgGain { 0% { filter: brightness(1.8); } 100% { filter: none; } }
+@keyframes chgFlash { 0%, 40% { filter: brightness(2.4); box-shadow: 0 0 14px 4px rgba(255,220,110,.95); } 100% { filter: none; box-shadow: none; } }
+.float.chg { font-size: 34px; color: #ffe27a; }
+.float.chg.faint { font-size: 26px; opacity: .7; }
+
+/* ===== CONTRACT-2026-11-16 充能「先蓄后放」: raised cards, the ×n plate, the hold before the volley ===== */
+.bcard.raised { transform: translateY(-30px) scale(1.05); box-shadow: 0 0 0 3px var(--c-gold-hi), 0 0 40px rgba(255,200,90,.9); z-index: 4; }
+.bcard.foe.raised { box-shadow: 0 0 0 3px #ff8a8a, 0 0 40px rgba(255,80,90,.85); }
+.bcard.raised.hold { animation: rsHold .5s ease-in-out infinite alternate; }
+.bcard.raised.burst-hit { animation: rsBurst .26s ease-out; }
+.chg-bar.tick { animation: chgTick .12s ease-out; }
+.mult-plate { position: absolute; left: 50%; top: -64px; transform: translateX(-50%); z-index: 6; pointer-events: auto; white-space: nowrap; transition: opacity .3s, transform .3s; }
+.mult-plate b { display: block; font: 400 var(--fs-xl)/1 var(--font-display); color: #ffd66b; -webkit-text-stroke: 2px #6a3000; text-shadow: 0 3px 0 #5a2a00, 0 0 18px rgba(255,190,60,.8); }
+.mult-plate.lv-2 b { color: #ffa54a; text-shadow: 0 3px 0 #5a2000, 0 0 22px rgba(255,140,40,.85); font-size: calc(var(--fs-xl) * 1.12); }
+.mult-plate.lv-3 b { color: #ff6b4a; text-shadow: 0 3px 0 #4a1000, 0 0 26px rgba(255,80,50,.9); font-size: calc(var(--fs-xl) * 1.24); }
+.mult-plate.lv-4 b { color: #ff5a9a; -webkit-text-stroke-color: #5a0030; text-shadow: 0 3px 0 #3a0020, 0 0 28px rgba(255,70,150,.9), 0 0 6px #ffd66b; font-size: calc(var(--fs-xl) * 1.34); }
+.mult-plate.lv-5 b { color: #ffffff; -webkit-text-stroke-color: #8a3000; text-shadow: 0 3px 0 #5a2000, 0 0 22px rgba(255,210,90,.95), 0 0 40px rgba(255,70,150,.9); font-size: calc(var(--fs-xl) * 1.42); }
+.mult-plate.foe b { -webkit-text-stroke-color: #5a0010; }
+.mult-plate.pop { animation: plPop .38s cubic-bezier(.2,1.8,.4,1); }
+.mult-plate.bump { animation: plBump .26s ease-out; }
+.mult-plate.out { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(1.4); }
+.float.chg.self { color: #fff3c0; }
+.float.raise-f { font-size: 44px; color: #ffd66b; }
+.battle.release-hold .bcard:not(.raised) { filter: brightness(.5) saturate(.7); }
+.battle.release-hold::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.45)); z-index: 3; }
+@keyframes rsHold { from { transform: translateY(-30px) scale(1.05); } to { transform: translateY(-34px) scale(1.07) rotate(.6deg); } }
+@keyframes rsBurst { 0% { transform: translateY(-30px) scale(1.05); } 40% { transform: translateY(-46px) scale(1.12); } 100% { transform: translateY(-30px) scale(1.05); } }
+@keyframes chgTick { from { filter: brightness(1.8); } to { filter: none; } }
+@keyframes plPop { 0% { transform: translateX(-50%) scale(1.8); } 60% { transform: translateX(-50%) scale(.9); } 100% { transform: translateX(-50%) scale(1); } }
+@keyframes plBump { 0% { transform: translateX(-50%) scale(1.25); } 100% { transform: translateX(-50%) scale(1); } }
+/* 用户 2026-11-16 晚「准备攻击」: the opener rises, trembles and glows while she gathers; she fires with the volley */
+.bcard.acting.windup { animation: wuShake .16s ease-in-out infinite alternate; box-shadow: 0 0 0 3px var(--c-gold-hi), 0 0 48px rgba(255,210,110,.95); }
+.bcard.foe.acting.windup { box-shadow: 0 0 0 3px #ff8a8a, 0 0 48px rgba(255,80,90,.9); }
+.bcard.acting.windup.hold { animation: wuShake .1s ease-in-out infinite alternate; }
+.bcard.acting.windup.burst-hit { animation: wuFire .26s ease-out; }
+@keyframes wuShake { from { transform: translateY(-34px) scale(1.06) rotate(-.8deg); } to { transform: translateY(-36px) scale(1.07) rotate(.8deg); } }
+@keyframes wuFire { 0% { transform: translateY(-34px) scale(1.06); } 40% { transform: translateY(-50px) scale(1.13); } 100% { transform: translateY(-34px) scale(1.06); } }
+@media (prefers-reduced-motion: reduce) {
+  .bcard.raised, .bcard.raised.hold, .bcard.raised.burst-hit { transform: none; animation: none; }
+  .bcard.acting.windup, .bcard.acting.windup.hold, .bcard.acting.windup.burst-hit { animation: none; }
+  .mult-plate.pop, .mult-plate.bump { animation: none; }
+  .mult-plate.out { transform: translateX(-50%); }
+}
+
+/* ===== 2026-11-16 猎人锁定: the 准星 button on her card (pause), the pickable foes, the mark over the locked foe ===== */
+.aim-btn { position: absolute; right: -10px; top: -14px; z-index: 7; width: 52px; height: 52px; padding: 7px; border-radius: 50%; border: 2px solid #ffe08a; background: radial-gradient(circle, #6a2a10, #2a1008); color: #ffe08a; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.6); }
+.aim-btn svg { width: 100%; height: 100%; display: block; }
+/* 2026-11-20b AIM_BTN_TOP_MID (ui/app.js): the hunter's button at the top-centre of her card, the top-right stays for 威力 (the rule above = backup) */
+.aim-btn.top-mid { right: auto; left: 50%; top: -30px; margin-left: -26px; }
+.aim-btn.locked { color: #ff6b4a; border-color: #ff6b4a; }
+.aim-btn.on { background: radial-gradient(circle, #ff8a4a, #8a2a10); color: #fff; box-shadow: 0 0 0 3px #ffe08a, 0 0 22px rgba(255,140,60,.9); }
+.heal-btn { position: absolute; left: 50%; top: -30px; margin-left: -26px; z-index: 7; width: 52px; height: 52px; padding: 9px; border-radius: 50%; border: 2px solid #c8ffd0; background: radial-gradient(circle, #1f6a3a, #0c2a16); color: #c8ffd0; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.6); } /* 2026-11-20 牧师治疗 */
+.heal-btn svg { width: 100%; height: 100%; display: block; }
+.heal-btn.locked { color: #6bff8a; border-color: #6bff8a; }
+.heal-btn.on { background: radial-gradient(circle, #4adf7a, #12602a); color: #fff; box-shadow: 0 0 0 3px #c8ffd0, 0 0 22px rgba(80,230,120,.9); }
+.heal-mark { position: absolute; left: 6px; top: 6px; z-index: 6; width: 40px; height: 40px; color: #5ce87e; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.8)); }
+.heal-mark.heal-2 { left: 48px; }
+.heal-mark svg { width: 100%; height: 100%; display: block; }
+.heal-mark b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #0c2a16; font-size: 22px; font-weight: 900; }
+.battle[data-mode="aim"] .bcard.foe:not(.down) { cursor: crosshair; box-shadow: 0 0 0 3px #ff8a4a, 0 0 26px rgba(255,120,60,.8); animation: aimPickable 1s ease-in-out infinite alternate; }
+.aim-mark { position: absolute; left: 50%; top: -58px; transform: translate(-50%, 0); z-index: 6; width: 64px; height: 64px; color: #ff5a3a; pointer-events: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.8)); }
+.aim-mark.aim-2 { top: -118px; }
+.aim-mark .aim-x { display: block; width: 100%; height: 100%; animation: aimSpin 6s linear infinite; }
+.aim-mark .aim-x svg { width: 100%; height: 100%; display: block; }
+.aim-mark .aim-face { position: absolute; right: -16px; bottom: -6px; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; border: 2px solid #ffe08a; background: #2a1008; }
+.aim-mark .aim-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+@keyframes aimSpin { to { transform: rotate(360deg); } }
+@keyframes aimPickable { from { box-shadow: 0 0 0 3px #ff8a4a, 0 0 14px rgba(255,120,60,.6); } to { box-shadow: 0 0 0 4px #ffb07a, 0 0 30px rgba(255,120,60,.95); } }
+@media (prefers-reduced-motion: reduce) {
+  .aim-mark .aim-x, .battle[data-mode="aim"] .bcard.foe:not(.down) { animation: none; }
+}
+
+/* 2026-11-16 经验条 (用户「锻炼的时候看不出经验」): Lv · 经验 x/y, the bar fills by this level's progress; .xp-add = where a training card / shop item lands */
+.xp-bar { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; min-width: 96px; margin-top: 4px; }
+.xp-track { position: relative; display: block; height: 8px; border-radius: 4px; background: rgba(40, 28, 18, .35); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); overflow: hidden; }
+.xp-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #c99a3c, #f0cf6e); border-radius: 4px 0 0 4px; }
+.xp-add { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, #7fd4f0 0 4px, #4fb0d8 4px 8px); animation: xp-pulse 1.2s ease-in-out infinite alternate; }
+.xp-bar.maxed .xp-fill { background: linear-gradient(90deg, #b48ae0, #e2c8ff); border-radius: 4px; }
+.xp-txt { font: 600 var(--fs-label)/1.2 var(--font-body); text-align: center; white-space: pre-line; } /* 2026-11-19: the numbers go on a second line under 经验 (narrow shop cards overlapped) */
+.xp-gain { display: block; font: 700 var(--fs-text)/1.3 var(--font-body); color: #1f5f86; text-align: center; }
+.xp-gain .xp-left { display: block; font: 500 var(--fs-label)/1.2 var(--font-body); opacity: .8; }
+.xp-up { display: flex; flex-direction: column; align-items: center; gap: 1px; font: 600 var(--fs-label)/1.3 var(--font-body); color: #24561f; }
+.xp-up b { color: #a0520f; font-size: var(--fs-text); }
+.uc-xp { padding: 0 6px; }
+.uc-xp .xp-txt, .who .xp-txt, .up-xp .xp-txt { color: #f1e6cf; }
+.choice .xp-txt { color: #3b2a1c; }
+.cc-xp { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; margin-top: var(--sp-1, 6px); }
+.who .xp-gain { color: #9fd8f5; } .who .xp-up { color: #b8e6a0; } .who .xp-up b { color: #f0cf6e; }
+.shop-who .xp-bar { min-width: 72px; }
+.wd-xp { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }
+.up-xp { margin-top: 6px; max-width: 240px; }
+@keyframes xp-pulse { from { opacity: .55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .xp-add { animation: none; } }
+/* 2026-11-19 keyword inside card text ({k:sear} → 灼烧): bold, dotted underline, its own tip */
+.kw { font-weight: 700; text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+
+/* ---------- 2026-11-19 路线图 (route map): the move before a new campfire (.route-ov.anim on the stage) + the map at the
+   campfire (.route-ov.static in #modal.route-open). The picture has no text; nodes / path / labels / marker are drawn here. */
+.route-btn { width: 64px; height: 64px; border: 1px solid var(--c-line); margin-right: var(--sp-3); }
+.modal.route-open { z-index: 59; background: rgba(0,0,0,.72); }
+.route-ov { position: absolute; inset: 0; display: grid; place-items: center; }
+.route-ov.anim { z-index: 55; background: #07060b; opacity: 0; transition: opacity .35s ease-out; cursor: pointer; }
+.route-ov.anim.on { opacity: 1; } .route-ov.anim.out { opacity: 0; pointer-events: none; }
+.rm-board { position: relative; width: 1760px; height: 990px; border-radius: 14px; overflow: hidden; background: radial-gradient(circle at 40% 40%, #3a4a3c, #141019 75%) center / cover no-repeat;
+  box-shadow: 0 0 0 2px var(--c-line), 0 18px 60px rgba(0,0,0,.6); }
+.route-ov.anim .rm-board { width: 1920px; height: 1080px; border-radius: 0; box-shadow: none; }
+.rm-board[style*="background-image"] { background-size: cover; background-position: center; }
+.rm-path { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.rm-seg { stroke: rgba(255,244,214,.55); stroke-width: 5; stroke-dasharray: 2 14; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(0,0,0,.8)); }
+.rm-seg.done { stroke: var(--c-gold-hi); stroke-width: 6; stroke-dasharray: none; opacity: .9; }
+.rm-seg.rv { opacity: 0; transition: opacity .8s ease-out; } .revealed .rm-seg.rv { opacity: .9; }
+.rm-node { position: absolute; width: 0; height: 0; }
+.rm-dot { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; border-radius: 50%; box-sizing: border-box;
+  background: rgba(20,16,28,.82); border: 3px solid rgba(255,244,214,.75); box-shadow: 0 0 0 3px rgba(0,0,0,.35); }
+.rm-node.st-done .rm-dot { background: var(--c-gold); border-color: var(--c-gold-hi); }
+.rm-node.st-current .rm-dot { background: var(--c-gold-hi); border-color: #fff; box-shadow: 0 0 0 6px rgba(241,215,154,.35), 0 0 22px rgba(241,215,154,.8); animation: rmPulse 1.6s ease-in-out infinite; }
+.rm-node.cp .rm-dot::after { content: ''; position: absolute; left: 50%; top: -14px; width: 10px; height: 10px; margin-left: -5px; transform: rotate(45deg);
+  background: #d8574a; border: 2px solid #ffd9c8; box-shadow: 0 0 6px rgba(0,0,0,.6); } /* 难关: a small red diamond above the dot */
+.rm-label { position: absolute; left: 22px; top: -20px; white-space: nowrap; padding: 4px 12px; border-radius: 8px; background: rgba(14,11,20,.74);
+  color: #f6ecd6; font-size: var(--fs-s); line-height: 1.2; pointer-events: none; text-shadow: 0 1px 2px #000; }
+.rm-label small { display: block; font-size: var(--fs-s); color: var(--c-gold-hi); opacity: .9; }
+.rm-label b { font-weight: 600; font-size: var(--fs-m); }
+.rm-node.st-upcoming .rm-label { opacity: .78; }
+.rm-node.st-current .rm-label { background: rgba(60,42,20,.88); box-shadow: 0 0 0 1px var(--c-gold-hi); }
+.rm-node[data-lv="6"] .rm-label, .rm-node[data-lv="11"] .rm-label, .rm-node[data-lv="10"] .rm-label { left: auto; right: 22px; } /* the right edge: labels sit on the left */
+.rm-node.rv { opacity: 0; transition: opacity .8s ease-out .2s; } .revealed .rm-node.rv { opacity: 1; }
+.rm-fog { position: absolute; width: 420px; height: 300px; margin: -150px 0 0 -210px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(12,10,22,.96), rgba(18,14,30,.85) 55%, rgba(30,26,44,0)); filter: blur(6px); transition: opacity 1.1s ease-out, transform 1.1s ease-out; }
+.revealed .rm-fog { opacity: 0; transform: scale(1.4); }
+.rm-party { position: absolute; width: 64px; height: 64px; margin: -78px 0 0 -32px; z-index: 2; pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,.7)); }
+.rm-party .pic { width: 100%; height: 100%; object-fit: contain; }
+.rm-party .pic.failed { display: none; }
+.rm-party::after { content: ''; position: absolute; left: 50%; bottom: -10px; width: 0; height: 0; margin-left: -9px; border: 9px solid transparent; border-top-color: var(--c-gold-hi); } /* points at the node */
+.rm-close { position: absolute; right: 60px; top: 30px; width: 64px; height: 64px; font-size: 40px; border: 1px solid var(--c-line); z-index: 3; }
+.rm-skip { position: absolute; right: 48px; bottom: 34px; margin: 0; padding: 6px 16px; border-radius: 8px; background: rgba(0,0,0,.55); color: #e8dfca; font-size: var(--fs-s); }
+@keyframes rmPulse { 50% { box-shadow: 0 0 0 10px rgba(241,215,154,.18), 0 0 30px rgba(241,215,154,.95); } }
+@media (prefers-reduced-motion: reduce) { .rm-node.st-current .rm-dot { animation: none; } .route-ov.anim, .rm-fog, .rm-node.rv, .rm-seg.rv { transition: none; } }
+
+/* ---------- 2026-11-19 路线图 v2 (user: 「路线动画好难看」): ink path that draws itself, the new place glows, one tap enters.
+   No party marker, no boxes, no hard lines. .route-ov.v2.anim (before a new campfire, on the stage) / .route-ov.v2.static
+   (the map from the campfire button, in #modal.route-open). The v1 rules above stay for ROUTE_MAP_V2 = false (backup). */
+.route-ov.v2 { display: block; overflow: hidden; background: #07060b; opacity: 0; transition: opacity .45s cubic-bezier(.22,.61,.36,1); cursor: pointer; }
+.route-ov.v2.anim { z-index: 55; opacity: 1; } /* 2026-11-19 路线图 v2 polish: black from the first frame (no campfire flash); only the board fades in */
+.route-ov.v2.anim .rm2-board { opacity: 0; transition: opacity .45s cubic-bezier(.22,.61,.36,1); } .route-ov.v2.anim.on .rm2-board { opacity: 1; }
+.route-ov.v2.on { opacity: 1; } .route-ov.v2.out, .route-ov.v2.anim.out { opacity: 0; pointer-events: none; transition-duration: .4s; }
+.modal.route-open:has(.route-ov.v2) { background: #07060b; }
+.rm2-board { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: #07060b center / cover no-repeat; }
+.rm2-board::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 70% at 50% 48%, rgba(8,6,12,0) 55%, rgba(8,6,12,.5) 100%); } /* a soft vignette */
+/* portrait (the stage is turned): the overlay turns back upright; the picture fills the height, shifted so the leg is centred */
+#stage.st-rot .route-ov.v2.upright, .route-ov.v2.upright { inset: auto; left: 420px; top: -420px; width: 1080px; height: 1920px; transform: rotate(-90deg); }
+.route-ov.v2.upright .rm2-board { width: 3413px; height: 1920px; }
+.rm2-path { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.rm2-halo { fill: none; stroke: rgba(14,8,3,.78); stroke-width: 34; stroke-linecap: round; } /* 2026-11-19 路线图 v2 polish: a stronger soft dark halo under the new leg */ /* soft dark under the ink so it reads on grass and rock */
+.rm2-ink { fill: none; stroke: #ffd486; stroke-width: 15; stroke-linecap: round; stroke-dasharray: 26 22; } /* 2026-11-19 路线图 v2 polish: ~2.7× thicker, warmer brighter ink */
+.rm2-trail .rm2-ink { stroke: #e6d2a4; stroke-width: 7; stroke-dasharray: 16 14; opacity: .7; } .rm2-trail .rm2-halo { stroke-width: 18; opacity: .55; } /* 2026-11-19 路线图 v2 polish: visited legs stay thinner / calmer than the new one */ /* visited legs: calm ink */
+.rm2-pen { fill: none; stroke: #fff; stroke-width: 70; stroke-linecap: butt; stroke-dashoffset: 1; transition: stroke-dashoffset .8s cubic-bezier(.3,.6,.25,1); }
+.route-ov.v2.draw .rm2-pen { stroke-dashoffset: 0; }
+.rm2-node { position: absolute; width: 0; height: 0; transition: opacity .6s ease-out; }
+.rm2-dot { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: #e6d3a6; box-shadow: 0 0 0 4px rgba(20,12,6,.32), 0 0 10px rgba(0,0,0,.55);
+  transition: background .5s ease-out, box-shadow .5s ease-out, transform .5s ease-out; }
+.rm2-node.st-done .rm2-dot { background: #cdb88b; }
+.rm2-node.st-upcoming .rm2-dot { transform: scale(.72); background: rgba(236,222,190,.42); box-shadow: 0 0 8px rgba(0,0,0,.5); }
+.rm2-node.st-current .rm2-dot { background: #fff3d2; box-shadow: 0 0 0 3px rgba(255,236,190,.25), 0 0 16px 5px rgba(255,214,140,.75); }
+.rm2-glow { position: absolute; left: -100px; top: -100px; width: 200px; height: 200px; border-radius: 50%; pointer-events: none; opacity: 0; transform: scale(.35);
+  background: radial-gradient(closest-side, rgba(255,228,168,.62), rgba(255,204,120,.24) 48%, rgba(255,198,110,0)); mix-blend-mode: screen;
+  transition: opacity .7s ease-out, transform .9s cubic-bezier(.22,.61,.36,1); }
+.rm2-node.st-current .rm2-glow { opacity: 1; transform: none; animation: rm2Breathe 2.6s ease-in-out .9s infinite; }
+.rm2-node.cp .rm2-dot::after { content: ''; position: absolute; left: 50%; top: -15px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg); border-radius: 1px;
+  background: rgba(200,86,66,.92); box-shadow: 0 0 6px rgba(0,0,0,.6); } /* 难关: a small red-ink diamond */
+.rm2-label { position: absolute; left: 22px; top: -24px; white-space: nowrap; pointer-events: none; color: #f6ecd6; font: 400 var(--fs-s) / 1.15 var(--font-body);
+  isolation: isolate; text-shadow: 0 0 4px rgba(0,0,0,.95), 0 0 12px rgba(0,0,0,.85), 0 2px 3px rgba(0,0,0,.9); transition: opacity .6s ease-out .1s, transform .6s cubic-bezier(.22,.61,.36,1) .1s; }
+.rm2-label small { display: block; font-size: 22px; color: #e7cf9c; letter-spacing: .06em; }
+.rm2-label b { font: 600 28px / 1.2 var(--font-display); letter-spacing: .04em; } /* 2026-11-19 路线图 v2 polish: a little larger */
+.rm2-label::before { content: ''; position: absolute; inset: -12px -22px; z-index: -1; border-radius: 48px; background: rgba(10,7,4,.6); filter: blur(12px); } /* 2026-11-19 路线图 v2 polish: a soft dark backdrop (blurred, not a box) */
+.rm2-node.st-done .rm2-label { opacity: .74; } .rm2-node.st-upcoming .rm2-label { opacity: .5; }
+.rm2-node.st-current .rm2-label b { font-size: 36px; color: #fff5dc; }
+.rm2-node[data-lv="6"] .rm2-label, .rm2-node[data-lv="10"] .rm2-label, .rm2-node[data-lv="11"] .rm2-label { left: auto; right: 22px; text-align: right; } /* the right edge: labels sit on the left */
+/* the new place waits dim until the pen arrives (.lit) */
+.route-ov.v2.anim:not(.lit) .rm2-node.new .rm2-glow { opacity: 0; transform: scale(.35); animation: none; }
+.route-ov.v2.anim:not(.lit) .rm2-node.new .rm2-dot { transform: scale(.72); background: rgba(236,222,190,.42); box-shadow: 0 0 8px rgba(0,0,0,.5); }
+.route-ov.v2.anim:not(.lit) .rm2-node.new .rm2-label { opacity: 0; transform: translateY(8px); }
+/* hidden places (throne / secret chamber): under soft mist; on the reveal the mist clears first, then the pen draws */
+.rm2-node.rv { opacity: 0; } .route-ov.v2.fog-clear .rm2-node.rv { opacity: 1; }
+.rm2-fog { position: absolute; width: 440px; height: 320px; margin: -160px 0 0 -220px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(14,12,24,.95), rgba(20,16,32,.82) 52%, rgba(30,26,44,0)); filter: blur(8px); transition: opacity .6s ease-out, transform .7s ease-out; }
+.route-ov.v2.fog-clear .rm2-fog.rv { opacity: 0; transform: scale(1.35); }
+/* the hint: the new place's name + 「点击进入」 with a soft chevron, over a soft dark band at the bottom */
+.route-ov.v2.anim::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 320px; pointer-events: none; opacity: 0; transition: opacity .6s ease-out;
+  background: linear-gradient(to top, rgba(8,6,12,.72), rgba(8,6,12,.3) 55%, rgba(8,6,12,0)); }
+.route-ov.v2.anim.ready::after { opacity: 1; }
+.rm2-hint { position: absolute; left: 0; right: 0; bottom: 62px; z-index: 1; text-align: center; pointer-events: none; color: #f8eedb; opacity: 0; transform: translateY(12px);
+  text-shadow: 0 0 6px rgba(0,0,0,.9), 0 0 18px rgba(0,0,0,.7); transition: opacity .6s ease-out, transform .6s cubic-bezier(.22,.61,.36,1); }
+.route-ov.v2.ready .rm2-hint { opacity: 1; transform: none; }
+.rm2-hint small { display: block; font-size: var(--fs-s); color: #e7cf9c; letter-spacing: .12em; }
+.rm2-hint b { display: block; font: 600 var(--fs-xl) / 1.25 var(--font-display); letter-spacing: .08em; }
+.rm2-go { display: inline-block; margin-top: 12px; font-size: var(--fs-s); color: #ecdcb6; letter-spacing: .24em; animation: rm2Hint 2.4s ease-in-out infinite; }
+.rm2-go::after { content: ''; display: inline-block; width: 10px; height: 10px; margin: 0 0 3px 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); opacity: .8; }
+.route-ov.v2.upright .rm2-hint { bottom: 120px; }
+/* the campfire map's close: a soft × on a dark glow, no box */
+.rm2-close { position: absolute; right: 36px; top: 26px; z-index: 2; width: 76px; height: 76px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(closest-side, rgba(8,6,12,.55), rgba(8,6,12,0)); }
+.rm2-close::before, .rm2-close::after { content: ''; position: absolute; left: 50%; top: 50%; width: 30px; height: 2.5px; margin: -1px 0 0 -15px; border-radius: 2px; background: #f2e2bd; box-shadow: 0 0 6px rgba(0,0,0,.8); transform: rotate(45deg); }
+.rm2-close::after { transform: rotate(-45deg); }
+@keyframes rm2Breathe { 50% { opacity: .72; transform: scale(1.12); } }
+@keyframes rm2Hint { 50% { opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .route-ov.v2, .route-ov.v2 *, .route-ov.v2::after { transition: none !important; animation: none !important; } }
+/* 2026-11-19 预加载: the thin tier-1 bar on the title (ui/preload.js); never takes a tap */
+.pre-bar { position: absolute; left: 50%; bottom: 46px; width: 420px; margin-left: -210px; height: 4px; border-radius: 2px; background: rgba(243, 234, 216, .18); pointer-events: none; transition: opacity .4s; }
+.pre-bar i { display: block; height: 100%; width: 0; border-radius: 2px; background: rgba(243, 234, 216, .75); transition: width .25s; }
+.pre-bar span { position: absolute; left: 0; right: 0; top: 10px; text-align: center; font-size: 22px; color: #f3ead8; opacity: .6; letter-spacing: .06em; }
+.pre-bar.done { opacity: 0; }
+
+/* 2026-11-19 试玩修 界面: 「跳过剧情」 no longer sits in the top bar (it covered the quill / face / bell / 查看队伍, whose widths
+   vary per screen) — it hangs just under the bar's right end; in battle under the ×1 / 跳过 pills. 旧: right: 104px; top: var(--sp-4) */
+.story-skip { right: var(--sp-5); top: calc(var(--sp-4) + 64px + var(--sp-3)); }
+body[data-phase="battle"] .story-skip { top: 164px; }
+/* 2026-11-19 试玩修 界面: the 「下回合翻倍」 warning (battle.bigTell) — bottom-right, over everything in the field, red edge */
+.vn.side-right.b-warn { width: 920px; z-index: 43; }
+.vn.b-warn .vn-box { border: 2px solid #c0392b; box-shadow: 0 0 0 3px rgba(192,57,43,.35), 0 0 28px rgba(220,60,40,.45), var(--sh-3); }
+/* 2026-11-19 试玩修 界面: the advisor turned boss — her chip gets a red ring instead of the grey 「已离开」 look */
+.adv-chip.turned { opacity: 1; border-color: #c0392b; } .adv-chip.turned .ac-face { filter: none; box-shadow: 0 0 0 2px #c0392b; }
+/* 2026-11-19 意图预告 (SPEC-damage-spread §4): drawn marks only, no letters. Stage px (the stage scales ×~.45 on a phone → the
+   38px faces are ~17–20 screen px there). Enemy: a strip on the bottom-left of the art (the ⓘ keeps the bottom-right); ally: a red
+   准星 on the top-left corner, outside the art (the hunter's own 准星 button keeps the top-right). */
+.intent-row { position: absolute; left: 6px; bottom: 6px; z-index: 4; display: flex; align-items: center; padding: 3px 5px 3px 3px; border-radius: 22px; background: rgba(40,8,10,.78); box-shadow: 0 0 0 2px rgba(255,90,70,.75), 0 2px 6px rgba(0,0,0,.6); pointer-events: auto; }
+.intent-row .it-face { display: block; width: 38px; height: 38px; border-radius: 50%; overflow: hidden; border: 2px solid #ffb0a0; background: #2a1520; flex: none; }
+.intent-row .it-face + .it-face { margin-left: -8px; }
+.intent-row .it-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+.intent-row .it-face .pic.failed { display: none; }
+.intent-row .it-shape { display: grid; place-items: center; width: 38px; height: 38px; flex: none; }
+.intent-row .it-shape svg { width: 100%; height: 100%; display: block; }
+.intent-row .it-shape.all { color: #ff7a5a; }
+.intent-row.ik-heal { background: rgba(8,36,18,.8); box-shadow: 0 0 0 2px rgba(110,230,140,.75), 0 2px 6px rgba(0,0,0,.6); }
+.intent-row .it-shape.heal { color: #7ce89a; width: 30px; height: 30px; }
+.intent-row .it-face.foe { border-color: #9fe8b0; }
+.aimed-mark { position: absolute; left: -14px; top: -14px; z-index: 6; width: 34px; height: 34px; color: #ff4a3a; filter: drop-shadow(0 1px 3px rgba(0,0,0,.85)); pointer-events: auto; }
+.aimed-mark svg { width: 100%; height: 100%; display: block; }
+.aimed-mark .am-n { position: absolute; right: -14px; bottom: -12px; min-width: 26px; height: 26px; padding: 0 4px; border-radius: 13px; display: grid; place-items: center; font: 700 21px/1 var(--font-num, sans-serif); font-style: normal; color: #fff; background: #c0201c; box-shadow: 0 0 0 2px #ffd0c0; }
+.foe-ghost.has-intent { position: relative; width: auto; min-width: 52px; height: auto; min-height: 66px; padding: 4px 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 4px; }
+.foe-ghost.has-intent .fg-q { font-style: normal; line-height: 1; }
+.foe-ghost.has-intent .intent-row { position: static; padding: 2px; }
+.foe-ghost.has-intent .intent-row .it-face, .foe-ghost.has-intent .intent-row .it-shape { width: 32px; height: 32px; }
+.camp-wrap.talking .aimed-mark { opacity: 0; }
+
+/* ===== 2026-11-19 用户亲测 界面 (docs/archive/FEEDBACK-2026-11-19-user.md #1 #2 #5 #6, + 锻炼选人) =====
+   Parchment + ink, one accent (the gold of the level glyph); no new colours beyond the paper / gold / primary set. */
+
+/* #5 威力 on our battle card: the power glyph + number, small, top right of the name strip */
+.bcard.ally .uc-body { position: relative; }
+.bcard.ally .uc-name { padding: 0 40px; }
+.uc-pow { position: absolute; right: 6px; top: 6px; display: inline-flex; align-items: center; gap: 2px; font: 400 var(--fs-s)/1 var(--font-num); color: #f0d48a; opacity: .92; cursor: help; }
+.uc-pow .gi { width: 22px; height: 22px; }
+.bcard.down .uc-pow { opacity: .35; }
+
+/* #1 升级页: one paper page over a dim stage, portrait left, the changes right */
+.lvup-ov { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(10,6,16,.62); cursor: pointer; opacity: 0; transition: opacity .3s ease; }
+.lvup-ov.in { opacity: 1; } .lvup-ov.out { opacity: 0; pointer-events: none; }
+.lu-page { position: relative; display: grid; grid-template-columns: 400px 1fr; width: 1060px; min-height: 560px; padding: 0; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+.lvup-ov.in .lu-page { animation: luIn .45s cubic-bezier(.22,.61,.36,1) both; }
+.lu-art { position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, rgba(255,236,190,.55), rgba(160,122,70,.18) 70%); border-right: 1px solid var(--c-paper-line); }
+/* 2026-11-20 用户亲测: the whole figure, nothing cut top or bottom. Backup (2026-11-19): .lu-art .stand-img { position: absolute; left: 50%; bottom: 0; height: 112%; width: auto; max-width: none; transform: translateX(-50%); object-fit: contain; object-position: 50% 0; } */
+.lu-art .stand-img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; max-width: none; padding: 16px 12px 0; box-sizing: border-box; transform: none; object-fit: contain; object-position: 50% 100%; }
+.lu-page { min-height: 640px; }
+.lu-art .pic-fb { position: absolute; inset: 0; }
+.lu-body { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-6) var(--sp-6) 96px; color: var(--c-paper-ink); text-align: left; }
+.lu-k0 { font: 400 var(--fs-m) var(--font-display); letter-spacing: .3em; color: #a0500a; }
+.lu-name { font: 400 var(--fs-xxl)/1.05 var(--font-display); letter-spacing: .1em; color: #4a2c12; }
+.lu-lv { display: inline-flex; align-items: center; gap: var(--sp-3); font: 400 var(--fs-xl)/1 var(--font-num); color: #6a4a20; }
+.lu-lv .lu-to { color: #a0500a; }
+.lu-arrow { display: inline-block; width: 30px; height: 2px; position: relative; background: currentColor; opacity: .6; flex: none; }
+.lu-arrow::after { content: ''; position: absolute; right: -1px; top: -5px; width: 10px; height: 10px; border-right: 2px solid currentColor; border-top: 2px solid currentColor; transform: rotate(45deg); }
+.lu-list { list-style: none; margin: var(--sp-2) 0 0; padding: var(--sp-3) 0 0; width: 100%; border-top: 1px solid rgba(160,122,70,.45); display: flex; flex-direction: column; gap: var(--sp-3); }
+.lu-row { display: grid; grid-template-columns: 34px auto 1fr; align-items: center; gap: var(--sp-3); font-size: var(--fs-m); }
+.lu-row .gi { width: 30px; height: 30px; }
+.lu-k { font: 400 var(--fs-m) var(--font-display); letter-spacing: .08em; color: #6a4a20; white-space: nowrap; }
+.lu-v b { font: 400 var(--fs-l)/1 var(--font-num); color: #3a6a20; }
+.lu-skill { align-items: start; } .lu-skill .lu-ic, .lu-skill .lu-k { margin-top: 2px; }
+.lu-skill .lu-v { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); line-height: 1.4; }
+.lu-old { color: #8a7258; } .lu-new { color: #3b2a1c; font-weight: 600; } .lu-skill .lu-arrow { width: 20px; color: #8a7258; }
+.lu-say { display: block; margin-top: auto; padding-top: var(--sp-3); font: 400 var(--fs-l)/1.4 var(--font-display); color: #5a3a1c; letter-spacing: .04em; quotes: '「' '」'; }
+.lu-foot { position: absolute; left: 400px; right: 0; bottom: var(--sp-4); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--sp-6); }
+.lu-dots { display: inline-flex; gap: 8px; } .lu-dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(160,122,70,.35); } .lu-dots i.on { background: #a0500a; }
+.lu-next { margin-left: auto; font-size: var(--fs-s); letter-spacing: .2em; color: #8a6a44; animation: rm2Hint 2.4s ease-in-out infinite; }
+@keyframes luIn { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* #2 战报: one row per member — face + name · 4 numbers under one header line · 经验 + bar · 「升级」 */
+.result.rr-panel { width: 1240px; max-width: 1840px; padding: var(--sp-5) var(--sp-6); }
+.rr-list { margin: var(--sp-3) 0 var(--sp-4); color: var(--c-paper-ink); }
+.rr-row { display: grid; grid-template-columns: 64px minmax(170px, 1fr) repeat(4, 96px) 236px 136px; align-items: center; column-gap: 14px; padding: 8px 12px; border-bottom: 1px solid rgba(160,122,70,.3); }
+.rr-panel.no-xp .rr-row { grid-template-columns: 64px minmax(170px, 1fr) repeat(4, 110px); }
+.rr-row.rr-head { padding-top: 0; padding-bottom: 6px; border-bottom: 2px solid var(--c-paper-line); }
+.rr-h { font: 400 var(--fs-s) var(--font-display); letter-spacing: .08em; color: #6a4a20; text-align: center; white-space: nowrap; cursor: help; }
+.rr-h-xp { text-align: left; }
+.rr-face { position: relative; width: 60px; height: 60px; border-radius: 50%; overflow: hidden; border: 2px solid var(--c-paper-trim); background: #2a2138; }
+.rr-face img { width: 100%; height: 100%; object-fit: cover; }
+.rr-who { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; text-align: left; }
+.rr-who b { font: 400 var(--fs-m) var(--font-display); letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-crown { width: 34px; height: 34px; flex: none; mix-blend-mode: multiply; cursor: help; }
+.rr-n { font: 400 var(--fs-l)/1 var(--font-num); text-align: center; font-variant-numeric: tabular-nums; }
+.rr-n.zero { color: #a08a70; }
+.rr-xp { display: flex; flex-direction: column; gap: 6px; cursor: help; }
+.rr-xp-t { display: flex; align-items: baseline; gap: var(--sp-2); }
+.rr-lv { font: 400 var(--fs-s) var(--font-num); color: #6a4a20; }
+.rr-xp-t b { font: 400 var(--fs-m) var(--font-num); color: #3a6a20; }
+.rr-xp.none .rr-xp-t b { color: #a08a70; }
+.rr-bar { position: relative; display: block; height: 8px; border-radius: 4px; background: rgba(40,28,18,.2); box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); overflow: hidden; }
+.rr-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px 0 0 4px; background: linear-gradient(90deg, #c99a3c, #e8c066); }
+.rr-add { position: absolute; top: 0; bottom: 0; background: #5fae3e; }
+.rr-act { display: flex; justify-content: flex-end; }
+.rr-up { display: inline-flex; align-items: center; gap: 6px; min-height: var(--hit-min); padding: 0 16px 0 10px; border: 1px solid #a0500a; border-radius: var(--r-pill); background: linear-gradient(180deg, #fff3d6, #f1d79a); color: #6a3a10; font: 400 var(--fs-s) var(--font-display); letter-spacing: .12em; box-shadow: 0 2px 0 rgba(106,58,16,.25); }
+.rr-up .gi { width: 26px; height: 26px; }
+.rr-up:hover { background: linear-gradient(180deg, #fffaf0, #f6e0aa); }
+.rr-row.is-mvp { background: linear-gradient(90deg, rgba(246,200,90,.26), rgba(246,200,90,.06)); }
+.rr-row.is-mvp .rr-face { border-color: #c08a20; box-shadow: 0 0 0 2px #f1d79a; }
+body.act-3 .rr-n.zero { color: #5e4c38; }
+
+/* 锻炼选人: the level block leads the card (Lv big, how far to the next level, the bar; a gold ribbon when this training levels her up) */
+.camp-pick.lv-focus .uc-stats { font-size: var(--fs-s); opacity: .72; margin-top: 2px; }
+.camp-pick.lv-focus .uc-chips { min-height: 0; }
+.uc-lvf { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px; padding: 8px 10px; border-radius: var(--r-1); background: rgba(0,0,0,.32); box-shadow: inset 0 0 0 1px rgba(241,215,154,.25); cursor: help; }
+.lvf-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-2); }
+.lvf-lv { display: inline-flex; align-items: center; gap: 6px; }
+.lvf-lv .gi { width: 26px; height: 26px; align-self: center; }
+.lvf-lv b { font: 400 var(--fs-xl)/1 var(--font-num); color: #fff3d6; }
+.lvf-left { font-size: var(--fs-s); color: #e6d6ad; white-space: nowrap; }
+.lvf-bar { position: relative; display: block; height: 12px; border-radius: 6px; background: rgba(0,0,0,.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); overflow: hidden; }
+.lvf-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: linear-gradient(90deg, #c99a3c, #f0cf6e); }
+.lvf-up { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 8px; border-radius: var(--r-pill); font: 400 var(--fs-s) var(--font-display); letter-spacing: .08em; color: #3a2408; background: linear-gradient(180deg, #ffe6a0, #e2b456); }
+.uc-lvf.up-some .lvf-up { color: #f1d79a; background: rgba(241,215,154,.14); box-shadow: inset 0 0 0 1px rgba(241,215,154,.45); }
+.uc-lvf.up-all { box-shadow: inset 0 0 0 2px #e2b456, 0 0 18px rgba(240,200,110,.35); }
+.lvf-arrow { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 11px solid currentColor; }
+
+/* #6 路线图 v2: the tap opens into the new place (the board grows from it and fades; the campfire fades in under it) */
+.route-ov.v2.enter { opacity: 0; pointer-events: none; transition: opacity .62s ease .12s; }
+.route-ov.v2.enter .rm2-board { transform: scale(1.22); transition: transform .76s cubic-bezier(.4,0,.2,1); }
+.route-ov.v2.enter .rm2-hint { opacity: 0; transition: opacity .2s ease; }
+.route-ov.v2.enter .rm2-talk { opacity: 0; transition: opacity .2s ease; }
+/* 2026-11-20 流程: the first map — the advisor explains the road (one line per tap), the 「点击进入」 hint waits until she is done */
+.rm2-talk { position: absolute; left: 50%; bottom: 56px; z-index: 2; width: min(1100px, 80%); transform: translate(-50%, 12px); padding: 22px 34px 18px;
+  background: rgba(14,11,18,.84); border: 1px solid rgba(231,207,156,.45); border-radius: 14px; color: #f8eedb; opacity: 0; pointer-events: none;
+  transition: opacity .3s ease, transform .3s ease; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+.route-ov.v2.talking .rm2-talk { opacity: 1; transform: translate(-50%, 0); }
+.route-ov.v2.talking .rm2-hint { opacity: 0; }
+.rm2-who { display: block; font: 600 var(--fs-m) / 1.3 var(--font-display); color: #e7cf9c; letter-spacing: .08em; }
+.rm2-say { margin: 6px 0 4px; font-size: var(--fs-l); line-height: 1.5; }
+.rm2-talk small { display: block; text-align: right; font-size: var(--fs-s); color: rgba(248,238,219,.6); }
+.route-ov.v2.upright .rm2-talk { bottom: 110px; }
+/* 2026-11-20 流程: the place card (「篝火营地」 / the level's place) — a dark full-stage title on the way into a new place */
+.place-card { position: absolute; inset: 0; z-index: 54; display: grid; place-items: center; background: #07060b; opacity: 0; transition: opacity .45s ease; cursor: pointer; }
+.place-card.on { opacity: 1; } .place-card.out { opacity: 0; pointer-events: none; transition-duration: .5s; }
+.place-card .pc-in { display: flex; align-items: center; gap: 36px; transform: translateY(10px); transition: transform .9s cubic-bezier(.22,.61,.36,1); }
+.place-card.on .pc-in { transform: none; }
+.place-card .pc-name { font: 600 calc(var(--fs-xl) * 1.6) / 1.2 var(--font-display); color: #f3e4c4; letter-spacing: .3em; text-shadow: 0 2px 18px rgba(0,0,0,.7); }
+.place-card .pc-rule { display: block; width: 120px; height: 1px; background: linear-gradient(90deg, transparent, rgba(231,207,156,.7), transparent); }
+@media (prefers-reduced-motion: reduce) { .place-card, .place-card .pc-in, .rm2-talk { transition: none !important; } }
+
+@media (prefers-reduced-motion: reduce) { .lvup-ov, .lvup-ov.in .lu-page, .lu-next { transition: none; animation: none; } }
+/* 2026-11-20 用户亲测 界面: 「条款生效」 = a readable text plate (CLAUSE_BANNER_SMALL); the old big word stays for .banner.clause without .plate */
+.banner.clause.plate { white-space: normal; max-width: 1200px; padding: 18px 40px; border-radius: 18px; background: rgba(16,10,24,.88); box-shadow: 0 0 0 2px rgba(246,210,122,.55), 0 8px 24px rgba(0,0,0,.6); animation: plateIn 3s ease-out both; z-index: 8; }
+.banner.clause.plate .fx-word { font: 400 var(--fs-l)/1.4 var(--font-body); letter-spacing: .04em; background: none; color: #fff3d6; -webkit-text-fill-color: #fff3d6; filter: none; text-shadow: 0 2px 4px #000; animation: none; padding: 0; }
+@keyframes plateIn { 0% { opacity: 0; transform: translate(-50%, -40%); } 8% { opacity: 1; transform: translate(-50%, -50%); } 88% { opacity: 1; } 100% { opacity: 0; } }
+/* 2026-11-20 CARD_POWER_TOP: 威力 in the art's top-right corner (ours + foes), a dark pill so it reads over any portrait */
+.uc-pow.uc-pow-top { right: 6px; top: 6px; z-index: 4; padding: 2px 8px 2px 4px; border-radius: 16px; background: rgba(20,12,24,.78); box-shadow: 0 0 0 1px rgba(240,212,138,.55); font-size: var(--fs-m); opacity: 1; }
+.uc-pow.uc-pow-top .gi { width: 24px; height: 24px; }
+.uc-pow-top ~ .corrupt-mark { top: 46px; }
+.uc-pow.uc-pow-top.bump { animation: powBump .6s ease-out; }
+/* 2026-11-20b POWER_LIVE_UI (ui/app.js): the live 威力 — gold-green above her base, red below; the 「威力 +2」 float */
+.uc-pow.uc-pow-top.pow-up { color: #b8ff8a; box-shadow: 0 0 0 2px #ffe08a, 0 0 12px rgba(255,214,90,.7); }
+.uc-pow.uc-pow-top.pow-down { color: #ff7a6a; box-shadow: 0 0 0 2px #c0392b, 0 0 10px rgba(220,60,40,.6); }
+.float.pow-float { font: 400 var(--fs-l)/1.15 var(--font-num); white-space: pre-line; text-align: center; } /* 2026-11-20: several sources → one per line */
+.float.pow-float.up { color: #ffe08a; text-shadow: 0 2px 6px #000, 0 0 12px rgba(255,214,90,.8); }
+.float.pow-float.down { color: #ff7a6a; text-shadow: 0 2px 6px #000; }
+@keyframes powBump { 0% { transform: scale(1); } 30% { transform: scale(1.35); box-shadow: 0 0 0 2px #ffe08a, 0 0 18px rgba(255,200,90,.9); } 100% { transform: scale(1); } }
+/* 2026-11-20 TURN_BANNER_GAP: a slim band (≈56px) set in the gap between the lanes — never over a card or its 准星 */
+.turn-banner.slim { padding: 4px 0; gap: 20px; align-items: center; z-index: 5; }
+.turn-banner.slim .tb-r { font-size: var(--fs-m); }
+.turn-banner.slim .tb-s { font-size: 40px; line-height: 1.2; }
+/* 2026-11-20 ONE_HIT_NUMBER: the hunter's number rides the arrow (sharp, a touch smaller in flight) and slams in on the target */
+.flynum.hitnum.shot { filter: drop-shadow(-18px 0 6px rgba(255,230,160,.55)); }
+.float.shot { animation: shotPop 1.2s cubic-bezier(.2,1.6,.4,1) both; }
+.float.shot.crit { animation: critSlam 1.6s ease-out both; }
+@keyframes shotPop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(2); } 10% { opacity: 1; transform: translate(-50%, -50%) scale(.9); } 22% { transform: translate(-50%, -50%) scale(1.08); } 75% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
+/* 2026-11-20 BELL_FX: a bell effect's per-card text (「威力 +1」「充能 +1」…) and a quick gold glow */
+.float.bell-fx { font: 400 var(--fs-l) var(--font-display); color: #ffe7a0; text-shadow: 0 2px 0 #3a2408, 0 0 14px rgba(255,200,90,.85); }
+.float.bell-fx.bad { color: #ffb0c8; text-shadow: 0 2px 0 #3a0a18, 0 0 14px rgba(255,90,140,.8); }
+.bcard.bell-glow { animation: bellGlow .7s ease-out; }
+@keyframes bellGlow { 0% { box-shadow: 0 0 0 0 rgba(255,215,120,0); } 30% { box-shadow: 0 0 0 4px #ffe08a, 0 0 30px rgba(255,200,90,.9); } 100% { box-shadow: 0 0 0 0 rgba(255,215,120,0); } }
+
+/* 2026-11-20 keepsake / relic gain on the 给谁 preview */
+.who-detail .wd-token { display: block; color: var(--c-ink); font-size: var(--fs-text); }
+.who-detail .wd-token-t { display: block; font-style: normal; color: var(--c-ink-2); }
+
+/* 2026-11-20 幸运 (LUCK_STAT): the clover badge on a battle card (only when 幸运 > 0), the 「好运一击」 pop, 妮可塔's +2 */
+.luck-badge { position: absolute; top: calc(var(--sp-2) + 44px); left: var(--sp-2); z-index: 3; display: flex; align-items: center; gap: 2px; padding: 2px 8px 2px 4px; border-radius: 999px; background: rgba(18, 48, 28, .88); border: 2px solid #6fd08a; color: #8ff0a8; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.luck-badge .gi { width: 26px; height: 26px; }
+.luck-badge .gi svg { width: 100%; height: 100%; fill: currentColor; }
+.luck-badge .luck-n { font: 400 24px/1 var(--font-num); color: #eaffef; }
+.float.lucky-fx { color: #7dffa0; z-index: 8; animation: critSlam 1.5s ease-out both; }
+.float.lucky-fx .gi { display: block; width: 84px; height: 84px; margin: 0 auto; color: #5fe08a; filter: drop-shadow(0 0 14px rgba(120,255,160,.9)) drop-shadow(0 3px 0 #0c3a1c); }
+.float.lucky-fx .gi svg { width: 100%; height: 100%; fill: currentColor; }
+.float.lucky-fx small { color: #b8ffcb; font-size: 36px; -webkit-text-stroke: 2px #0c3a1c; }
+.float.lucky-fx.up .gi { width: 56px; height: 56px; }
+.float.lucky-fx.up small { font-size: 28px; }
+.bcard.lucky { box-shadow: 0 0 0 3px #6fd08a, 0 0 28px rgba(110,240,150,.8); }
+
+/* 2026-11-20 BONUS_STACK (ui/dev/mockup-bonus-v5.html): bonus rows over the attacker → one big number; font-size per row (+15%) */
+.bs-chip { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; display: flex; align-items: center; gap: .4em; padding: .12em .8em .12em .4em; border-radius: 999px;
+  background: rgba(20,12,28,.94); border: 2px solid #c9a46a; box-shadow: 0 4px 12px rgba(0,0,0,.6); font: 400 25px/1.15 var(--font-body); color: #f6ecdc; z-index: 9; pointer-events: none; }
+.bs-chip .bs-ic { display: inline-flex; width: 1.35em; height: 1.35em; } .bs-chip .bs-ic svg { width: 100%; height: 100%; }
+.bs-chip .v { font: 400 1.5em/1 var(--font-num); color: #f1d79a; min-width: 1.6em; text-align: right; }
+.bs-chip.mul { border-color: #ff8a4a; background: rgba(52,20,8,.95); box-shadow: 0 0 16px rgba(255,138,74,.55), 0 4px 12px rgba(0,0,0,.6); } .bs-chip.mul .v { color: #ffb070; }
+.bs-chip.base { border-color: #c9b8a8; } .bs-chip.base .v { color: #fff; }
+.bs-chip.burst { border-color: #c8b0ff; background: rgba(36,18,66,.96); box-shadow: 0 0 18px rgba(170,140,255,.7), 0 4px 12px rgba(0,0,0,.6); } .bs-chip.burst .v { color: #e0d0ff; }
+.bs-chip.foe { background: rgba(44,8,14,.95); border-color: #c8505e; } .bs-chip.foe .v { color: #ffb3b9; }
+.bs-chip.foe.mul { border-color: #ff4a3a; background: rgba(72,10,8,.96); box-shadow: 0 0 16px rgba(255,60,40,.6), 0 4px 12px rgba(0,0,0,.6); } .bs-chip.foe.mul .v { color: #ff9a7a; }
+.bs-chip.foe.base { border-color: #a07078; } .bs-chip.foe.base .v { color: #ffe0e0; }
+.bs-chip.slim { gap: .25em; padding: .1em .55em .1em .3em; } .bs-chip.slim .l { display: none; } .bs-chip.slim .v { min-width: 1.2em; } /* volley: icon + value, neighbours stay apart */
+.bs-big { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font: 400 80px/1 var(--font-num); color: #fff4c0; -webkit-text-stroke: 3px #8a1020;
+  text-shadow: 0 5px 0 #4a0010, 0 0 26px rgba(255,80,40,.9); z-index: 10; pointer-events: none; }
+.bs-big.foe { color: #ffd6d6; -webkit-text-stroke-color: #5a0010; text-shadow: 0 5px 0 #300008, 0 0 26px rgba(255,30,60,.95); }
+.bs-ring { position: absolute; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; border: 5px solid #ffd27a; box-shadow: 0 0 30px #ff7a3a; z-index: 8; pointer-events: none; }
+
+/* 2026-11-20 招人花钱 (RECRUIT_PRICE): her price (coin + number) on the panel, the hire button and the one-page list; the purse sits in the top bar */
+.iv-price { display: inline-flex; align-items: center; gap: 2px; color: var(--c-gold-hi); font: 700 var(--fs-m) var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.iv-price .gi { width: 26px; height: 26px; }
+.iv-price .gi svg { fill: #e8b84a; }
+.iv-price.poor { color: #e07a6a; }
+.iv-tag .it-h .iv-price { margin-left: var(--sp-2); }
+.hire-btn .hb-price { margin-left: auto; padding-left: var(--sp-3); }
+.qr-card .qr-price { position: absolute; right: var(--sp-4); bottom: var(--sp-3); }
+.hire-btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* 2026-11-20 用户「自动按钮被回合间提示挡住了」: while a pick mode is open (heal / aim / move …) the opening tip steps aside */
+.battle[data-mode]:not([data-mode=""]) .pause-open { display: none; }
+
+/* 2026-11-20 快速招募: the profile button on each card (top-right corner, like the battle card's i) */
+.qr-card { position: relative; }
+.qr-more { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(20, 16, 28, .85); border: 2px solid var(--c-gold-hi, #e8c77a); color: #fff3d6; font: italic 700 24px/1 Georgia, serif; cursor: pointer; z-index: 2; }
+.qr-more:hover { background: rgba(60, 44, 20, .95); }
+
+/* 2026-11-20 BONUS_STACK_V7 (?stack=v7 only): 用户「不要框，字太平」 — no plate: every row is free-standing cartoon lettering in the v6
+   big-number style (display / number font, thick dark stroke, a solid drop shadow + glow), source left, effect right, ≥ 22 px.
+   Ours grows up from above her card, enemies' grows down from below it (red). Then one big number + 「合计 N」. */
+.v7-plate { position: absolute; z-index: 7; display: flex; flex-direction: column-reverse; gap: 2px; padding: 0 6px; white-space: nowrap;
+  background: none; border: 0; box-shadow: none; pointer-events: none; transform-origin: 50% 100%; }
+.v7-plate.foe { flex-direction: column; transform-origin: 50% 0; }
+.v7-tail { display: none !important; }
+.v7-rw { display: flex; align-items: baseline; gap: .7em; padding: 0 .2em; font: 400 26px/1.25 var(--font-display); letter-spacing: .03em; color: #fff4c0;
+  -webkit-text-stroke: 5px #3a1408; paint-order: stroke fill; text-shadow: 0 4px 0 #3a0a10, 0 0 14px rgba(0,0,0,.85); }
+.v7-rw .k { flex: 1; text-align: left; }
+.v7-rw .e { font-family: var(--font-num); font-size: 1.12em; color: #f1d79a; text-align: right; }
+.v7-rw .sub { display: block; font: 400 max(22px, .8em)/1.25 var(--font-body); color: #e6d8c4; -webkit-text-stroke: 4px #2a1008; }
+.v7-rw.base, .v7-rw.base .e { color: #ffffff; }
+.v7-rw.mul { color: #ffd0a8; font-size: 1.12em; -webkit-text-stroke-color: #5a1a00; text-shadow: 0 4px 0 #4a1000, 0 0 20px rgba(255,120,40,.9); }
+.v7-rw.mul .e { color: #ffb070; font-size: 1.2em; }
+.v7-rw.burst { color: #efe6ff; font-size: 1.12em; -webkit-text-stroke-color: #2a1060; text-shadow: 0 4px 0 #1e0a48, 0 0 20px rgba(170,140,255,.95); }
+.v7-rw.burst .e { color: #e0d0ff; font-size: 1.2em; }
+.v7-rw.info { color: #f6ecdc; }
+.v7-plate.foe .v7-rw { color: #ffe0e0; -webkit-text-stroke-color: #4a0010; text-shadow: 0 4px 0 #300008, 0 0 14px rgba(0,0,0,.85); }
+.v7-plate.foe .v7-rw .e { color: #ffb3b9; }
+.v7-plate.foe .v7-rw.mul { color: #ffc0b0; text-shadow: 0 4px 0 #300008, 0 0 20px rgba(255,30,60,.95); } .v7-plate.foe .v7-rw.mul .e { color: #ff9a7a; }
+.v7-merged { position: absolute; z-index: 8; transform: translate(-50%, -50%); pointer-events: none; transition: opacity .25s; }
+.v7-merged.release { opacity: 0; }
+.v7-big { display: block; font: 400 64px/1 var(--font-num); color: #fff4c0; -webkit-text-stroke: 3px #8a1020; text-shadow: 0 5px 0 #4a0010, 0 0 26px rgba(255,80,40,.9); white-space: nowrap; }
+.v7-merged.foe .v7-big { color: #ffd6d6; -webkit-text-stroke-color: #5a0010; text-shadow: 0 5px 0 #300008, 0 0 26px rgba(255,30,60,.95); }
+.v7-cap { position: absolute; left: 50%; top: 100%; margin-top: 10px; transform: translateX(-50%); white-space: nowrap; font: 400 28px/1 var(--font-display); color: #fff4c0;
+  -webkit-text-stroke: 4px #3a1408; paint-order: stroke fill; text-shadow: 0 3px 0 #3a0a10, 0 0 12px rgba(0,0,0,.85); }
+.v7-merged.foe .v7-cap { color: #ffd6d6; -webkit-text-stroke-color: #4a0010; }
+/* V7 (?stack=v7): while plates are up nothing else floats over them (charge 「+N」, 威力 floats, early numbers); rows on top */
+#fx.v7-live > :not(.v7-plate):not(.v7-merged):not(.bs-ring):not(.b1-col) { visibility: hidden !important; }
+#fx > .v7-plate { z-index: 30; } #fx > .v7-merged { z-index: 31; }
+#stage.v7-mode .mult-plate { top: 4px; left: auto; right: 4px; transform: scale(.62); transform-origin: top right; }
+#stage.v7-mode .mult-plate.out { opacity: 0; transform: scale(.4); }
+
+/* 2026-11-20 用户「右上角 x2 这种小字也不要了」: no stack badge in v7 mode */
+#stage.v7-mode .mult-plate, #stage.v7-mode .float.raise-f { display: none !important; }
+
+/* 2026-11-20 BONUS_STACK_B1 (?stack=b1 only; ui/dev/bonus-lab.html B1): 「招式名」 band over her head (same look as .skill-tag),
+   her hit number above it (same look as .flynum.hitnum) counting up, the bonus rows above it as plain words, no box. An enemy's hangs down. */
+.b1-col { position: absolute; z-index: 30; transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; pointer-events: none; }
+.b1-col.foe { flex-direction: column; }
+.b1-name { width: max-content; padding: 4px 22px; white-space: nowrap; font: 400 var(--fs-xl) var(--font-display); letter-spacing: .08em; color: #fff3c8;
+  background: linear-gradient(90deg, transparent, rgba(20,10,28,.9) 18%, rgba(20,10,28,.9) 82%, transparent); text-shadow: 0 2px 0 #3a2410, 0 0 12px rgba(246,200,90,.6); }
+.b1-col.foe .b1-name { color: #ffd6d0; text-shadow: 0 2px 0 #4a0a14, 0 0 12px rgba(255,120,120,.5); }
+.b1-num { display: block; margin: 2px 0; font: 400 56px/1.1 var(--font-num); color: #ffdf8a; text-shadow: 0 3px 0 #5a1020, 0 0 10px rgba(0,0,0,.9); white-space: nowrap; }
+.b1-col.foe .b1-num { color: #ff8a8a; }
+.b1-num.mul { color: #ffb070; }
+.b1-rows { display: flex; flex-direction: column-reverse; align-items: center; }
+.b1-col.foe .b1-rows { flex-direction: column; }
+.b1-rw { white-space: nowrap; font: 400 30px/1.3 var(--font-display); letter-spacing: .04em; color: #fff3c8; text-shadow: 0 2px 0 #000, 0 0 8px rgba(0,0,0,.95), 0 0 2px #000; }
+.b1-rw .e { margin-left: .5em; color: #ffe08a; font-family: var(--font-num); }
+.b1-rw .sub { font-size: .7em; color: #e6d8c4; }
+.b1-rw.base { font-size: 26px; color: #c8bcae; } .b1-rw.base .e { color: #e8dcc8; }
+.b1-rw.mul .e { color: #ffb070; font-size: 1.2em; }
+.b1-rw.burst .e { color: #e0d0ff; font-size: 1.2em; }
+.b1-col.foe .b1-rw .e { color: #ff9a8a; }
+.b1-col.release .b1-name { opacity: 0; transition: opacity .4s ease .3s; }
+.b1-col.release .b1-rows { opacity: 0; }
+
+/* 2026-11-20 招式名放在出手人的卡上（不挡上方的数字和分解） */
+.skill-tag.on-card { font-size: var(--fs-l); padding: 2px 14px; background: rgba(16, 12, 24, .78); border-radius: 10px; z-index: 4; }
+/* 2026-11-20 用户「三个铃铛获得的时候字要加粗」: 「你获得了xx之铃」 */
+.vn-box.bell-got .vn-text { font-weight: 700; }
+/* 2026-11-20 用户「所有物品道具都加边框：白 / 蓝 / 紫 / 橙代表不同等级」 (app.js RARITY_FRAME → .rar-*) */
+:root { --rar-common: #f2eee6; --rar-rare: #4a8fe0; --rar-epic: #9b5de5; --rar-legendary: #f08a24; }
+.choice.rar-common { outline: 4px solid var(--rar-common); outline-offset: 2px; }
+.choice.rar-rare { outline: 4px solid var(--rar-rare); outline-offset: 2px; }
+.choice.rar-epic { outline: 4px solid var(--rar-epic); outline-offset: 2px; }
+.choice.rar-legendary { outline: 4px solid var(--rar-legendary); outline-offset: 2px; box-shadow: 0 0 22px rgba(240,138,36,.55); }
+.bag-chip img.rar-common { outline: 2px solid var(--rar-common); border-radius: 6px; }
+.bag-chip img.rar-rare { outline: 2px solid var(--rar-rare); border-radius: 6px; }
+.bag-chip img.rar-epic { outline: 2px solid var(--rar-epic); border-radius: 6px; }
+.bag-chip img.rar-legendary { outline: 2px solid var(--rar-legendary); border-radius: 6px; }
+/* 2026-11-20 灰羽首领狂暴穿透 (app.js beam / pierceLine) */
+.pierce-beam { position: absolute; height: 14px; margin-top: -7px; transform-origin: 0 50%; pointer-events: none; z-index: 30; border-radius: 7px;
+  background: linear-gradient(90deg, rgba(255,90,60,0), #ff5a3c 25%, #fff3e6 60%, #ff5a3c); box-shadow: 0 0 18px rgba(255,80,50,.85); animation: pierceBeam 360ms ease-out forwards; }
+@keyframes pierceBeam { 0% { clip-path: inset(0 100% 0 0); opacity: 1; } 45% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+
+
+/* 2026-11-21 顾问换装：一幕纯立绘，背景变灰，粒子，旧立绘渐变成背叛后的立绘，真实身份的标签飞出 */
+#stage.cs-grey > *:not(.cine) { filter: grayscale(1) brightness(.55); transition: filter 1.2s ease; }
+.cine.costume { display: block; pointer-events: auto; cursor: pointer; background: radial-gradient(ellipse at 50% 55%, rgba(40,38,44,.55), rgba(6,5,8,.92)); opacity: 0; transition: opacity 1s ease; overflow: hidden; }
+.cine.costume.on { opacity: 1; }
+.cine.costume.fade { opacity: 0; }
+.cs-fig { position: absolute; left: 50%; bottom: 0; height: 92%; aspect-ratio: 3 / 4; transform: translateX(-50%); }
+.cs-fig img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: bottom center; transition: opacity 2.2s ease, filter 2.2s ease; }
+.cs-fig .cs-old { opacity: 1; filter: grayscale(.4); }
+.cs-fig .cs-new { opacity: 0; filter: brightness(2.2) blur(6px); }
+.cine.costume.morph .cs-old { opacity: 0; filter: brightness(2.2) blur(6px); }
+.cine.costume.morph .cs-new { opacity: 1; filter: none; }
+.cs-dots { position: absolute; inset: 0; pointer-events: none; }
+.cs-dots i { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, #fff6d8 0, #f2c46b 45%, rgba(242,196,107,0) 72%); box-shadow: 0 0 10px 2px rgba(242,196,107,.55); }
+.cine.costume.on .cs-dots i { animation: csDot 2.6s ease-in-out var(--d) infinite; }
+.cine.costume.morph .cs-dots i { animation: csBurst 1.8s ease-out var(--d) both; }
+@keyframes csDot { 0% { opacity: 0; transform: translateY(14px) scale(.6); } 40% { opacity: .9; } 100% { opacity: 0; transform: translateY(-46px) scale(1.1); } }
+@keyframes csBurst { 0% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-140px) scale(.3); } }
+.cs-cap { position: absolute; left: 50%; bottom: 7%; width: min(80%, 880px); transform: translateX(-50%); margin: 0; text-align: center; color: #e9e3d6;
+  font-size: clamp(16px, 2.1vw, 24px); line-height: 1.6; text-shadow: 0 2px 8px #000; opacity: 0; transition: opacity .9s ease .5s; }
+.cine.costume.on .cs-cap { opacity: 1; }
+.cine.costume.tag .cs-cap { opacity: 0; transition-delay: 0s; }
+.cs-tag { position: absolute; left: 50%; top: 16%; transform: translate(-50%, 0) scale(2.6); opacity: 0; filter: blur(8px); pointer-events: none; }
+.cs-tag b { display: inline-block; padding: .35em 1.2em; font-size: clamp(22px, 3.4vw, 44px); letter-spacing: .12em; color: #ffe6a8; white-space: nowrap;
+  background: linear-gradient(90deg, rgba(60,8,14,0), rgba(60,8,14,.92) 18%, rgba(60,8,14,.92) 82%, rgba(60,8,14,0)); border-top: 1px solid #c79a4a; border-bottom: 1px solid #c79a4a; text-shadow: 0 0 12px rgba(255,200,120,.7); }
+.cine.costume.tag .cs-tag { animation: csTag .7s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes csTag { 0% { opacity: 0; transform: translate(-50%, 0) scale(2.6); filter: blur(8px); } 100% { opacity: 1; transform: translate(-50%, 0) scale(1); filter: none; } }
+@media (prefers-reduced-motion: reduce) { .cs-dots i { animation: none !important; } }
+
+/* 2026-11-22 遗物 (guild relics): small name pills in the top bar, the effect in the tip */
+.grelic.grelic-pic { padding: 0 var(--sp-1); }
+.grelic-pic .grelic-ic { width: 28px; height: 28px; object-fit: contain; }
+.grelic-pic .pic-fb { position: static; inset: auto; }
+.grelic-pic .grelic-ic.failed { display: none; }
+.grelic-chip { display: inline-flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.grelic { display: inline-flex; align-items: center; min-height: var(--hit-min); padding: 0 var(--sp-2); border-radius: var(--r-pill); border: 1px solid var(--c-gold-lo); background: rgba(24,18,34,.85); color: var(--c-gold-hi); font-size: var(--fs-s); white-space: nowrap; cursor: help; }
+.shop-card.k-guildRelic { box-shadow: inset 0 0 0 2px rgba(232,184,74,.75); }
+
+/* 2026-11-23 REWARD_TRAIT_NOTE: trait reactions under the reward preview */
+.who-detail .wd-trait { display: block; font-size: 0.85em; color: #a0522d; margin-top: 4px; }
+
+/* 2026-11-23 用户「灵体状态要带蓝边」: L9 首领 after 3 hits this round (every later hit only 1) */
+.bcard.foe.graze-on { box-shadow: 0 0 0 2px #4aa3ff, 0 0 12px rgba(74,163,255,.7); border-color: #4aa3ff; }
+
+/* 2026-11-23 妮可塔「幸运星」: the loot screen says she turned one more card */
+.fortune-note { text-align: center; margin: 4px 0 8px; opacity: .85; font-size: .95em; }
+
+/* 2026-11-24 MOOD_WHY: why each mood moved (or did not), under the faces */
+.md-why { position: absolute; left: 50%; top: 700px; transform: translateX(-50%); max-width: 1400px; width: max-content; padding: var(--sp-3) var(--sp-5); border-radius: var(--r-2); background: rgba(10,8,16,.88); border: 1px solid var(--c-line); color: var(--c-ink); font-size: var(--fs-l); line-height: 1.7; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.6); } /* 2026-11-24 用户「心情的改变要写在中间条幅的下面——在上面根本看不清」: below the face strip (34–62% of the stage) */
+
+/* 2026-11-24 SWAP_ANY_UI: the ⬇ slot buttons on ally cards while picking where she goes */
+.mv-here { position: absolute; left: 50%; top: -6px; transform: translate(-50%, -100%); z-index: 9; width: 64px; height: 56px; border-radius: 14px; border: 2px solid #ffe08a; background: rgba(30,20,8,.92); color: #ffe08a; font-size: 34px; line-height: 1; cursor: pointer; box-shadow: 0 0 16px rgba(255,214,90,.6); animation: mvBob 1s ease-in-out infinite; }
+.mv-here:hover { background: #ffe08a; color: #2a1a04; }
+@keyframes mvBob { 0%, 100% { transform: translate(-50%, -100%); } 50% { transform: translate(-50%, -112%); } }
+
+/* 2026-11-24 用户「边框不大明显，稀有度看不出来——有 glow 效果会好一点」: rarity glow (rare steady, epic / legendary breathing) */
+.choice.rar-rare { box-shadow: 0 0 14px 3px rgba(74,143,224,.75), inset 0 0 18px rgba(74,143,224,.35); }
+.choice.rar-epic { box-shadow: 0 0 18px 5px rgba(155,93,229,.8), inset 0 0 22px rgba(155,93,229,.4); animation: rarGlowEpic 2.2s ease-in-out infinite; }
+.choice.rar-legendary { box-shadow: 0 0 24px 7px rgba(240,138,36,.85), inset 0 0 26px rgba(240,138,36,.45); animation: rarGlowLeg 1.8s ease-in-out infinite; }
+@keyframes rarGlowEpic { 0%, 100% { box-shadow: 0 0 14px 3px rgba(155,93,229,.6), inset 0 0 18px rgba(155,93,229,.3); } 50% { box-shadow: 0 0 26px 8px rgba(155,93,229,.95), inset 0 0 26px rgba(155,93,229,.5); } }
+@keyframes rarGlowLeg { 0%, 100% { box-shadow: 0 0 18px 5px rgba(240,138,36,.7), inset 0 0 20px rgba(240,138,36,.35); } 50% { box-shadow: 0 0 34px 11px rgba(255,170,60,1), inset 0 0 30px rgba(255,170,60,.55); } }
+.bag-chip img.rar-rare { box-shadow: 0 0 8px 2px rgba(74,143,224,.8); }
+.bag-chip img.rar-epic { box-shadow: 0 0 10px 3px rgba(155,93,229,.85); }
+.bag-chip img.rar-legendary { box-shadow: 0 0 12px 4px rgba(240,138,36,.9); }
+@media (prefers-reduced-motion: reduce) { .choice.rar-epic, .choice.rar-legendary { animation: none; } }
+/* 2026-11-25 角色面板 信物图 */
+.up-keep .up-keep-ic { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; margin-right: var(--sp-1); }
+.up-keep .up-keep-ic.failed { display: none; }
+/* 2026-11-25 TOPBAR_SPLIT: relics + bells from the left (after the level plate, clipped — never over it); items right, 5 fixed slots */
+.topbar .tb-plate { flex-shrink: 0; }
+.relic-strip { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; flex: 0 1 auto; overflow: hidden; padding: var(--sp-1); }
+.relic-strip .rs-it { position: relative; flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(24,18,34,.85); border: 1px solid var(--c-gold-lo); cursor: help; }
+.relic-strip .rs-ic { width: 34px; height: 34px; object-fit: contain; }
+.relic-strip .rs-ic.failed { display: none; }
+.relic-strip .pic-fb { position: static; inset: auto; }
+.relic-strip .rs-name { font-size: var(--fs-s); color: var(--c-gold-hi); white-space: nowrap; padding: 0 var(--sp-1); }
+.bag-slots { align-items: center; }
+.bag-slots .bs-slot { width: var(--hit-min); height: var(--hit-min); display: grid; place-items: center; flex-shrink: 0; }
+.bag-slots .bs-slot img { width: 100%; height: 100%; border-radius: 50%; border: 1px solid var(--c-gold-lo); }
+.bag-slots .bs-empty { border-radius: 50%; border: 1px dashed var(--c-line); background: rgba(255,255,255,.03); }
+/* 2026-11-25 获得遗物 / 铃铛: the card in the middle, then the picture flies to the relic strip */
+.cine.relicget { display: grid; place-items: center; pointer-events: auto; cursor: pointer; background: rgba(6,4,10,.55); opacity: 0; transition: opacity .35s; }
+.cine.relicget.on { opacity: 1; }
+.rg-card { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); width: 460px; padding: var(--sp-5) var(--sp-5) var(--sp-4); border-radius: 18px; border: 2px solid var(--c-gold-lo); background: rgba(24,18,34,.96); box-shadow: 0 0 40px rgba(240,200,120,.25); text-align: center; animation: rg-pop .45s cubic-bezier(.2,1.4,.4,1) both; }
+.rg-got { color: var(--c-gold-hi); letter-spacing: .2em; font-size: var(--fs-s); }
+.rg-ic { width: 180px; height: 180px; object-fit: contain; filter: drop-shadow(0 0 18px rgba(240,200,120,.45)); }
+.rg-ic.failed { display: none; }
+.rg-name { font-size: 34px; color: var(--c-gold-hi); }
+.rg-text { margin: 0; font-size: var(--fs-m, 22px); line-height: 1.5; color: var(--c-text, #eee); }
+.rg-tap { opacity: .55; font-size: var(--fs-s); margin-top: var(--sp-2); }
+@keyframes rg-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.relic-fly img { width: 56px; height: 56px; object-fit: contain; }

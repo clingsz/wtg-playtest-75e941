@@ -1,4 +1,4 @@
-// 2026-11-14 真结局片尾 (docs/SPEC-2026-11-13-batch6.md「追加：结局去英文 + 真结局片尾」). Pure parts, node-tested
+// 2026-11-14 真结局片尾 (docs/archive/SPEC-2026-11-13-batch6.md「追加：结局去英文 + 真结局片尾」). Pure parts, node-tested
 // (tests/credits.test.cjs); app.js playCredits() only draws what these return.
 //
 //   cards(summary, run, data)  → one card per person of this run, in order: those who stayed → those handed over →
@@ -201,7 +201,7 @@
 
   function staffDefault() {
     return { title: tx('ui.credits.staff.title'), rows: [{ role: tx('ui.credits.staff.planning'), names: ['Alpico'] }, { role: tx('ui.credits.staff.writing'), names: ['Alpico'] }, { role: tx('ui.credits.staff.art'), names: ['Alpico'] },
-      { role: tx('ui.credits.staff.music'), names: [tx('ui.credits.staff.themeSong'), 'Alpico'] }, { role: tx('ui.credits.staff.code'), names: ['Alpico'] }], thanks: tx('ui.credits.staff.thanks'), dawnCaption: tx('ui.credits.staff.dawnCaption') };
+      { role: tx('ui.credits.staff.music'), names: ['Alpico'] /* 2026-11-24 用户「片尾曲不是《写下你的名字》」: no song title (the ending plays the dawn track) */ }, { role: tx('ui.credits.staff.code'), names: ['Alpico'] }], thanks: tx('ui.credits.staff.thanks'), dawnCaption: tx('ui.credits.staff.dawnCaption') };
   }
   function staff(data) {
     var c = data && data.linesV2 && data.linesV2.credits, STAFF_DEFAULT = staffDefault();
@@ -211,19 +211,20 @@
     return { title: c.title || STAFF_DEFAULT.title, rows: rows.length ? rows : STAFF_DEFAULT.rows, thanks: c.thanks || STAFF_DEFAULT.thanks, dawnCaption: c.dawnCaption != null ? c.dawnCaption : STAFF_DEFAULT.dawnCaption };
   }
 
-  var T = { dawn: 6500, card: 6000, cardMin: 4500, cardMax: 9000, staffBase: 4000, staffRow: 1100, thanks: 4000, white: 1600, closing: 5500 };
+  // 2026-11-24 用户「最后的字幕太快了——尤其是团长的，还没看清楚就结束了」: slower cards (old card 6000 / min 4500 / max 9000, closing 5500), the leader card ×LEADER_X
+  var T = { dawn: 6500, card: 8000, cardMin: 6500, cardMax: 11000, staffBase: 4000, staffRow: 1100, thanks: 4000, white: 1600, closing: 7500, leaderX: 1.8 };
   function plan(nCards, nRows, opts) {
     var o = opts || {}, k = o.reduced ? 0.15 : 1, n = Math.max(0, nCards | 0), r = Math.max(0, nRows | 0);
     var staffMs = T.staffBase + T.staffRow * r, card = T.card;
     var song = +o.songMs;
     if (isFinite(song) && song > 0 && n) { // lay the cards along the song: what the dawn / staff / thanks leave over, shared out
       var left = song - T.dawn - staffMs - T.thanks - (o.closing ? T.closing : 0);
-      card = Math.max(T.cardMin, Math.min(T.cardMax, Math.floor(left / n)));
+      card = Math.max(T.cardMin, Math.min(T.cardMax, Math.floor(left / (n + (o.leaderIdx >= 0 ? T.leaderX - 1 : 0))))); // the leader's longer card counts in the share
     }
     var segs = [], t = 0;
     function add(kind, ms, i) { var s = { kind: kind, t: t, ms: Math.max(1, Math.round(ms * k)) }; if (i != null) s.i = i; segs.push(s); t += s.ms; }
     add('dawn', T.dawn);
-    for (var i = 0; i < n; i++) add('card', card, i);
+    for (var i = 0; i < n; i++) add('card', i === o.leaderIdx ? card * T.leaderX : card, i); // the leader's card has the most to read
     if (o.closing) add('closing', T.closing); // 2026-11-14: 团长卡之后，单独一屏的收尾句
     add('staff', staffMs);
     add('thanks', T.thanks);
