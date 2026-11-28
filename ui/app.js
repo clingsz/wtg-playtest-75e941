@@ -1373,7 +1373,8 @@
       '<label class="mn-row"><input type="checkbox" data-pref="autoCont"' + (prefs.autoCont ? ' checked' : '') + '> ' + T('ui.menu.autoCont') + '</label><p class="mn-note">' + T('ui.menu.autoContNote') + '</p>' +
       '<label class="mn-row"><input type="checkbox" data-pref="intent2"' + (intent2On() ? ' checked' : '') + '> ' + T('ui.menu.intent2') + '</label>' + // 2026-11-25 意图 v2 switch
       (run ? '' : '<div class="mn-row"><button class="btn btn-secondary" data-act="replayIntro">' + T('ui.title.replayIntro') + '</button></div>') +
-      (window.CHOOSER_FGUIDE ? '<div class="mn-row"><button class="btn btn-secondary" data-act="fguide">' + T('ui.fguide.menu') + '</button></div>' : ''); // 布阵教学: reopen the pages
+      (window.CHOOSER_FGUIDE ? '<div class="mn-row"><button class="btn btn-secondary" data-act="fguide">' + T('ui.fguide.menu') + '</button></div>' : '') + // 布阵教学: reopen the pages
+      '<div class="mn-row"><button class="btn btn-secondary" data-act="resetAsk">' + T('ui.reset.button') + '</button></div>'; // 2026-11-27 用户「选项里放一个 reset，我可以从头玩」
     var log = (PL ? '<div class="mn-row"><button class="btn btn-secondary" data-act="plExport">' + T('ui.playlog.export') + '</button>' +
       '<button class="btn btn-secondary" data-act="plCopy" data-tip="' + T('ui.playlog.copyTip') + '">' + T('ui.playlog.copy') + '</button><button class="btn btn-secondary" data-act="briefCopy" data-tip="' + T('ui.brief.copyTip') + '">' + T('ui.brief.copy') + '</button></div>' : '') + '<p class="mn-note">' + T('ui.title.localOnly') + '</p>';
     var lang = '<div class="mn-row"><button class="pill-btn on" disabled>' + T('ui.menu.lang.zh') + '</button><span class="mn-note">' + T('ui.menu.lang.soon') + '</span></div>';
@@ -5644,6 +5645,17 @@
   var boxDone = null;
   function boxFx(open) { return function (done, it) { it.skip = function () {}; boxDone = done; open(); if (modalEl.hidden) { boxDone = null; done(); } }; }
   // batch6 H2-1: the game never uses alert/confirm/prompt — overwriting a save asks in a game-styled panel
+  // 2026-11-27 重置存档: clears this profile's run, unlocks (meta), interview / route / place memory and prefs (the sound volume has its own key and stays),
+  // after one backup of all of it (RESET_BACKUP_KEY, newest 3). The 游玩记录 and the save backups stay. Then back to the title.
+  var RESET_BACKUP_KEY = 'chooser.resetBackups.v1';
+  function resetAll() {
+    var keys = [KEY, MKEY, ROUTE_KEY, ROUTE_TALK_KEY, PLACE_KEY, IVM_KEY, QKEY, PKEY], snap = {};
+    keys.forEach(function (k) { try { var v = localStorage.getItem(k); if (v != null) snap[k] = v; } catch (e) { /* */ } });
+    try { var list = lsGet(RESET_BACKUP_KEY, []) || []; list.push({ t: Date.now(), profile: PROFILE || '', keys: snap }); lsSet(RESET_BACKUP_KEY, list.slice(-3)); } catch (e) { /* */ }
+    if (run) backupSave(run, 'reset');
+    keys.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { /* */ } });
+    location.reload();
+  }
   function askOverwrite(act) {
     modal('<h2>' + T('ui.newRun.confirmTitle') + '</h2><p>' + bold(T(run ? 'ui.newRun.confirmCurrent' : 'ui.newRun.confirmExisting')) + '</p><p class="small dim">' + T('ui.newRun.noUndo') + '</p>' +
       '<div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.rethink') + '</button><button class="btn btn-primary" data-act="' + act + '" data-ok="1">' + T('ui.newRun.confirmStart') + '</button></div>');
@@ -5950,6 +5962,12 @@
     'export': exportJson,
     plExport: function () { plExport(false); },
     plCopy: function () { plExport(true); },
+    resetAsk: function () {
+      modal('<h2>' + T('ui.reset.title') + '</h2><p>' + bold(T('ui.reset.body')) + '</p><p class="small dim">' + T('ui.reset.note') + '</p>' +
+        '<div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.rethink') + '</button><button class="btn btn-primary" data-act="resetGo">' + T('ui.reset.go') + '</button></div>');
+      var p = modalEl.querySelector('.panel'); if (p) p.classList.add('ask-modal');
+    },
+    resetGo: function () { closeModal(); resetAll(); },
     briefCopy: function () { var t; try { t = briefText(); } catch (e) { notice(T('ui.playlog.exportFailed')); return; } copyText(t); }
   };
   Object.keys(SHOP_H).forEach(function (k) { H[k] = SHOP_H[k]; }); // 2026-11-14 芙洛的店

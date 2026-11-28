@@ -5,7 +5,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000"><link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="data:,"><link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin><!-- 2026-11-19 预加载: the logo and the title scene (web copy) start before any script; hrefs = A.ver(...) / A.scene('title-fairy')[0], kept in step by tests/preload.test.cjs --><link rel="preload" href="../art/brand/alpico-logo.png?v=20261114f" as="image"><link rel="preload" href="../art/web/scenes/title-fairy.webp?v=20261114f" as="image" type="image/webp"><title></title><link rel="stylesheet" href="style.css?v=v49-1127"><link rel="stylesheet" href="formation-guide.css?v=v49-1127"></head>
+<link rel="icon" href="data:,"><link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin><!-- 2026-11-19 预加载: the logo and the title scene (web copy) start before any script; hrefs = A.ver(...) / A.scene('title-fairy')[0], kept in step by tests/preload.test.cjs --><link rel="preload" href="../art/brand/alpico-logo.png?v=20261114f" as="image"><link rel="preload" href="../art/web/scenes/title-fairy.webp?v=20261114f" as="image" type="image/webp"><title></title><link rel="stylesheet" href="style.css?v=v50-1127"><link rel="stylesheet" href="formation-guide.css?v=v50-1127"></head>
 <body class="act-1">
 <!-- Everything renders into one fixed 1920×1080 stage; app.js scales it to fit the window (letterboxed). -->
 <div id="stage" class="stage1080">
@@ -22,20 +22,20 @@
 </div>
 <!-- Asset depot: every image slot is an ordered candidate list (docs/ASSET-DEPOT.md). -->
 <!-- 游玩记录 (local only, export from the ☰ menu): first, so it also catches load-time errors. ?log=0 turns it off. -->
-<script src="playlog.js?v=v49-1127"></script>
-<script src="../art/web/manifest.js?v=v49-1127"></script><!-- 2026-11-14: resized art list (tools/make-web-art.mjs); missing = originals -->
-<script src="assets.js?v=v49-1127"></script>
+<script src="playlog.js?v=v50-1127"></script>
+<script src="../art/web/manifest.js?v=v50-1127"></script><!-- 2026-11-14: resized art list (tools/make-web-art.mjs); missing = originals -->
+<script src="assets.js?v=v50-1127"></script>
 <!-- Real engine + content (v2). If missing or still v1, app.js falls back to the dev/ stubs. -->
-<script src="../engine/engine.js?v=v49-1127"></script>
-<script src="generated/data.js?v=v49-1127"></script>
-<script src="preload.js?v=v49-1127"></script><!-- 2026-11-19 预加载: art warmed in tiers (URLs from assets.js); ?nopreload=1 = off -->
+<script src="../engine/engine.js?v=v50-1127"></script>
+<script src="generated/data.js?v=v50-1127"></script>
+<script src="preload.js?v=v50-1127"></script><!-- 2026-11-19 预加载: art warmed in tiers (URLs from assets.js); ?nopreload=1 = off -->
 <!-- DEV stubs: define ChooserStubEngine / CHOOSER_STUB_DATA only; remove these two lines with ui/dev/. -->
-<script src="dev/stub-data.js?v=v49-1127"></script>
-<script src="dev/stub-engine.js?v=v49-1127"></script>
-<script src="audio.js?v=v49-1127"></script>
-<script src="hitfx.js?v=v49-1127"></script>
-<script src="round-plan.js?v=v49-1127"></script>
-<script src="credits.js?v=v49-1127"></script>
-<script src="formation-guide.js?v=v49-1127"></script>
-<script src="app.js?v=v49-1127"></script>
+<script src="dev/stub-data.js?v=v50-1127"></script>
+<script src="dev/stub-engine.js?v=v50-1127"></script>
+<script src="audio.js?v=v50-1127"></script>
+<script src="hitfx.js?v=v50-1127"></script>
+<script src="round-plan.js?v=v50-1127"></script>
+<script src="credits.js?v=v50-1127"></script>
+<script src="formation-guide.js?v=v50-1127"></script>
+<script src="app.js?v=v50-1127"></script>
 </body></html>
