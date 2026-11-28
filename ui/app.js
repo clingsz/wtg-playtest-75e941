@@ -1375,7 +1375,7 @@
       (run ? '' : '<div class="mn-row"><button class="btn btn-secondary" data-act="replayIntro">' + T('ui.title.replayIntro') + '</button></div>') +
       (window.CHOOSER_FGUIDE ? '<div class="mn-row"><button class="btn btn-secondary" data-act="fguide">' + T('ui.fguide.menu') + '</button></div>' : ''); // 布阵教学: reopen the pages
     var log = (PL ? '<div class="mn-row"><button class="btn btn-secondary" data-act="plExport">' + T('ui.playlog.export') + '</button>' +
-      '<button class="btn btn-secondary" data-act="plCopy" data-tip="' + T('ui.playlog.copyTip') + '">' + T('ui.playlog.copy') + '</button></div>' : '') + '<p class="mn-note">' + T('ui.title.localOnly') + '</p>';
+      '<button class="btn btn-secondary" data-act="plCopy" data-tip="' + T('ui.playlog.copyTip') + '">' + T('ui.playlog.copy') + '</button><button class="btn btn-secondary" data-act="briefCopy" data-tip="' + T('ui.brief.copyTip') + '">' + T('ui.brief.copy') + '</button></div>' : '') + '<p class="mn-note">' + T('ui.title.localOnly') + '</p>';
     var lang = '<div class="mn-row"><button class="pill-btn on" disabled>' + T('ui.menu.lang.zh') + '</button><span class="mn-note">' + T('ui.menu.lang.soon') + '</span></div>';
     var home = run ? '<div class="mn-row"><button class="btn btn-secondary" data-act="menuHome">' + T('ui.menu.home') + '</button></div>' : '';
     var cheat = NOCHEAT ? '' : (!run ? '<button class="btn-ghost cheat-keys" data-act="newKeys" data-tip="' + T('ui.title.newKeysTip') + '">' + T('ui.title.newKeys') + '</button>' :
@@ -5330,7 +5330,7 @@
     return (trueEnd ? '<div class="true-crest"><img src="' + esc(A.crest(false)) + '" alt=""><b>' + T('ui.ending.trueCrest') + '</b></div>' : '') +
       heading(trueEnd ? T('ui.ending.trueHeading') : win ? T('ui.ending.winHeading') : T('ui.ending.loseHeading', { level: s.reachedLevel || v.level }), trueEnd ? T('ui.ending.trueSub') : '', win ? (trueEnd ? 'true' : '') : 'grim') +
       '<div class="tabs"><button class="tab' + (page === 'fates' ? ' on' : '') + '" data-act="page" data-p="fates">' + T('ui.ending.tabFates') + '</button><button class="tab' + (page === 'q' ? ' on' : '') + '" data-act="page" data-p="q">' + T('ui.ending.tabQuestions') + '</button></div>' +
-      '<div class="ending-body">' + body + '</div><div class="ending-foot"><button class="btn btn-secondary btn-lg" data-act="export">' + T('ui.ending.export') + '</button><button class="btn btn-primary btn-lg" data-act="endHome">' + T('ui.ending.home') + '</button></div>'; // feedback-1112 #43
+      '<div class="ending-body">' + body + '</div><div class="ending-foot"><p class="ending-ask">' + T('ui.brief.ask') + '</p><button class="btn btn-secondary btn-lg" data-act="briefCopy">' + T('ui.brief.copy') + '</button><button class="btn btn-secondary btn-lg" data-act="export">' + T('ui.ending.export') + '</button><button class="btn btn-primary btn-lg" data-act="endHome">' + T('ui.ending.home') + '</button></div>'; // feedback-1112 #43
   }
   function earlyDefeatHtml(v) { // the run ended before it began: one quiet line + back to the title
     return heading(T('ui.ending.earlyHeading'), '', 'grim') +
@@ -5589,6 +5589,28 @@
     a.href = url; a.download = 'chooser-run-' + run.seed + '.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
   }
 
+  // 2026-11-27 用户「做复制记录按钮」(M1 给陌生人): a short brief of this run (~2 KB) for WeChat — the full record (~200 KB) is too long
+  // to paste. Plain JSON: version, difficulty, advisor, leader class, party, outcome, every battle (level / win / rounds / who fell /
+  // team hp), sacrifices, keys, and the run's choices (rewards, debuffs, seal, camp). tools/read-brief.cjs prints it as a table.
+  function briefText() {
+    var r = run || {}, sm = (view && view.summary) || {}, lg = null;
+    try { lg = PL && PL.exportData(plEnv()).log; } catch (e) { lg = null; }
+    var pr = lg && (lg.runs || []).filter(function (x) { return x && x.seed === r.seed; }).pop(), ev = (pr && pr.ev) || [];
+    var short = function (a) { return a && a.type === 'pickReward' ? 'R:' + a.card : a && a.type === 'pickDebuff' ? 'D:' + a.card + '>' + a.target : a && a.type === 'sealChoice' ? 'seal:' + a.choice : a && a.type === 'sacrifice' ? 'sac:' + a.mode + (a.target ? '>' + a.target : '') : a && a.type === 'camp' ? 'camp:' + a.choice : a && a.type === 'shopBuy' ? 'buy:' + a.itemId : null; };
+    var picks = (r.history || []).map(function (h) { var t = h && short(h.action); return t ? 'L' + h.level + ' ' + t : null; }).filter(Boolean).slice(-60);
+    var o = { f: 'wtg-brief', v: 1, ver: (document.querySelector('script[src*="engine.js"]') || { src: '' }).src.split('v=')[1] || '', at: new Date().toISOString().slice(0, 16), seed: r.seed,
+      diff: r.difficulty, adv: r.advisor, leader: r.leader ? (r.leader.identity || '') + '/' + (r.leader.class || '') : '', party: r.party, gone: (r.sacrificed || []).map(function (x) { return x.id + '@L' + (x.level || ''); }),
+      out: sm.outcome || r.outcome || (view && view.phase), lv: sm.reachedLevel || r.level, keys: Object.keys(r.keys || {}).filter(function (k) { return r.keys[k]; }),
+      battles: ev.filter(function (e) { return e && e.k === 'battleEnd'; }).map(function (e) { var hp = (e.hp || []).reduce(function (s0, u) { return [s0[0] + (u.hp > 0 ? u.hp : 0), s0[1] + (u.max || 0)]; }, [0, 0]); return 'L' + e.lv + (e.win ? ' W' : ' L') + ' r' + (e.rd || '') + ' hp' + hp[0] + '/' + hp[1] + ((e.fell || []).length ? ' x' + e.fell.join(',') : ''); }),
+      picks: picks };
+    return JSON.stringify(o);
+  }
+  function copyText(txt) { // the clipboard, with the old textarea fallback (TapTap / iOS webviews)
+    function fallback() {
+      try { var ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); var ok = document.execCommand && document.execCommand('copy'); ta.remove(); notice(T(ok ? 'ui.brief.copied' : 'ui.playlog.copyFailed')); } catch (e) { notice(T('ui.playlog.copyFailed')); }
+    }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { notice(T('ui.brief.copied')); }, fallback); else fallback(); } catch (e) { fallback(); }
+  }
   // 游玩记录 export: a .json download, or the clipboard (phones often can't save a download). Never throws.
   function plExport(toClipboard) {
     if (!PL) return;
@@ -5927,7 +5949,8 @@
     rate: function (d) { var q = qState(); q.ratings[d.r] = +d.v; qSave(q); render(); },
     'export': exportJson,
     plExport: function () { plExport(false); },
-    plCopy: function () { plExport(true); }
+    plCopy: function () { plExport(true); },
+    briefCopy: function () { var t; try { t = briefText(); } catch (e) { notice(T('ui.playlog.exportFailed')); return; } copyText(t); }
   };
   Object.keys(SHOP_H).forEach(function (k) { H[k] = SHOP_H[k]; }); // 2026-11-14 芙洛的店
   var CLICK_CUE = { goldClaim: 'none', shopPick: 'none', shopBuy: 'none', shopBuyNow: 'none', shopLeave: 'cancel', shopWho: 'click', shopBack: 'cancel', shopLook: 'confirm', fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
@@ -6123,6 +6146,7 @@
     cheatable: function () { return !!app.querySelector('[data-act="cheat"]'); },
     skip: function () { H.skip(); }, prefs: prefs, intro: function () { return !!$('intro'); },
     box: function (kind, d) { sayFx(boxFx(function () { if (kind === 'advisor') advisorUpBox(d); else blessStatsBox(d); })); }, // 2026-11-27 dev: preview the two boxes
+    brief: function () { return briefText(); }, // dev: the 复制简报 text
     queue: function (evs) { eventsToQueue(evs, view); } // feedback-1112 checker (ui/dev/fb1112c.cjs): replay result events (mood / training)
   };
   // 2026-11-19 预加载: start warming the art (tier 2 = the saved run's level on a resume, else level 1 + the opening)

@@ -3006,3 +3006,4 @@ body.act-3 .rr-n.zero { color: #5e4c38; }
 .aura-lines .al-dot { fill: #ffffff; r: 7; filter: drop-shadow(0 0 8px #b8c8ff); }
 .aura-lines .al-end { fill: #e6ecff; opacity: .9; filter: drop-shadow(0 0 6px #9fb4ff); }
 .aura-lines .al-src { fill: #e6ecff; filter: drop-shadow(0 0 14px #9fb4ff); }
+.ending-foot:has(.ending-ask) { flex-wrap: wrap; justify-content: center; } .ending-ask { flex: 0 0 100%; text-align: center; font-size: var(--fs-s); opacity: .85; margin: 0 0 var(--sp-2); } /* 2026-11-27 复制简报: the ask sits above the buttons */
