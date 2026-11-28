@@ -25,16 +25,18 @@
     'mercenary-blade': 'masked-spectator-b', 'mercenary-archer': 'masked-spectator-a',
     'noble-guard': 'masked-spectator-b', 'masked-champion': 'blank-general',
     'bell-guardian': 'stone-gate-guardian', 'tower-bell': 'stone-gate-guardian', 'split-slime': 'slime', 'goblin-mage': 'goblin-captain', // 2026-11-20 L5 / L7 新敌人 + L2 哥布林法师: placeholder art (reuse) — docs/ART-REQUEST-2026-11-19.md
-    'mercenary-guard': 'masked-spectator-b', 'mercenary-priest': 'masked-spectator-a' // 2026-11-14: stand-ins until their own art (art brief: mercenary guard, mercenary priest)
+    'mercenary-guard': 'masked-spectator-b', 'mercenary-priest': 'masked-spectator-a' ,
+    'corrupt-guard': 'masked-spectator-b', 'corrupt-blade': 'mercenary-blade', 'corrupt-priest': 'masked-spectator-a', 'corrupt-archer': 'mercenary-archer', 'grey-amulet': 'tower-bell' // 2026-11-27 灰羽雕像: enemies/grey-statue.png first, the bell stand-in until drawn // 2026-11-27 第 8 关魔化小队: stand-ins until enemies/corrupt-*.png // 2026-11-14: stand-ins until their own art (art brief: mercenary guard, mercenary priest)
   };
   // 2026-11-20 美术第一波 (docs/ART-REQUEST-2026-11-20-wave1.md §3.3): these enemies have their own cell now → enemies/<own>.png is
   // the first candidate, the old stand-in above stays the fallback (OWN_ENEMY_ART = false → the stand-ins only).
   var OWN_ENEMY_ART = true;
   var ENEMIES_OWN = { goblin: 'goblin', 'goblin-archer': 'goblin-archer', 'goblin-mage': 'goblin-mage', 'skeleton-mage': 'skeleton-mage', 'bell-guardian': 'bell-guardian',
-    'tower-bell': 'tower-bell', 'split-slime': 'split-slime', 'mercenary-blade': 'mercenary-blade', 'mercenary-archer': 'mercenary-archer' };
+    'tower-bell': 'tower-bell', 'split-slime': 'split-slime', 'mercenary-blade': 'mercenary-blade', 'mercenary-archer': 'mercenary-archer',
+    'corrupt-guard': 'corrupt-guard', 'corrupt-blade': 'corrupt-blade', 'corrupt-priest': 'corrupt-priest', 'corrupt-archer': 'corrupt-archer', 'grey-amulet': 'grey-statue' }; // 2026-11-27 魔化: own art first (falls back to the stand-in until drawn)
   var ROLE_ICON = { tank: 'shield', adc: 'bow', healer: 'chalice', mage: 'staff', rogue: 'dagger' };
   var MOOD_ICON = { '-2': 'mood-minus-2', '-1': 'mood-minus-1', '0': 'mood-neutral', '1': 'mood-plus-1', '2': 'mood-plus-2' };
-  var ITEM_ICON = { potion: 'item-potion', smoke: 'item-smoke', drum: 'item-drum', holywater: 'item-holywater', 'potion-big': 'item-potion-big', 'armor-potion': 'item-armor-potion', revive: 'item-revive', 'weak-powder': 'item-weak-powder', 'vuln-potion': 'item-vuln-potion', 'fire-bottle': 'item-fire-bottle' /* 2026-11-25 art request */ }; // 2026-11-20 own icons (was reward-heart / storm-cloud / reward-ribbon / chalice)
+  var ITEM_ICON = { potion: 'item-potion', smoke: 'item-smoke', drum: 'item-drum', holywater: 'item-holywater', 'potion-big': 'item-potion-big', 'armor-potion': 'item-armor-potion', revive: 'item-revive', 'weak-powder': 'item-weak-powder', 'vuln-potion': 'item-vuln-potion', 'fire-bottle': 'item-fire-bottle' /* 2026-11-25 art request */, 'dice-cup': 'relic-dice-cup' /* 2026-11-26 骰盅 = a battle item now */ }; // 2026-11-20 own icons (was reward-heart / storm-cloud / reward-ribbon / chalice)
   // 2026-11-20 美术第一波 (docs/ART-REQUEST-2026-11-20-wave1.md §3.5): a card / shop item with its own drawn icon → ui-icons/<id>.png
   // (relics → ui-icons/relic-<id>.png). Only ids listed here (the files that exist), so nothing can show a broken image; the
   // others (and everything when ICON_BY_ID is false) keep the old pick-by-type below.
@@ -52,7 +54,7 @@
     'relic-war-horn': 1, 'relic-hunter-mark': 1, 'relic-supply-cart': 1, 'relic-team-luck': 1, 'relic-team-power': 1, 'relic-team-vigor': 1,
     'relic-bell-refuse': 1, 'relic-bell-rules': 1, 'mask-mark': 1 };
   // the legendary charms carry a test- id in the shop and a core- id as reward cards: both → relic-<name>
-  var ICON_ALIAS = { 'test-blade-storm': 'relic-blade-storm', 'core-blade-storm': 'relic-blade-storm', 'test-hawk-eye': 'relic-hawk-eye', 'core-hawk-eye': 'relic-hawk-eye',
+  var ICON_ALIAS = { 'full-rest': 'hot-stew' /* 2026-11-27 热水澡: the stew icon for now */, 'test-blade-storm': 'relic-blade-storm', 'core-blade-storm': 'relic-blade-storm', 'test-hawk-eye': 'relic-hawk-eye', 'core-hawk-eye': 'relic-hawk-eye',
     'test-shield-wall': 'relic-shield-wall', 'core-shield-wall': 'relic-shield-wall', 'test-holy-spring': 'relic-holy-spring', 'core-holy-spring': 'relic-holy-spring',
     'test-sear-flame': 'relic-sear-flame', 'core-sear-flame': 'relic-sear-flame', 'lucky-charm': 'relic-lucky-charm' /* 2026-11-25 own icon (was relic-four-leaf) */,
     'test-luck-charm': 'relic-luck-charm', 'core-luck-charm': 'relic-luck-charm', 'test-charge-charm': 'relic-charge-charm', 'core-charge-charm': 'relic-charge-charm', 'test-arrow-charm': 'relic-arrow-charm',
@@ -65,7 +67,9 @@
   var SCENES = ['title', 'guild-hall-day', 'guild-hall-night', 'guild-desk', 'interview-room', 'stage-01-mill', 'stage-02-forest', 'stage-03-tomb-gate',
     'stage-03-tomb-hall', 'sealing', 'stage-04-names', 'stage-05-gate', 'sacrifice-altar', 'sacrifice-altar-after', 'taken', 'camp-night', 'stage-06-corridor',
     'stage-07-corridor-deep', 'stage-08-arena', 'stage-09-tavern', 'advisor-gone', 'throne', 'throne-fallen', 'dawn-exit', 'game-over', 'camp-dusk', 'camp-cold',
-    'title-fairy', 'noble-chamber', 'noble-chamber-broken', 'white-room', 'guild-dawn-full'];
+    'title-fairy', 'noble-chamber', 'noble-chamber-broken', 'white-room', 'guild-dawn-full',
+    // 2026-11-26 用户「被白手套拖走」: one per girl (L4 / L6 rejected defeat, the sacrifice); fallback = taken
+    'dragged-marta', 'dragged-eve', 'dragged-rico', 'dragged-awu', 'dragged-cecy', 'dragged-greta', 'dragged-viola', 'dragged-xiaoman', 'dragged-crow', 'dragged-kiki', 'dragged-leader'];
   var OLD_SCENE = { title: 'guild-hall', 'guild-hall-day': 'guild-hall', 'guild-hall-night': 'guild-hall', 'guild-desk': 'guild-hall', 'interview-room': 'interview',
     'stage-01-mill': 'guild-hall', 'stage-02-forest': 'guild-hall', 'stage-03-tomb-gate': 'gate-seals', 'stage-03-tomb-hall': 'gate-seals', sealing: 'gate-seals',
     'stage-04-names': 'noble-gallery', 'stage-05-gate': 'gate-seals', 'sacrifice-altar': 'sacrifice', 'sacrifice-altar-after': 'sacrifice', taken: 'sacrifice',
@@ -92,7 +96,7 @@
   function prepScene(v) { if (v.camp && v.camp.march) return LEVEL_SCENE[v.level] || 'throne'; /* feedback-1112 #35: no campfire before L10 */ if (v.camp && v.camp.first) return 'guild-hall-day'; /* 2026-11-19 流程修 M6: L1 has no campfire — the formation still at the guild */ var a = v.act || 1; return a >= 3 ? 'camp-night' : a === 2 ? 'camp-cold' : 'camp-dusk'; }
   // 修复 2026-11-13 第二幕首个篝火无背景: every campfire's chain stays campfire art (was: camp-night → the masked gallery cell);
   // the act-1 fire with a cold tint ('#cold', app.js setScene → .bg.cold) is the last campfire resort for the crypt / night camps
-  var SCENE_FALLBACK = { 'camp-dusk': ['camp-night.png'], 'camp-cold': ['camp-night.png', 'camp-dusk.png#cold'], 'camp-night': ['camp-cold.png', 'camp-dusk.png#cold'],
+  var SCENE_FALLBACK = { 'dragged-marta': ['taken.png'], 'dragged-eve': ['taken.png'], 'dragged-rico': ['taken.png'], 'dragged-awu': ['taken.png'], 'dragged-cecy': ['taken.png'], 'dragged-greta': ['taken.png'], 'dragged-viola': ['taken.png'], 'dragged-xiaoman': ['taken.png'], 'dragged-crow': ['taken.png'], 'dragged-kiki': ['taken.png'], 'dragged-leader': ['game-over.png'], 'camp-dusk': ['camp-night.png'], 'camp-cold': ['camp-night.png', 'camp-dusk.png#cold'], 'camp-night': ['camp-cold.png', 'camp-dusk.png#cold'],
     'title-fairy': 'title.png', 'guild-dawn-full': 'dawn-exit.png', 'noble-chamber-broken': 'noble-chamber.png' }; // only if the new art goes missing
   // the ending's own scene: the true ending at the guild at dawn, the plain victory in the white room
   function endingScene(s) { var o = s && s.outcome; return o === 'true' ? 'guild-dawn-full' : o === 'victory' ? (s.whiteout ? 'white-room' : 'dawn-exit') : 'game-over'; }
@@ -204,6 +208,7 @@
     leaderBadge: function () { return icon('leader-badge'); },
     // v2.3 (art/discussion-v7.md): relic, camp-choice icons and the masked-noble gallery stands. Until Codex delivers them
     // the lists fall through to an existing icon or (nobles) to the caller's dark silhouette.
+    tierIcon: function (i) { return [icon('tier-' + (+i || 0))]; }, // 2026-11-26 难度页 B3: art/cells/ui-icons/tier-N
     relicIcon: function (id, key) { if ((id || 'bell') === 'bell') return [icon(BELL_ICON_BY_KEY[key] || BELL_ICON_BY_KEY.bell), icon('relic-bell')]; return [icon(idIcon(id) || 'relic-' + (id || 'bell'))]; }, // 2026-11-25: the three bells share id 'bell' — key picks the picture // 2026-11-20 test- / core- charm ids → their relic-<name> icon
     campIcon: function (choice) { return [icon('camp-' + choice), icon({ rest: 'candle', explore: 'key', train: 'reward-sword' }[choice] || 'reward-skill')]; },
     noble: function (x) { return [ALPHA + 'noble-' + x + '.png', PORT + 'noble-' + x + '.png#masked']; },
@@ -227,7 +232,7 @@
   // feedback-1113 (3rd batch) #4: every art URL carries ?v=ART_V. The dev server (python http.server) sends no Cache-Control,
   // so Chrome kept serving the old portraits from its heuristic cache after Codex replaced the files. Bump ART_V whenever
   // art is redrawn; the '#classes' suffix of a candidate stays after the query.
-  var ART_V = '20261125b'; // b: 好奇之铃新图 relic-bell-curious · (was '20261125a') a: 27 个新物品图标（遗物 / 道具 / 护符 / 全队道具 / 两个铃 / 面具印记，art/raw/icons-20261125） · (was '20261120d') d: 31 个物品图标（4 道具、6 信物、5 护符、11 加属性卡 / 商店服务、5 诅咒卡；ui-icons，网格原图 art/raw/icons-20261120） · (was '20261120c') c: 9 张新杂兵按女主角头像的画风重画成上半身 (浅暖灰底；1254 原图在 art/raw/enemies-20261120-heroine-style，旧图备份 art/backup-20261120/enemies) · (was '20261120a') a: 美术第一波 (docs/ART-REQUEST-2026-11-20-wave1.md: 9 enemies, 3 status, 5 card / relic icons) · (was '20261114f': 芙洛 (fluo) portrait + faces) · (was '20261114w': resized WebP copies in art/web/ (tools/make-web-art.mjs) put in front of the originals)
+  var ART_V = '20261127c'; // c: 第 9 关灰羽雕像 grey-statue · (was '20261127b') b: 第 8 关魔化小队 4 张敌人图 corrupt-guard/blade/priest/archer（原图 art/raw/corrupt-20261127）· (was '20261127a') 20261127a: 伊芙 dragged-eve 新图（旧图 art/backup-20261127/scenes）· (was '20261126a') a: 白色房间新图 white-room（旧图备份 art/backup-20261126/scenes）· (was '20261125b') b: 好奇之铃新图 relic-bell-curious · (was '20261125a') a: 27 个新物品图标（遗物 / 道具 / 护符 / 全队道具 / 两个铃 / 面具印记，art/raw/icons-20261125） · (was '20261120d') d: 31 个物品图标（4 道具、6 信物、5 护符、11 加属性卡 / 商店服务、5 诅咒卡；ui-icons，网格原图 art/raw/icons-20261120） · (was '20261120c') c: 9 张新杂兵按女主角头像的画风重画成上半身 (浅暖灰底；1254 原图在 art/raw/enemies-20261120-heroine-style，旧图备份 art/backup-20261120/enemies) · (was '20261120a') a: 美术第一波 (docs/ART-REQUEST-2026-11-20-wave1.md: 9 enemies, 3 status, 5 card / relic icons) · (was '20261114f': 芙洛 (fluo) portrait + faces) · (was '20261114w': resized WebP copies in art/web/ (tools/make-web-art.mjs) put in front of the originals)
   // (was '20261113c': batch6 H2-8 高台 scene, H2-12/15 advisor enemy art)
   // (was '20261113b': v9 layered fairy animation, art/portraits/anim/)
   function ver(p) { if (typeof p !== 'string' || !/^\.\.\/(art|godot)\//.test(p) || p.indexOf('?') >= 0) return p; var i = p.indexOf('#'); return i < 0 ? p + '?v=' + ART_V : p.slice(0, i) + '?v=' + ART_V + p.slice(i); }

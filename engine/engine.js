@@ -97,7 +97,7 @@
   }));
   const STATUS_TIPS = lazy(() => ({ weak: TX('status.tip.weak'), tough: TX('status.tip.tough'), shell: TX('status.tip.shell'), escort: TX('status.tip.escort'), doubleCut: TX('status.tip.doubleCut'), twinShot: TX('status.tip.twinShot'), ambush: TX('status.tip.ambush'), sunder: TX('status.tip.sunder'),
     'foe-lv2': TX('status.tip.foe-lv2'), 'foe-lv3': TX('status.tip.foe-lv3'), 'foe-lv4': TX('status.tip.foe-lv4'), ward: TX('status.tip.ward', { n: WARD_HP }) })); // fallback tips
-  const FOE_TRAIT_CHIPS = ['ambush', 'escort', 'doubleCut', 'twinShot', 'sunder']; // 2026-11-18 cleanup: + 破甲 (sunder)
+  const FOE_TRAIT_CHIPS = ['ambush', 'escort', 'doubleCut', 'twinShot', 'sunder', 'corruptHit']; // 2026-11-27 + 魔化 // 2026-11-18 cleanup: + 破甲 (sunder)
   // 用户 2026-11-15: enemy traits shown as chips (硬壳 has its own line)
   const CLOSE = { friend: true, 'ex-partner': true };
   const BOSS_REFS0 = { 'goblin-boss': 1, 'gate-guardian': 1, 'bandit-chief': 1 };
@@ -117,6 +117,8 @@
     { id: 'weak-powder', name: TX('item.weak-powder.name'), text: TX('item.weak-powder.text'), needsTarget: false, effect: { type: 'weakAll', n: 2 } },
     { id: 'vuln-potion', name: TX('item.vuln-potion.name'), text: TX('item.vuln-potion.text'), needsTarget: true, targetEnemy: true, effect: { type: 'vuln' } },
     { id: 'fire-bottle', name: TX('item.fire-bottle.name'), text: TX('item.fire-bottle.text'), needsTarget: false, effect: { type: 'fire', n: 5 } },
+    // 2026-11-26 用户「幸运骰盅变成道具：这一回合全体幸运 +2」(was a guild relic: 全员幸运 +1)
+    { id: 'dice-cup', name: TX('item.dice-cup.name'), text: TX('item.dice-cup.text'), needsTarget: false, effect: { type: 'luckAll', n: 2 } },
   ]));
 
   // ---------- v2.2 constants ----------
@@ -189,22 +191,35 @@
     picked: [{ speaker: 'fairy', text: TX('difficulty.picked') }, { speaker: 'fairy', expr: 'happy', text: TX('difficulty.pickedNext') }], // 第六批 H1-2: before the advisor pick the fairy talks only about the tier
   }));
   // rank 「青铜 4」: the highest unlocked tier and where the last run on it ended (0 = not tried yet)
+  const SKILL_TEXT_LIVE = true; // 2026-11-26 试玩「技能文字里的伤害数不跟着威力涨」: an enemy's text uses its live 威力 (ramp / 祝福 / 虚弱) at the pause; false = the base 威力
+  const WARD_SAY_ONCE = true; // 2026-11-26 用户「露西安每次庇护都要 pop 对话说只掉一滴血，太烦了——说一次就行，以后小字『契约』」: once per battle (false = once per round)
+  const CURSE_CHIP = true; // 2026-11-26 用户「威力 −1 的诅咒就直接减了——应该威力变红，每次出手加成字显示『诅咒 −1』」: false = the base 威力 just drops
+  const RANK_CLEARED_WORD = false, RANK_TOP_LEVEL = 10;
   function rankOf(meta) {
     const m = normMeta(meta);
     const t = m.unlocked, d = DIFFICULTIES()[t];
     const cleared = !!m.tierCleared[t];
     const level = cleared ? 0 : m.tierLast[t] || 0;
+    // 2026-11-26 用户「不是『青铜 通关』这种等级」: always 「名字 + 数字」 — a cleared tier reads as its last level (青铜 10). RANK_CLEARED_WORD = the old 「青铜 通关」
+    if (cleared && !RANK_CLEARED_WORD) return { tier: t, name: d.name, level: RANK_TOP_LEVEL, cleared, text: TX('difficulty.rankLevel', { name: d.name, level: RANK_TOP_LEVEL }) };
     return { tier: t, name: d.name, level, cleared, text: cleared ? TX('difficulty.rankCleared', { name: d.name }) : TX('difficulty.rankLevel', { name: d.name, level }) };
   }
-  let OPEN_TIERS = 10; // 2026-11-24 用户「打完木头级，后面没有解锁」: the ladder (DIFF_LADDER) is in — every tier opens by clearing the one before (was 1)
+  const DIFF_FUTURE = [{ key: 'steel', at: 2, icon: 3 }, { key: 'platinum', at: 3, icon: 2 }, { key: 'star', at: 4, icon: 9 }, { key: 'abyss', at: 5, icon: 8 }]; // 2026-11-26 M1: 精钢 白金 星辰 深渊 (深渊 = 龙鳞's badge); null = none drawn
+  const DIFF_FUTURE_NAME = lazy(() => ({ steel: TX('difficulty.future.steel'), platinum: TX('difficulty.future.platinum'), star: TX('difficulty.future.star'), abyss: TX('difficulty.future.abyss') })); // literal keys (i18n scan)
+  const DIFF_HIDE_CLOSED = true; // 2026-11-26 M1: tiers past OPEN_TIERS are not drawn at all (false = drawn locked)
+  let OPEN_TIERS = 2; // 2026-11-26 M1（docs/MILESTONE-M1.md）: only 木头 + 青铜 for the first outside playtest; the rest hidden (10 = the full ladder)
+  let OPEN_TIERS_old_2026_11_26 = 10; // eslint-disable-line no-unused-vars // 2026-11-24 用户「打完木头级，后面没有解锁」: the ladder (DIFF_LADDER) is in — every tier opens by clearing the one before (was 1)
   let OPEN_TIERS_old_2026_11_24 = 1; // eslint-disable-line no-unused-vars // 2026-11-14 playtest: only 木头 is open (the other tiers need a re-tune — BACKLOG); raise to open more (tests: E.setOpenTiers)
   function difficultyView(data, run) {
     const m = run.meta, fz = dig(linesV2(data), 'fairy', 'difficulty') || {};
     const get = (k) => (fz[k] != null ? fz[k] : DIFF_TEXT()[k]);
     return {
-      tiers: DIFFICULTIES().map((d) => ({ id: d.id, name: d.name, locked: d.id > m.unlocked || d.id >= OPEN_TIERS, cleared: !!m.tierCleared[d.id], trueEnd: !!m.tierTrue[d.id], last: m.tierLast[d.id] || 0,
+      tiers: DIFFICULTIES().filter((d) => d.id < OPEN_TIERS || !DIFF_HIDE_CLOSED).map((d) => ({ id: d.id, name: d.name, locked: d.id > m.unlocked || d.id >= OPEN_TIERS, cleared: !!m.tierCleared[d.id], trueEnd: !!m.tierTrue[d.id], last: m.tierLast[d.id] || 0,
         text: DIFF_BLURB()[d.id] || '' })),
       unlocked: m.unlocked, rank: rankOf(m),
+      // 2026-11-26 用户「徽标都做上去，试玩版灰色不能选中」: the tiers to come (the new ladder names, BACKLOG), drawn grey; icon = which tier-N badge
+      futureSay: TX('difficulty.lockedPlaytest'),
+      future: DIFF_FUTURE ? DIFF_FUTURE.filter((f) => f.at >= OPEN_TIERS).map((f) => ({ key: f.key, name: DIFF_FUTURE_NAME()[f.key], icon: f.icon })) : [],
       ask: asList(get('ask')).map((r) => (typeof r === 'string' ? { speaker: 'fairy', text: r } : r)),
       locked: m.unlocked >= OPEN_TIERS ? [{ speaker: 'fairy', expr: 'special', text: TX('difficulty.lockedPlaytest') }]
         : asList(get('locked')).map((r) => (typeof r === 'string' ? { speaker: 'fairy', expr: 'special', text: r } : r)),
@@ -310,11 +325,23 @@
   const ADV_GROWN_LINE = true; // 2026-11-23: one battle-log line the first fight her skill number grows (false = silent, as before)
   const ADV_SKILL_GROWN_NOTE = false; // 2026-11-22: off — 用户 2026-11-21「不需要说献祭后」 // 2026-11-22 试玩「加班条款一处 +1 一处 +2」: from act 2 the text adds 「（第二幕起变强）」 (false = no note)
   const ADV_SKILL_GROWS_NOTE = false; // 2026-11-21 用户「不需要说献祭后」 (true = the text adds 「（献祭之后变成 +n）」)
-  const ADV_SKILL_N_KIND = { formation: [2, 5] }; // 2026-11-21 用户「奥德丽太弱了，护甲 +2 / +5 第一第二幕」
+  const ADV_SKILL_N_KIND = { formation: [2, 5], overtime: [2, 4] }; // 2026-11-27 用户「露西安 +1 充能太少，改成 +2 +4」 (overtime was ADV_SKILL_N [1, 2]) // 2026-11-21 用户「奥德丽太弱了，护甲 +2 / +5 第一第二幕」
   const advSkillPair = (kind) => ADV_SKILL_N_KIND[kind] || ADV_SKILL_N;
   const advSkillN = (run, kind) => ((run && run.level) >= ADV_SKILL_LV2 ? advSkillPair(kind)[1] : advSkillPair(kind)[0]);
   const ADV_SKILL_OLD = { formation: () => FORMATION_BLOCK, overtime: () => LUCK_ADD, luck: () => LUCK_ADD, luckUp: () => LUCK_UP_ADD };
   const advSkillAmt = (run, kind) => (ADV_SKILL_SCALE && ADV_SKILL_OLD[kind] ? advSkillN(run, kind) : ADV_SKILL_OLD[kind] ? ADV_SKILL_OLD[kind]() : 0);
+  // 2026-11-27 用户: after 小铃's blessing (L5 night) she slips the advisor a gift, the advisor smiles, and a box says her skill grew
+  // from the act-1 number to the act-2 one (ADV_SKILL_LV2). false = no scene (the number still grows silently at L6).
+  const ADVISOR_GIFT = true;
+  function advisorUpOf(data, run) {
+    if (!ADV_SKILL_SCALE || !run || !run.advisorPresent) return null;
+    const a = advisorData(data, run), cb = a && combatOf(a);
+    if (!cb || !ADV_SKILL_OLD[cb.kind] || !['formation', 'overtime', 'luckUp'].includes(cb.kind)) return null;
+    const [n1, n2] = advSkillPair(cb.kind);
+    if (n1 === n2) return null;
+    const T0 = (n) => ({ formation: () => TX('advisor.combat.formation', { n }), overtime: () => TX('advisor.combat.overtime', { n }), luckUp: () => TX('advisor.combat.luckUp', { n }) })[cb.kind]();
+    return { id: a.id, name: a.name, skill: cb.name, from: T0(n1), to: T0(n2) };
+  }
   function combatView(a, run) { // the skill as the player reads it: its number for this level (+ what it grows to)
     const cb = combatOf(a); if (!cb) return null;
     const c = clone(cb);
@@ -387,7 +414,7 @@
   const FOE_RULE_SUMMARY = true; // false = old (each trait's own line)
   function foeRuleTexts(data, B, u, run) {
     const out = [], trim = (t) => String(t || '').replace(/^[。；，\s]+/, '');
-    if (u.toll) out.push(trim(u.toll.noBell ? TX('skill.action.chargeSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 }) : TX('skill.action.tollSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 }))); // 2026-11-23 noBell = 奥德丽「全军突击」
+    if (u.toll && !(BELL_BROKEN_FRONT2 && !u.toll.noBell && B && B.bellBroken)) out.push(trim(u.toll.ult ? TX('skill.action.ultSuffix', { every: u.toll.every || 3, n: u.toll.n || 4, ult: u.toll.ult, shield: u.toll.shield || 0 }) : u.toll.noBell ? TX('skill.action.chargeSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 }) : TX('skill.action.tollSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 }))); // 2026-11-23 noBell = 奥德丽「全军突击」
     if (u.bell) { const g = (B.enemies || []).find((x) => x.toll); out.push(TX('skill.action.bellIdle', { every: (g && g.toll.every) || 2 })); }
     if (u.dodgeAura && !u.bell) { const pct = Math.round(u.dodgeAura * 100); out.push((B.enemies || []).some((x) => (x.traits || []).includes('enrageOnAmulet')) ? TX('skill.action.amuletIdleEnrage', { pct }) : TX('skill.action.amuletIdle', { pct })); } // 2026-11-23 试玩 16/17「该不该打护符？」: say both sides
     if (u.brood) out.push(trim(u.brood.atkEvery > 1 ? TX('skill.action.broodSuffixEvery', { n: u.brood.n, cost: u.brood.selfCost > 0 && u.brood.selfCost < 1 ? TX('skill.action.broodCostHalf') : TX('skill.action.broodCostFull'), cap: u.brood.cap, hpStep: u.brood.hpStep || 0, atkStep: u.brood.atkStep || 0, every: NUM_CN()[u.brood.atkEvery] || u.brood.atkEvery }) : TX('skill.action.broodSuffix', { n: u.brood.n, cost: u.brood.selfCost > 0 && u.brood.selfCost < 1 ? TX('skill.action.broodCostHalf') : TX('skill.action.broodCostFull'), cap: u.brood.cap, hpStep: u.brood.hpStep || 0, atkStep: u.brood.atkStep || 0 })));
@@ -470,6 +497,7 @@
     trueDoor: [TX('story.trueDoor.1'), TX('story.trueDoor.2')],
     sideDoor: [TX('story.sideDoor.1'), TX('story.sideDoor.2')], // 2026-11-15 小门 (text only in data/text/zh/engine.json)
     sideDoorPass: [TX('story.sideDoorPass.1'), TX('story.sideDoorPass.2'), TX('story.sideDoorPass.3')],
+    bellDoorReveal: [TX('story.bellDoorReveal.1'), { speaker: 'member0', text: TX('story.bellDoorReveal.2') }, { speaker: 'narrator', text: TX('story.bellDoorReveal.3'), fx: 'bellsWake' }, { speaker: 'narrator', text: TX('story.bellDoorReveal.4'), fx: 'bellsFly' }, { speaker: 'narrator', text: TX('story.bellDoorReveal.unlock'), unlock: 'bellDoor' }], // BELL_UNLOCK — 用户「顾问已经失败了」: a girl of the party asks (member0), never the advisor
     nobleChamber: [TX('story.nobleChamber.1'), F(TX('story.nobleChamber.fairy')), { speaker: 'narrator', text: TX('story.nobleChamber.narrator'), fx: 'transform' }],
     trueEnding: [TX('story.trueEnding')], // 2026-11-14: the dolls turning back is told in l11After
     teamAssembled: [{ speaker: 'advisor', text: TX('story.teamAssembled') }], // v2.4 [9]
@@ -497,6 +525,26 @@
   const leaderCand = () => (CUR_LEADER ? Object.assign({}, LEADER_CAND(), { name: CUR_LEADER }) : LEADER_CAND());
   const cand = (data, id) => (isLeader(id) ? leaderCand() : data.candidates.find((c) => c.id === id) || fail('unknown candidate ' + id));
   const sacrificable = (run) => run.party.filter((id) => !isLeader(id));
+  // 2026-11-26 M1 高手青铜报告 #1「交给规则抽走了唯一的战士，下一关基本就输」: the dice never take the party's only tank
+  // (leader counted). false = the old pool (every girl).
+  const SAC_KEEP_LONE_TANK = false; // 2026-11-26 用户「交给规则有可能抽走坦克，我们得允许这种事情发生」: off (true = keep the lone tank)
+  const ENEMY_AIM_CRIT = true; // 2026-11-27 晚 用户「保留等级和暴击，加一条：被暴击的我方不会马上死」(CRIT_SAVE) · 2026-11-26: false = never crit
+  // CRIT_SAVE: an enemy crit that would drop one of ours leaves her at 1 hp instead — once per person per battle (t.critSaved, chip 险些);
+  // the next lethal crit drops her. Checked before the 旧公会徽章 (that one works after a fall), so the two never fire on the same hit.
+  const CRIT_SAVE = true;
+  const DEFEAT_DRAG = true;
+  const DEFEAT_STORY_KEEP = 2; // 2026-11-27: the gameOver story keeps its first 2 lines (the fall); the rest close the epilogue // 2026-11-26 用户: the defeat epilogue walks the party off one by one (her picture + last words), then the leader — false = the old portraits
+  const BELL_BROKEN_FRONT2 = true;
+  const BELL_SECOND_HALF = true; // 2026-11-27: the second one takes half (round up); false = both full // 2026-11-26 用户: L5 铜钟碎了 → 钟楼守卫每回合打前两位 (false = one target, old)
+  const DEBT_PAIR_ONE = true; // 2026-11-26 M1: see reckoning() — two returning girls in one battle bring one debt each
+  function randomSacPool(data, run) {
+    const pool = sacrificable(run);
+    if (!SAC_KEEP_LONE_TANK) return pool;
+    const tanks = run.party.filter((id) => roleOfMember(data, run, id) === 'tank');
+    if (tanks.length !== 1 || !pool.includes(tanks[0])) return pool;
+    const rest = pool.filter((id) => id !== tanks[0]);
+    return rest.length >= diceN(run) ? rest : pool;
+  }
   const advisorData = (data, run) => (run.advisor ? data.advisors.find((a) => a.id === run.advisor) : null);
   const levelCfg = (data, n) => tierCfg(data.scenario.levels.find((l) => l.level === n)); // v2.5 tier rules
   const hasTrait = (data, id, t) => { const c = isLeader(id) ? LEADER_CAND() : (data.candidates || []).find((x) => x.id === id); return !!c && (c.hiddenTraits || []).includes(t); }; // safe for non-candidate units (turncoats)
@@ -518,7 +566,7 @@
     return out;
   }
   const itemDef = (data, id) => itemDefs(data).find((x) => x.id === id) || null;
-  const itemKind = (it) => (it.effect && it.effect.type) || ({ potion: 'healFull', smoke: 'smoke', drum: 'drum', holywater: 'cleanse', 'potion-big': 'healFull', 'armor-potion': 'armor', revive: 'revive', 'weak-powder': 'weakAll', 'vuln-potion': 'vuln', 'fire-bottle': 'fire' })[it.id];
+  const itemKind = (it) => (it.effect && it.effect.type) || ({ potion: 'healFull', smoke: 'smoke', drum: 'drum', holywater: 'cleanse', 'potion-big': 'healFull', 'armor-potion': 'armor', revive: 'revive', 'weak-powder': 'weakAll', 'dice-cup': 'luckAll', 'vuln-potion': 'vuln', 'fire-bottle': 'fire' })[it.id];
   // 2026-11-22 who an item is aimed at: 'ally' (a living one) · 'enemy' (a living foe: 烟雾弹 when SMOKE_DAZE) · 'fallen' (an ally at 0 hp: 复活药) · null
   const itemAim = (run, it) => {
     const kind = itemKind(it);
@@ -573,6 +621,7 @@
     }
     const out = { speaker: sp, speakerId, name, text: fill(o.text, Object.assign(baseCtx(data, run), ctx || {})), expr: o.expr || null };
     if (o.fx) out.fx = o.fx; // v2.2: e.g. nobleChamber's {fx:'transform'}
+    if (o.unlock) out.unlock = o.unlock; // 2026-11-25 BELL_UNLOCK: the UI shows its unlock box on this line
     return out;
   }
   // 2026-11-20 反水 one line (TURNCOAT_RECORD_LINE): which record backs her line. Pure. → { branch, ctx, raw }
@@ -607,6 +656,7 @@
     if (id === 'fairyWelcome' && run.fairyLines) return run.fairyLines; // v2.2 §3: built once at createRun
     if (id === 'levelIntro') return run.levelIntro ? run.levelIntro.lines : null; // v2.4 [9]: built at startLevel
     if (id === 'rejectedDefeat') return run.defeatLines || null;
+    if (run && run.bellGate && (id === 'sealAccept' || id === 'sealAcceptSay')) { const g = data.stories && data.stories.sealAcceptGate; return id === 'sealAccept' && Array.isArray(g) ? g.slice() : []; } // 2026-11-26 试玩: no choice was shown — the leader never said yes
     if (BELL_DOOR && (id === 'sideDoor' || id === 'sideDoorPass')) return [TX('story.bellDoor.1'), BELL_HAVE()[bellDoorView(data, run).have]]; // 2026-11-20 铃之门: says how many // SPEC-2026-11-13 E3: built in postQueue
     if (id === 'sealing' && SEALING_BEFORE_REWARD && data.stories && Array.isArray(data.stories.sealing_old_2026_11_19g)) return data.stories.sealing_old_2026_11_19g.slice(); // 2026-11-19 用户亲测 流程: the old 「最后一具骷髅散了架」 opening goes with the old order
     if (id === 'bellFollowed' && tierRule(run, 'bellWound') === false) { // 2026-11-13: 木头 — the night is simply gone, no wound hinted
@@ -621,10 +671,20 @@
     }
     const v = Array.isArray(s) ? s : (run.advisor && s[run.advisor]) || s.default;
     if (!Array.isArray(v)) return null;
+    // 2026-11-27 用户「叮铃。石门前又只剩下你们了——后面还在说话」: with advisorGift next, her blessing's closing line moves into it,
+    // right before the advisor's rallying line (the last line before the box)
+    if (ADVISOR_GIFT && id === 'bellBlessingAfter' && (run.queue || []).some((q) => q && q.story === 'advisorGift')) return v.filter((l) => !(l && l.giftMoves));
+    if (ADVISOR_GIFT && id === 'advisorGift') {
+      const end = ((data.stories || {}).bellBlessingAfter || []).filter((l) => l && l.giftMoves).map((l) => ({ speaker: l.speaker, text: l.text }));
+      const k = v.findIndex((l) => l && l.fx === 'advisorUp'), at = k > 0 ? k - 1 : v.length;
+      if (end.length) return v.slice(0, at).concat(end, v.slice(at));
+    }
     // feedback-1112 #35/#40/#38: in the throne room and the white room a line for a girl the party no longer has is dropped
     if (MEMBER_STORIES[id]) return v.filter((l) => !(l && typeof l === 'object' && /^member\d$/.test(l.speaker || '') && !sacrificable(run)[+l.speaker.slice(6)]));
     // 2026-11-14: L10 is one wave (the advisor boss + her guards) on every tier — finalReveal no longer brings anybody back, so the old
     // 「老朋友 / 一位客人」 rewrite for tiers 0–4 is gone. (The 秘银+ second sacrifice still sets run.returned.final; nothing in L10 reads it.)
+    if (id === 'gameOver' && DEFEAT_DRAG && run.outcome === 'defeat' && !run.earlyDefeat && v.length > DEFEAT_STORY_KEEP) return v.slice(0, DEFEAT_STORY_KEEP); // 2026-11-27 用户「先说了工会的事情又走了过场」: the fall only; the guild lines close the epilogue
+    if (id === 'sacrificeIntro' && BELL_UNLOCK && !bellsOn(run)) return v.map((l) => (l && typeof l === 'object' && l.noBells ? Object.assign({}, l, { text: l.noBells }) : l)); // 2026-11-26 用户: no 随机挑 before the bells → the noble does not offer it
     if (id === 'sacrificeIntro' && diceN(run) !== 1) { // v2.5: the rule names how many the dice take on this tier
       const n = NUM_CN()[diceN(run)] || String(diceN(run));
       const re = new RegExp(TX('sacrifice.diceRe'), 'g'); // 第六批 H1-6: the data says 「随机挑走一个」 (tiers 0–4); 秘银+ / untiered → 「两个」
@@ -692,7 +752,12 @@
   const SUMMON_OUT_ATK = 2; // 2026-11-25 用户「威力 +3 改成威力 +2」（先前 3）: 露西安 名册叫空时 威力 +3（最后一段别太松）；0 = 旧
   const OVERTIME_ROUND = 2; // 2026-11-25 露西安「加班条款」(敌方): 每回合开始敌方每人充能 +2；0 = 旧（她站着时敌方每次被充能多 1 格，旧文字「她还站着，敌方每人每次被充能多 1 格」）
   const ENRAGE_CLEAR_CHARGE = true; // 2026-11-25 用户「改」: 首领狂暴时充能清零（攒着的额外行动也清掉），不会刚狂暴就连穿两枪；false = 旧
-  const ENRAGE_ONCE = 2; // 0 = old (enraged: 威力 +2 every round instead of +1)
+  const ENRAGE_ONCE = 2;
+  const ENRAGE_ONCE_BONUS = false; // 2026-11-26 用户 方案 B: no 威力 +2 the moment she goes berserk (true = +ENRAGE_ONCE once, old)
+  const CHIEF_FRONT = 1; // 2026-11-26 用户 方案 A: 灰羽首领's pierce — only the first full, the rest half (露西安's sweep keeps ENRAGE_FRONT) // 0 = old (enraged: 威力 +2 every round instead of +1)
+  // 2026-11-27 用户「灰羽首领触发灵体的时候，冒泡的字应该是『看我灵体护身！』」: her enemies.json grazeLine, a bubble once a round
+  const GRAZE_SAY = true;
+  const grazeLineOf = (data, t) => { const d = ((data && data.enemies) || []).find((x) => x.id === t.ref); return (d && d.grazeLine) || null; };
   const grazeState = (t) => !!(t && Array.isArray(t.traits) && t.traits.includes('grazeAfter') && (t.dodgeHits || 0) >= GRAZE_AFTER_N);
   function dodgeOf(B, t) {
     if (!t || t.hp <= 0) return 0;
@@ -733,7 +798,17 @@
   function prepWarn(data, run, events) {
     const cfg = levelCfg(data, run.level), k = cfg && cfg.prepWarn;
     if (!k || !run.advisorPresent) return;
+    if (PREP_WARN_ON_DEPART) { run.warnPending = k; return; } // 2026-11-26 用户「第九关之前顾问说经常被袭——挪到开战 / 地图的时候，不在篝火」: said on 「出发」, in the scene intro
     for (const raw of linesFor(run, dig(linesV2(data), 'advisorGuide', run.advisor, k), k)) events.push(lineEvent(data, run, raw, {}, 'advisor', { key: 'campfire', warn: k }));
+  }
+  const PREP_WARN_ON_DEPART = true; // false = the old: with the campfire talk
+  function warnOnDepart(data, run) {
+    const k = run.warnPending;
+    if (!k) return;
+    delete run.warnPending;
+    if (!run.advisorPresent || !run.levelIntro) return;
+    const add = linesFor(run, dig(linesV2(data), 'advisorGuide', run.advisor, k), k);
+    run.levelIntro.lines = run.levelIntro.lines.concat(add.map((r) => Object.assign({ key: 'guide.' + k, warn: k }, typeof r === 'object' ? r : { text: r })));
   }
   const REVEAL_EFFECT_NOTE = true; // 2026-11-19 试玩修 数值文字
   // 2026-11-19 伤害分摊 E1: a girl with two hidden traits may have one reveal line per trait (traitRevealBy), else the shared one
@@ -866,6 +941,7 @@
   // what giving `effs` (plus a plain mood delta) would do to member id; hidden traits are not leaked
   const PREVIEW_CHARGE = true; // 2026-11-23: a charge curse shows 充能满格 from → to in the target preview (false = mood only, as before)
   const DEBT_RIVAL_LEADER = true; // 2026-11-23: a rejected girl's 「你没有选她」 hits the leader when the girl you hired over her is gone (false = a random ally)
+  const SUMMON_PRUNE = true; // 2026-11-26 用户「死掉的召唤物占位置挺奇怪」: fallen summons leave the line at the start of each round (new ones come in beside her); false = old (they keep the slot)
   const SUMMON_CALLS = true; // 2026-11-23 试玩 16: boss.summon.calls = how many groups she can call in all (0 = no end, the old way)
   function previewFor(data, run, id, effs, moodDelta) {
     const m = run.members[id], leader = isLeader(id);
@@ -1196,7 +1272,8 @@
   function intentView(run, B, u) {
     if (!(u.hp > 0)) return null;
     if (u.passive) return null; // 2026-11-20 L5 铜钟: never acts
-    if (u.toll && tollDue(B, u, B.round)) return { kind: 'all', targets: [], all: true }; // 2026-11-20 L5 钟楼守卫: the toll round shows the all-hit
+    if (u.toll && tollDue(B, u, B.round)) return { kind: 'all', targets: [], all: true };
+    if (BELL_BROKEN_FRONT2 && u.toll && !u.toll.noBell && B.bellBroken) { const a2 = (B.allies || []).filter((x) => x.hp > 0).slice(0, 2); if (a2.length > 1) return { kind: 'other', targets: a2.map((x) => x.id), all: false }; } // 2026-11-26: the front two // 2026-11-20 L5 钟楼守卫: the toll round shows the all-hit
     if (u.xlPhase === 2 && u.xlMark != null) { const t = xlMarkTarget(B, u); return { kind: 'mark', targets: t ? [t.id] : [], all: false }; } // 2026-11-19 小铃强 玩偶弱: her knell — the portrait of whoever stands in the marked slot
     const af = (B.allies || []).filter((x) => x.hp > 0);
     const it = u.intent && u.intent.round === B.round ? u.intent : null;
@@ -1260,7 +1337,8 @@
   // 2026-11-18 平衡 (试玩反馈「战士血量没比猎人高多少」): per class — 盾 +8, 刺客 +4, 后排 (猎人 / 法师 / 牧师) +3; past the cap
   // 满级加成 生命 盾 +3 / 刺客 +2 / 后排 +1 (was +2 for all). LV_HP_BY_CLASS false = the old rule (LV_HP_OLD, OVER_HP).
   const LV_HP_BY_CLASS = true;
-  const LV_HP_CLASS = { guard: 8, backstab: 4, strike: 5 }, LV_HP_BACK = 3, OVER_HP_CLASS = { guard: 3, backstab: 2, strike: 2 }, OVER_HP_BACK = 1;
+  const LV_HP_CLASS = { guard: 8, heal: 6, backstab: 4, strike: 4 }, LV_HP_BACK = 4, OVER_HP_CLASS = { guard: 3, heal: 2, backstab: 2, strike: 2 }, OVER_HP_BACK = 1; // 2026-11-27 用户「+8 战士 +6 牧师 +4 其他」(牧师要能撑起战士的位置)
+  const LV_HP_CLASS_old_2026_11_27 = { guard: 8, backstab: 4, strike: 5 }, LV_HP_BACK_old_2026_11_27 = 3; // eslint-disable-line no-unused-vars
   const LV_HP_OLD = (sk) => (sk && sk.kind === 'guard' ? 6 : 5);
   const LV_HP = (sk) => (!LV_HP_BY_CLASS ? LV_HP_OLD(sk) : sk && LV_HP_CLASS[sk.kind] != null ? LV_HP_CLASS[sk.kind] : LV_HP_BACK);
   const OVER_HP_OF = (sk) => (!LV_HP_BY_CLASS ? OVER_HP : sk && OVER_HP_CLASS[sk.kind] != null ? OVER_HP_CLASS[sk.kind] : OVER_HP_BACK);
@@ -1371,6 +1449,13 @@
   // 牧师 per heal share: 'half' = ⌈威力/2⌉ (chosen 2026-11-14 by sim, see DESIGN-2026-11-14-block 实施记录) · 'minus2' = max(1, 威力 − 2)
   // 试玩反馈 2026-11-14 晚 (用户): the priest was too weak — 'full' = each share heals the full 威力
   const HEAL_FORMULA = 'full';
+  const HEAL_LESS_FROM = 3; // 2026-11-27 用户「前两级不减 1」: the −1 only from skill Lv3 (Lv1–2 heal full 威力); 1 = old (every level)
+  const healLessAt = (sk) => (!HEAL_POOL && lvOf(sk) >= HEAL_LESS_FROM ? HEAL_LESS : 0); // HEAL_POOL: no −1
+  const HEAL_LESS = 1; // 2026-11-26 用户「牧师加血整体 −1」: each of our heal shares heals 1 less (min 1); 0 = old
+  const HEAL_OVER_SKILL_ONLY = true; // 2026-11-26 用户「溢出的部分不要加甲，这个是塞西的技能」: overflow → 护甲 only for a skill with overBlock (塞西; 葛蕾 keeps it for 回本); false = old (every priest)
+  const overBlockOf = (data, id) => !HEAL_OVER_SKILL_ONLY || (((data && data.candidates) || []).find((c) => c.id === id) || { skill: {} }).skill.overBlock === true; // candidates.json skill.overBlock (members copy only kind/name/text/power)
+  const ENRAGE_FRONT = 1; // 2026-11-26 用户「朱笔勾销也应该满 / 半」: 露西安 — only the first full, the rest half (was 2) · // 2026-11-26 用户「前排满伤，后排一半」「不要保留 4——威力每回合增加」: 灰羽首领 狂暴穿透 = the first ENRAGE_FRONT full, everyone behind ⌈威力/2⌉; 0 = halving per person (min SWEEP_MIN)
+  const SWEEP_MIN = 4; // 2026-11-26 用户「横扫 /2 太废，每个人 −4」: 露西安 sweep + 灰羽首领 狂暴穿透 — every hit at least 4; 1 = old
   const healShare = (p) => (HEAL_FORMULA === 'full' ? Math.max(1, p) : HEAL_FORMULA === 'minus2' ? Math.max(1, p - 2) : Math.ceil(Math.max(1, p) / 2));
   // 2026-11-16 (职业表): ours 护甲 = 威力 (one share), Lv2 掩护 one behind, Lv3 each hit taken = +1 pip to herself (taken), Lv4 own 护甲 +2 (plus)
   // (was { self 1/1/2/2, cover 0/1/1/2 } — kept as ENEMY_GUARD_LV for enemy guards, unchanged)
@@ -1388,7 +1473,26 @@
   const XL_MARK_FIXED = 10; // 2026-11-24c 用户「终响打 10 好了」: the knell hits a flat 10 (护甲 still blocks); 0 = 威力 × XL_MARK_X
   // 2026-11-24 进阶难度 (docs/DESIGN-2026-11-22-ascension.md, 杀戮尖塔式: 每档加一条，叠加): run.ascension = N → rows 1..N all on.
   // Only via ?asc=N until it is settled; 0 / absent = the game as it is. Rows: { rule, n }
-  const ASCENSION = [ // 用户 2026-11-24 定稿草案 (DIFF_LADDER: 青铜 = 1 … 星辰 = 9)
+  // 2026-11-25 用户「加强和阻挡成型混着给」「先把前 5 级做好」(docs/DESIGN-2026-11-25-difficulty-v2.md, v3): tiers 1–5 replaced,
+  // 6–9 unchanged for now. false = the 2026-11-24 rows (ASCENSION_OLD_1124).
+  const DIFF_V3 = true;
+  const ASCENSION_V3 = [
+    { rule: 'enemyHpPct', n: 20, also: [{ rule: 'lateAtk', n: 1 }], /* 2026-11-27 晚 用户「现在都感觉不到疼」→「第四关起 +1 试试」: from L4 every enemy 威力 +1 (no also = the old) */ also_old_2026_11_27: [{ rule: 'healCut', n: 20 }], also_old_2026_11_26: [{ rule: 'healHalf', n: 1 }] }, // 2026-11-27 用户「加血削弱和敌人生命增加还是放两个难度级，加血削弱不进青铜」→ healCut moved to tier 2 · // 2026-11-26 晚 用户「牧师治疗 −20% 好了」(AI 青铜两局都卡住): healHalf → healCut 20 (round down) · // 1 青铜: every enemy max hp +20% (after the fixed hp — hpExact / mirror) + 2026-11-26 用户「你试试」: our priests heal half (木头 keeps the strong heal)
+    { rule: 'purse', n: 1, also: [{ rule: 'healCut', n: 20 }] }, // 2 白银: the purse 130 → 100 · 2026-11-27: + 牧师治疗 −20% (from 青铜)
+    { rule: 'eliteHpPct', n: 30 }, // 3 精钢: 首领 (isElite) max hp +30% more
+    { rule: 'startMood', n: 1 }, // 4 黄金: every hire starts one mood lower
+    { rule: 'lateAtk', n: 2 }, // 5 秘银: from level LATE_ATK_FROM on, every enemy 威力 +2
+    { rule: 'curseUp', n: 1 }, // 6 山铜 (unchanged)
+    { rule: 'winGold', n: 2 }, // 7 晶钻 (unchanged)
+    { rule: 'eliteBlock', n: 6 }, // 8 龙鳞 (unchanged)
+    { rule: 'allAtk', n: 1 }, // 9 星辰 (unchanged)
+  ];
+  // 精钢「首领」: isElite plus the two level bosses ELITE_REFS leaves out (L5 钟楼守卫, L7 分裂史莱姆) — a separate list so the other elite rules don't move
+  const V3_BOSS_REFS = { 'bell-guardian': 1, 'split-slime': 1 };
+  // 2026-11-25 用户「算」: the girls who come back as foes (L4 / L6 / L8 …) count as 首领 too; L11's mirror dolls don't (their numbers are the party's)
+  const isV3Boss = (data, u) => isElite(u) || !!(u && V3_BOSS_REFS[u.ref]) || !!(u && !u.mirror && (u.candidate || (data.candidates || []).some((c) => c.id === u.ref)));
+  const LATE_ATK_FROM = 4; // same level the per-round 越打越凶 starts (ENEMY_RAMP_FROM_LV)
+  const ASCENSION_OLD_1124 = [ // 用户 2026-11-24 定稿草案 (DIFF_LADDER: 青铜 = 1 … 星辰 = 9)
     { rule: 'enemyHp', n: 2 }, // 1 青铜: every enemy +2 max hp
     { rule: 'restLess', n: 3 }, // 2 白银: a campfire rest heals 3 less
     { rule: 'purse', n: 1 }, // 3 精钢: the purse 130 → 100 (PURSE_FIXED; the 4 dearest picks cost 85–88)
@@ -1399,6 +1503,7 @@
     { rule: 'eliteBlock', n: 6 }, // 8 龙鳞: elites / bosses open with 6 护甲
     { rule: 'allAtk', n: 1 }, // 9 星辰: every enemy 威力 +1
   ];
+  const ASCENSION = DIFF_V3 ? ASCENSION_V3 : ASCENSION_OLD_1124;
   // 山铜「诅咒卡加重一级」: stat / charge ×2, a fine ×1.5, the daze twice (the leader's own extra still comes on top in leaderEff)
   const curseUp = (run, eff) => {
     if (!eff || !ascOn(run, 'curseUp')) return eff;
@@ -1413,7 +1518,7 @@
   const PURSE_FIXED = true, PURSE_EASY = 130, PURSE_HARD = 100;
   const ascPurse = (data, run) => { if (!PURSE_FIXED || !run || !run.recruitPrice || run.recruitSpent) return; run.gold = ascOn(run, 'purse') ? PURSE_HARD : PURSE_EASY; };
   const ascLevel = (run) => Math.max((run && run.ascension) || 0, DIFF_LADDER && run && run.difficulty > 0 ? run.difficulty : 0);
-  const ascOn = (run, rule) => { const a = ascLevel(run); let n = 0; for (let i = 0; i < Math.min(a, ASCENSION.length); i++) if (ASCENSION[i].rule === rule) n += ASCENSION[i].n; return n; };
+  const ascOn = (run, rule) => { const a = ascLevel(run); let n = 0; for (let i = 0; i < Math.min(a, ASCENSION.length); i++) { if (ASCENSION[i].rule === rule) n += ASCENSION[i].n; for (const x of ASCENSION[i].also || []) if (x.rule === rule) n += x.n; } return n; };
   const GIRL_SPARK_SPLASH = true; // 2026-11-24: a rejected / returned mage hits her targets with the first full, the rest half (was full on each)
   // 墓穴的寒气: run.tune.chill = { fromLevel, start, n, start2, n2 } (tools / sims) or the ascension rule 'chill' (fromLevel 7, start 3, n 1, start2 6, n2 2)
   const CHILL_FLOOR = 1;
@@ -1506,7 +1611,20 @@
   const wallFeed = (u, n, from) => { if (!(n > 0) || !hasWall(u) || u.hp <= 0) return; n = Math.min(n, Math.max(0, BLOCK_CAP - (u.block || 0))); if (!(n > 0)) return; u.block = (u.block || 0) + n; const bf = u.blockFrom || (u.blockFrom = {}); bf[from || u.id] = (bf[from || u.id] || 0) + n; };
   // 用户 2026-11-15 牧师变强: 「威力 = 加血，满了变护甲」 from Lv1 — what a share cannot heal becomes 护甲 on that ally; a share with
   // nobody left hurt goes whole as 护甲 to the lowest-hp ally (front-most on a tie). Everyone full before she acts → she attacks (unchanged).
-  const HEAL_LV = [{ n: 1, over: true }, { n: 2, over: true }, { n: 3, over: true }, { n: 3, over: true, cleanse: true }]; // shares; Lv4 净化
+  const HEAL_LV = [{ n: 1, over: true }, { n: 2, over: true }, { n: 3, over: true }, { n: 3, over: true, cleanse: true }]; // shares; Lv4 净化 (enemy priests; ours too when HEAL_POOL is off)
+  // 2026-11-27 用户「牧师做成跟猎人类似」: ours heal ONE pool = 威力 × x; what the first ally cannot take spills on to the next `spill`
+  // allies (each the next most in need); what is still left → 护甲 (塞西) / 回本 (葛蕾). Lv3 祝福, Lv4 净化 stay. Lv5: ×2, spills to
+  // everyone, and every hurt ally gets at least +1. false = old HEAL_LV shares (+ HEAL_SPLIT / HEAL_LESS).
+  const HEAL_POOL = true;
+  const HEAL_POOL_LV = [{ x: 1, spill: 0 }, { x: 1.25, spill: 1 }, { x: 1.5, spill: 1 }, { x: 1.75, spill: 2 }], HEAL_POOL_LV5 = { x: 2, spill: Infinity, plus1: true };
+  const healPoolAmt = (p, hp) => Math.max(1, Math.round(Math.max(1, p) * hp.x)); // 4×1.25 = 5, 5×1.25 = 6.25 → 6
+  const healSpillTag = (pre, hp) => { // the literal TX('…') calls keep the i18n key check happy
+    const all = hp.spill === Infinity, n = hp.spill;
+    if (!all && !(n > 0)) return '';
+    if (pre === 'skill.text') return all ? TX('skill.text.healSpillAll') : TX('skill.text.healSpill', { n });
+    if (pre === 'skill.lv') return all ? TX('skill.lv.healSpillAll') : TX('skill.lv.healSpill', { n });
+    return all ? TX('skill.action.healSpillAll') : TX('skill.action.healSpill', { n });
+  };
   function lvOf(sk) { return clamp(1 + ((sk && sk.power) || 0), 1, SKILL_LV_MAX); }
   function hitsOf(sk) { return sk && sk.kind === 'backstab' ? BACKSTAB_HITS[lvOf(sk) - 1] : 1; } // rogues: 连击 2/2/3/4 hits (2026-11-16; was Lv + 1)
   function lvLine(kind, lv, perk) { // the plain words for one level: 「暴击率 35%」 · perk: 2026-11-24 伊芙's 掩护 count (guardLvFor)
@@ -1517,7 +1635,9 @@
       case 'aim': return CRIT_RATE[i] >= 1 ? TX('skill.lv.aimMax', { x: CRIT_X_MAX }) : (i >= CRIT_PIERCE_LV - 1 ? TX('skill.lv.aimPierce', { pct: Math.round(CRIT_RATE[i] * 100), x: CRIT_X_LV[i] }) : TX('skill.lv.aim', { pct: Math.round(CRIT_RATE[i] * 100), x: CRIT_X_LV[i] }));
       case 'backstab': return TX('skill.lv.backstab', { n: BACKSTAB_HITS[i] });
       case 'spark': return (SPARK_TARGETS[i] === Infinity ? TX('skill.lv.sparkAll') : SPARK_TARGETS[i] === 1 ? TX('skill.lv.sparkOne') : TX('skill.lv.spark', { n: SPARK_TARGETS[i] })) + (i >= BURN_LV - 1 ? TX('skill.lv.burnTag') : ''); // 2026-11-16 Lv3+ 灼烧
-      case 'heal': { const h = HEAL_LV[i]; return (h.cleanse ? TX('skill.lv.healCleanse', { n: h.n }) : TX('skill.lv.heal', { n: h.n })) + (i >= BLESS_LV - 1 ? TX('skill.lv.blessTag') : ''); } // 2026-11-16 Lv3+ 祝福
+      case 'heal': { const h = HEAL_LV[i];
+        if (HEAL_POOL) { const hp = HEAL_POOL_LV[i]; return TX('skill.lv.healPool', { x: hp.x }) + healSpillTag('skill.lv', hp) + (i >= BLESS_LV - 1 ? TX('skill.lv.blessTag') : '') + (h.cleanse ? TX('skill.lv.cleanseTag') : ''); } // 2026-11-27 HEAL_POOL
+        return (h.cleanse ? TX('skill.lv.healCleanse', { n: h.n }) : TX('skill.lv.heal', { n: h.n })) + (i >= BLESS_LV - 1 ? TX('skill.lv.blessTag') : ''); } // 2026-11-16 Lv3+ 祝福
       default: return '';
     }
   }
@@ -1552,13 +1672,14 @@
     if (enemy && skill.kind === 'spark' && skill.splash && ENEMY_SPARK_SPLASH) return TX('skill.action.sparkEnemySplash', { m: SPARK_TARGETS[Math.min(ei, SPARK_TARGETS.length - 1)] - 1, dmg: d, splash: sparkSplash(d) }) + (ei ? TX('skill.action.lvTag', { lv: ei + 1 }) : '');
     if (enemy && skill.kind === 'spark' && skill.bigEvery > 0) return TX('skill.action.sparkBig', { dmg: d, n: skill.bigEvery, x2: d * JACKPOT_X }); // 2026-11-18 妮可塔 L10 大招
     if (enemy && skill.kind === 'spark' && skill.jackpot) return TX('skill.action.sparkJackpot', { dmg: d, pct: Math.round(skill.jackpot * 100), x2: d * JACKPOT_X }); // 2026-11-15 妮可塔「满场通杀」
+    if (enemy && skill.sweepStep > 0) return ENRAGE_FRONT === 1 ? TX('skill.action.sweepEnemyFront1', { dmg: d }) : ENRAGE_FRONT ? TX('skill.action.sweepEnemyFront', { dmg: d }) : TX('skill.action.sweepEnemy', { dmg: d, step: skill.sweepStep, min: SWEEP_MIN }); // 2026-11-26 试玩: 露西安「朱笔勾销」 hits everyone once, −step each (was read as 「前两位 ×2」)
     if (ei) { // her real numbers at this level (the same tables as ours: 掩护 / 连击 / 治疗份数; archers crit 30 / 60 / 90%)
       const etag = TX('skill.action.lvTag', { lv: ei + 1 });
       const foeE = ruleFoe || (skill.kind === 'aim' ? TX('skill.target.party.random') : TX('skill.target.party.leftmost'));
       switch (skill.kind) {
         case 'guard': { const g = ENEMY_GUARD_LV[ei], eb = skill.block || ENEMY_GUARD_BLOCK;
           return g.cover ? TX('skill.action.guardEnemyCover', { foe: foeE, dmg: d, block: eb * g.self, cover: g.cover, give: eb, lvTag: etag }) : TX('skill.action.guardEnemy', { foe: foeE, dmg: d, block: eb * g.self }) + etag; }
-        case 'aim': return TX('skill.action.aimEnemyCrit', { foe: foeE, dmg: d, pct: Math.round(ENEMY_CRIT_RATE[ei] * 100), critDmg: d * CRIT_X, lvTag: etag });
+        case 'aim': if (!ENEMY_AIM_CRIT) return TX('skill.action.aimEnemy', { foe: foeE, dmg: d }); return TX('skill.action.aimEnemyCrit', { foe: foeE, dmg: d, pct: Math.round(ENEMY_CRIT_RATE[ei] * 100), critDmg: d * CRIT_X, lvTag: etag });
         case 'backstab': return backRule ? TX('skill.action.backstabEnemyBackLv', { n: ei + 2, dmg: d, lvTag: etag }) : TX('skill.action.backstabEnemyLv', { n: ei + 2, dmg: d, lvTag: etag });
         case 'heal': return TX('skill.action.healEnemyN', { n: HEAL_LV[ei].n, heal: healShare(Math.max(1, atk)), foe: foeE, dmg: d, lvTag: etag });
         case 'spark': return TX('skill.action.sparkEnemy', { dmg: d }) + etag;
@@ -1568,7 +1689,7 @@
     // v2.3 §A[19]: hunters (adc) aim at the rightmost, a skill marked random at anyone
     const where = skill.random || skill.target === 'random' || (enemy && skill.kind === 'aim') ? 0 : role === 'adc' || skill.target === 'rightmost' ? 1 : 2; // v2.4 [18]: random / rightmost / leftmost
     const foe = ruleFoe ? ruleFoe : enemy ? [TX('skill.target.party.random'), TX('skill.target.party.rightmost'), TX('skill.target.party.leftmost')][where]
-      : !enemy && role === 'adc' && where === 1 && AIM_TARGET !== 'rightmost' ? ({ lowest: TX('skill.target.enemy.lowest'), highest: TX('skill.target.enemy.highest'), leftmost: TX('skill.target.enemy.leftmost'), lock: TX('skill.target.enemy.leftmost') })[AIM_TARGET] // 2026-11-16 #3 (AIM_TARGET)
+      : !enemy && role === 'adc' && where === 1 && AIM_TARGET !== 'rightmost' ? ({ lowest: TX('skill.target.enemy.lowest'), highest: TX('skill.target.enemy.highest'), leftmost: TX('skill.target.enemy.leftmost'), lock: TX('skill.target.enemy.aimPick') })[AIM_TARGET] /* 2026-11-27 用户「猎人是可以选择目标的」 (was enemy.leftmost) */ // 2026-11-16 #3 (AIM_TARGET)
         : [TX('skill.target.enemy.random'), TX('skill.target.enemy.rightmost'), TX('skill.target.enemy.leftmost')][where];
     const tag = enemy ? '' : TX('skill.action.lvTag', { lv }); // 2026-11-14 keyword style: the numbers are in the line itself
     switch (skill.kind) {
@@ -1585,7 +1706,12 @@
         return SPARK_TARGETS[i] === Infinity ? TX('skill.action.sparkAll', { dmg: sparkMain(d, lv), splash: sparkSplash(d, lv), lvTag: tag })
           : sparkSplash(d, lv) > 0 ? TX('skill.action.spark', { n: SPARK_TARGETS[i], dmg: sparkMain(d, lv), splash: sparkSplash(d, lv), lvTag: tag }) : TX('skill.action.sparkOne', { dmg: sparkMain(d, lv), lvTag: tag }); }
       case 'heal': { const h = HEAL_LV[i];
-        const hv = { n: h.n, heal: healShare(Math.max(1, atk)), foe, dmg: d, lvTag: tag };
+        if (HEAL_POOL && !enemy) { // 2026-11-27 HEAL_POOL: one pool = 威力 × x, spilling on
+          const hp = HEAL_POOL_LV[i], base = healPoolAmt(healShare(Math.max(1, atk)), hp);
+          const pv = { heal: skill.healHalf ? Math.max(1, Math.ceil(base / 2)) : skill.healCut ? Math.max(1, Math.floor(base * (100 - skill.healCut) / 100)) : base, spill: healSpillTag('skill.action', hp), over: !HEAL_OVER_SKILL_ONLY || skill.overBlock ? TX('skill.action.healOver') : '', foe, dmg: d, lvTag: tag, half: priestHalf(atk) };
+          return h.cleanse ? TX('skill.action.healPoolCleanse', pv) : TX('skill.action.healPool', pv);
+        }
+        const hv = { n: h.n, heal: enemy ? healShare(Math.max(1, atk)) : skill.healHalf ? Math.max(1, Math.ceil(healShare(Math.max(1, atk)) / 2)) : skill.healCut ? Math.max(1, Math.floor(healShare(Math.max(1, atk)) * (100 - skill.healCut) / 100)) : Math.max(1, healShare(Math.max(1, atk)) - healLessAt(skill)), foe, dmg: d, lvTag: tag, over: enemy || !HEAL_OVER_SKILL_ONLY || skill.overBlock ? TX('skill.action.healOver') : '' }; // skill.overBlock: memberView / unitView pass it (overBlockOf)
         if (!enemy && PRIEST_STRIKE) hv.half = priestHalf(atk);
         hv.decay = HEAL_SPLIT && h.n > 1 ? TX('skill.action.healSplit', { half: Math.max(1, Math.ceil(hv.heal / 2)) }) : !enemy && HEAL_DECAY && h.n > 1 ? TX('skill.action.healDecay', { n: HEAL_DECAY }) : '';
         return enemy ? TX('skill.action.healEnemy', hv) : h.cleanse ? (PRIEST_STRIKE ? TX('skill.action.healCleanseStrike', hv) : TX('skill.action.healCleanse', hv)) : PRIEST_STRIKE ? TX('skill.action.healStrike', hv) : TX('skill.action.heal', hv); }
@@ -1632,11 +1758,13 @@
     }
     return n;
   }
+  // 2026-11-25 防御姿态 (run.defendOn, test rule; docs/DESIGN-2026-11-25-defend-stance.md): an ally set to 防御 takes no charge from anything
+  const defending = (u) => !!u && u.side === 'ally' && u.stance === 'defend';
   // 好运 / 战鼓: every living ally (not broken) gets n pips right away; who is full acts at the start of our next phase
   function giftPips(B, n, from, name) {
     const out = [];
     for (const u of B.allies) {
-      if (u.hp <= 0 || (u.side === 'ally' && !u.noMood && u.mood <= -2)) continue;
+      if (u.hp <= 0 || (u.side === 'ally' && !u.noMood && u.mood <= -2) || defending(u)) continue;
       const before = u.charge || 0;
       u.charge = before + n;
       hawkFed(u, n); // 2026-11-17 爆发实验 猎人暴击流
@@ -1651,12 +1779,12 @@
   // 2026-11-21 转向指环 (TURN_RING; false = old: the ring does nothing): her charge turns round — 'next' → 'prev', 'prev' → 'next',
   // same k; a 'both' holder gives to ONE side (holder.ringSide, picked when the ring was given; default 'next') RING_BOTH_K pips.
   // Applied to the combo copy itself (battle unit, member view), so the arrow, k, bonus text and the Lv1 'both' → 'next' rule all agree.
-  const TURN_RING = true, RING_BOTH_K = 4;
+  const TURN_RING = true, RING_BOTH_K = 4, RING_BOTH_SUM = true; // RING_BOTH_SUM false = the old flat 4
   function ringCombo(combo, holder) {
     if (!TURN_RING || !combo || !holder || !hasTok(holder, 'turnRing')) return combo;
     const d = combo.direction;
     if (d === 'next' || d === 'prev') return { ...combo, direction: d === 'next' ? 'prev' : 'next', charge: baseK(combo) };
-    if (d === 'both') return { ...combo, direction: holder.ringSide === 'prev' ? 'prev' : 'next', charge: RING_BOTH_K };
+    if (d === 'both') return { ...combo, direction: holder.ringSide === 'prev' ? 'prev' : 'next', charge: RING_BOTH_SUM ? baseK(combo) * 2 : RING_BOTH_K }; // 2026-11-26 用户「两边都加的应该加起来」: both sides' pips on the one side
     return combo;
   }
   // her combo before the ring (same as allyUnit: the leader's from the class data when LEADER_COMBO_LIVE)
@@ -1793,7 +1921,8 @@
     const fates = [];
     for (const id of run.party) if (!isLeader(id)) {
       const raw = dig(D, 'fates', id, 'member');
-      fates.push({ id, name: nameOf(data, id), status: 'member', corruption: null, lines: res(raw != null ? raw : EPI_FALLBACK().member, { name: nameOf(data, id) }, raw != null ? id : 'narrator') });
+      fates.push({ id, name: nameOf(data, id), status: 'member', corruption: null, lines: res(raw != null ? raw : EPI_FALLBACK().member, { name: nameOf(data, id) }, raw != null ? id : 'narrator'),
+        lastWords: candLine(data, id, 'lastWords') || null, dragged: DEFEAT_DRAG ? TX('epilogue.draggedOne', { name: nameOf(data, id) }) : null }); // 2026-11-26 用户「失败时每个人走一遍，说一句遗言，被白手套拖走」
     }
     const gone = run.rejected.map((r, i) => ({ id: r.id, status: 'rejected', corruption: 'vengeful', ord: i }))
       .concat(run.sacrificed.map((s, i) => ({ id: s.id, status: 'sacrificed', corruption: 'possessed', ord: 100 + i })));
@@ -1810,8 +1939,10 @@
       intro: res(pickVar(D.intro) || EPI_FALLBACK().intro),
       fates,
       leader: res(pickVar(D.leader) || EPI_FALLBACK().leader, {}, 'narrator'),
+      leaderSorry: DEFEAT_DRAG ? [resolveLine(data, run, { speaker: 'leader', text: TX('epilogue.leaderSorry'), expr: 'sad' }, {}, 'leader')] : null, // 2026-11-26: then the leader is taken too
+      leaderDragged: DEFEAT_DRAG ? TX('epilogue.draggedLeader', { name: (run && run.leaderName) || leaderName() }) : null,
       advisor: a ? { id: a.id, name: a.name, lines: res(advRaw || EPI_FALLBACK().advisor, {}, 'advisor') } : null,
-      outro: res(pickVar(D.outro) || EPI_FALLBACK().outro),
+      outro: (DEFEAT_DRAG ? res(asList((((data.stories || {}).stories || data.stories || {}).gameOver) || []).slice(DEFEAT_STORY_KEEP)) : []).concat(res(pickVar(D.outro) || EPI_FALLBACK().outro)), // 2026-11-27: the guild notice / your name crossed out come last
     };
   }
 
@@ -2008,7 +2139,7 @@
     const seed = ((opts && opts.seed) != null ? opts.seed : 1) >>> 0;
     const run = {
       version: 3, seed, rng: seed, seq: 0,
-      meta: normMeta(opts && opts.meta), keys: KEYS0(), namedGirl: false, bellLevel: null, bell: false, bellDone: false, wounded: false, // v2.2
+      meta: normMeta(opts && opts.meta), bellGate: !!(BELL_UNLOCK && opts && opts.meta && !(normMeta(opts.meta).wins > 0)), keys: KEYS0(), namedGirl: false, bellLevel: null, bell: false, bellDone: false, wounded: false, // v2.2
       phase: 'story', level: 0, story: null, queue: [],
       leader: null, leaderStep: null, leaderEffects: [], advisor: null, advisorPresent: false, advisorMood: 0,
       interviewRound: 0, interviewStep: null, sided: {}, rejectedInfo: {},
@@ -2028,6 +2159,7 @@
     if (rp) { run.recruitPrice = true; run.gold = recruitEco(data).purse; run.recruitSpent = 0; } // old flow: gold = startGold (10)
     if (opts && opts.difficulty != null) run.difficulty = clamp(Math.floor(+opts.difficulty) || 0, 0, DIFFICULTIES().length - 1);
     if (opts && opts.ascension != null && +opts.ascension > 0) run.ascension = clamp(Math.floor(+opts.ascension) || 0, 0, ASCENSION.length); // 进阶 (docs/DESIGN-2026-11-22-ascension.md): ?asc=N
+    if (opts && opts.defend) run.defendOn = true; // 2026-11-25 防御姿态 (test rule): ?defend=1, new games only; absent = the game as before
     ascPurse(data, run);
     // 2026-11-19 伤害分摊 §6: per-run switches (tools / tests); absent = the constants (+ ?spread=0)
     if (opts && (opts.spread != null || opts.veteranArmor != null || opts.outlanderShop != null || opts.swapCost != null || opts.pauseMulti != null || opts.leaderMood != null)) {
@@ -2081,10 +2213,11 @@
         if (!ls || !ls.length) continue; // missing story text: skip
         run.phase = 'story';
         run.story = { id: step.story, ctx: step.ctx || {} };
+        if (step.story === 'advisorGift') run.advisorGiftSeen = true; // 2026-11-27 用户「删掉」: the box said it — no L6 「技能变强」 line after it
         // feedback-1112 #7: the sealing story ends on a choice (story.sealChoice refuse | accept; a plain continue = accept)
         if (step.story === 'sealing' && run.party.some(isLeader)) run.story.choice = 'seal';
         if (step.story === 'teamAssembled') teamAssembled(data, run, events);
-        if (step.story === 'sideDoor' || step.story === 'sideDoorPass') run.story.door = true; // 2026-11-15 小门
+        if (step.story === 'sideDoor' || step.story === 'sideDoorPass' || step.story === 'bellDoorReveal') run.story.door = true; // 2026-11-15 小门 (+ 2026-11-25 BELL_UNLOCK: the reveal shows the same door, 【那就算了吧】 only)
         if (step.story === 'levelIntro' && run.exitHideNo) run.story.noCard = true; // the walk out: no card yet (EXIT_CARD_AFTER_TURN)
         else if (step.story === 'levelIntro') run.story.levelCard = (({ kind, ...c }) => c)(levelCardEvent(data, run, run.level));
         return;
@@ -2116,13 +2249,13 @@
         startInterviewRound(data, run, interviewRounds(data, run)[0]);
       }
       if (step.phase === 'prep') {
-        run.bell = false; delete run.guidePending; // 2026-11-20 流程: a mark left by a cheat-won night does not carry over
+        run.bell = false; delete run.guidePending; delete run.warnPending; // 2026-11-20 流程: a mark left by a cheat-won night does not carry over
         run.sealNight = !!(run.recent && SEAL_WHENS[run.recent.when]); // SPEC-2026-11-13 E1+: the night after the rules
         run.camp = { step: 'choose' }; // v2.3 §B1: one choice of three, then the formation
         if (step.march) { run.campfire = null; run.camp = { step: 'done', quiet: true, march: true, choice: 'march' }; } // feedback-1112 #35 (old saves only: L9 → L10 now skips the prep)
         else if (step.first) { run.campfire = null; run.camp = { step: 'done', quiet: true, first: true, choice: null }; guideBeforeFight(data, run, events); } // 叙事节奏 2026-11-13: L1, the formation only
         else if (step.quiet) { run.campfire = null; run.camp = { step: 'done', quiet: true, choice: 'followBell' }; } // back from following the bell: no talk, no rest
-        else if (run.bellLevel != null && run.bellLevel === run.level && !run.bellDone) { // §4.3 the bell campfire
+        else if (run.bellLevel != null && run.bellLevel === run.level && !run.bellDone && bellsOn(run)) { // §4.3 the bell campfire (BELL_UNLOCK: not before the bells)
           run.camp.night = run.campNight = (run.campNight || 0) + 1; // G2 #10: every real campfire counts (the bell night keeps all its options)
           nightHeal(data, run, events);
           // feedback-1112 #8: the first night after a sacrifice always talks about it — even when the bell rings that night
@@ -2137,6 +2270,7 @@
         if (RULES_NIGHT_TRAIN_FIRST && !CAMP_EXPLORE && run.sealNight && run.camp.step === 'choose' && !run.bell) Object.assign(run.camp, { step: 'train-pick', preTrain: true });
         if (!step.quiet) lowHpWarn(data, run, events);
         if (!step.quiet) prepWarn(data, run, events); // 2026-11-19 流程修 M1: not again on the quiet prep after the bell (was said twice) · 用户 2026-11-15 L9: the advisor's warning (先攻), in the camp talk before the formation
+        if (run.level === SIDE_REPAY_LEVEL) for (const id of run.party) sideRepay(data, run, id, events, 'sideRepayGift'); // 2026-11-26 SIDE_REPAY: before 芙洛's shop
         shopOpen(data, run); // 2026-11-14: before L3 / L6 / L9 芙洛 turns up (not a campfire action)
       }
       run.rewardKind = step.phase === 'reward' && step.blessing ? 'blessing' : null; // 2026-11-18 小铃的祝福 reuses the reward screen
@@ -2352,6 +2486,7 @@
   // feedback-1112 #7: after the gate slams shut (L3), the leader answers the noble.
   //  refuse → the noble's guards beat her down: leader hp → 1, then she has to go on anyway · accept → 2 random girls mood −1
   // 2026-11-19 用户亲测 流程 (corrected): the option keeps its price note; only the injury report waits for the beat
+  const TEAM_HURT_BOX = true; // false = the old: only the leader's hp toast on the beating line
   const SEAL_OPTIONS = lazy(() => ([{ id: 'refuse', text: TX('sacrifice.seal.refuse'), note: TX('sacrifice.seal.refuseNote') /* 第六批 H1-5 */ }, { id: 'accept', text: TX('sacrifice.seal.accept'), note: TX('sacrifice.seal.acceptNote') }]));
   function sealChoice(data, run, a, ev) {
     const c = a.choice;
@@ -2371,7 +2506,9 @@
         if (!SEAL_HP_AT_BEAT) ev.push({ kind: 'sealCurse', id: LEADER_ID, hpBefore: from, hpAfter: to, text: TX('story.sealBeaten', { hp: to }) }); // the UI shows it on the story's curse line
         const teamTo = SEAL_TEAM_HIT ? Object.fromEntries(run.party.filter((id) => run.members[id]).map((id) => [id, Math.max(1, hpOf(run.members[id]) - SEAL_HIT)])) : null; // SEAL_TEAM_HIT
         if (teamTo && !SEAL_HP_AT_BEAT) for (const id of Object.keys(teamTo)) run.members[id].hp = teamTo[id];
-        run.queue.unshift({ story: 'sealRefuse', ctx: Object.assign(SEAL_HP_AT_BEAT ? { hpFrom: from, hpTo: to, hpPending: true } : { hpFrom: from, hpTo: to }, teamTo ? { teamTo } : {}, bg) });
+        const teamFrom = teamTo ? Object.fromEntries(Object.keys(teamTo).map((id) => [id, hpOf(run.members[id])])) : null; // 2026-11-27 TEAM_HURT_BOX: everyone's before (read before any settle)
+        if (teamFrom && !SEAL_HP_AT_BEAT) for (const id of Object.keys(teamFrom)) teamFrom[id] = Math.min(run.members[id].maxHp, teamTo[id] + SEAL_HIT);
+        run.queue.unshift({ story: 'sealRefuse', ctx: Object.assign(SEAL_HP_AT_BEAT ? { hpFrom: from, hpTo: to, hpPending: true } : { hpFrom: from, hpTo: to }, teamTo ? { teamTo, teamFrom } : {}, bg) });
       } else run.queue.unshift({ story: 'sealRefuse', ctx: bg });
     } else {
       for (const raw of storyLines(data, run, 'sealAcceptSay') || []) ev.push(lineEvent(data, run, raw, {}, 'leader', { key: 'sealAccept' })); // she says yes, then the girls flinch
@@ -2452,6 +2589,7 @@
         if (a.advisorSkill != null) armSkill(data, run, !!a.advisorSkill);
         autoCamp(data, run, ev); ignoreBell(run);
         guideOnDepart(data, run); // 2026-11-20 流程: the advisor's pre-fight line plays after the arrival (in the scene intro)
+        warnOnDepart(data, run); // 2026-11-26: the L9 「经常被偷袭」 warning, after the arrival
         run.queue = goSteps(data, run, levelCfg(data, run.level)).concat(run.queue);
         advance(data, run, ev);
       },
@@ -2560,6 +2698,7 @@
           e.amount = t.hp; e.hpAfter = t.hp; e.revived = true;
         }
         else if (kind === 'weakAll') { const n = itemNum(it, WEAK_POWDER); for (const u of B.enemies) if (u.hp > 0) { u.weak = (u.weak || 0) + n; u.powderWeak = (u.powderWeak || 0) + n; } e.amount = n; } // 2026-11-22 虚弱粉: off again at round end
+        else if (kind === 'luckAll') { const n = itemNum(it, 2); for (const u of B.allies) if (u.hp > 0) { const was = u.luck || 0; u.luck = Math.min(LUCK_MAX, was + n); u.diceLuck = (u.diceLuck || 0) + (u.luck - was); } e.amount = n; } // 2026-11-26 幸运骰盅: off again at round end
         else if (kind === 'vuln') { t.vuln = true; e.vuln = true; } // 2026-11-22 易伤药水: cleared at round end
         else if (kind === 'fire') { B.mods.fire = (B.mods.fire || 0) + itemNum(it, FIRE_BOTTLE); e.amount = itemNum(it, FIRE_BOTTLE); } // 2026-11-22 燃烧瓶: lands at the start of the coming round (fireBottle)
         else if (kind === 'smoke' || kind === 'drum') B.mods[kind] = true;
@@ -2595,6 +2734,21 @@
         u.healPick = ids.slice();
         const names = ids.map((id) => B.allies.find((x) => x.id === id).name);
         const e = { kind: 'healPick', round: B.round, id: u.id, targets: ids.slice(), text: ids.length ? TX('battle.healPickSet', { name: u.name, targets: listSeq(names) }) : TX('battle.healPickClear', { name: u.name }) };
+        B.log.push(e);
+        ev.push(e);
+      },
+      // 2026-11-25 防御姿态 (run.defendOn): set one ally to 'act' (行动, default) or 'defend' (防御) at the pause. Free, like setAim;
+      // kept for the battle until changed. Warriors (skill kind 'guard') have no stance: their act and defend would be the same.
+      setStance(data, run, a, ev) {
+        const B = run.battle;
+        if (!run.defendOn) fail('stances are off');
+        if (!B || B.over) fail('no battle');
+        const u = B.allies.find((x) => x.id === a.id) || B.allies.find((x) => x.wokeMember && x.ref === a.id);
+        if (!u || u.hp <= 0 || coat(u) || !u.skill) fail('not a living ally of ours: ' + a.id);
+        if (u.skill.kind === 'guard') fail('a warrior has no stance: ' + a.id);
+        if (a.stance !== 'act' && a.stance !== 'defend') fail('stance must be act or defend: ' + a.stance);
+        u.stance = a.stance === 'defend' ? 'defend' : undefined;
+        const e = { kind: 'stance', round: B.round, id: u.id, stance: a.stance, text: a.stance === 'defend' ? TX('battle.stanceDefend', { name: u.name }) : TX('battle.stanceAct', { name: u.name }) };
         B.log.push(e);
         ev.push(e);
       },
@@ -2652,6 +2806,7 @@
     if (SIDE_COST && pick.sideCost > 0) { // 2026-11-24 用户「琪琪偷钱袋——站她的话要多交 5 块钱」: backing her = the purse she had in her fingers stays with her
       const have = goldOf(run), n = Math.min(have, pick.sideCost);
       run.gold = have - n; run.sideSpent = (run.sideSpent || 0) + n;
+      if (n > 0) (run.sidePaid || (run.sidePaid = {}))[pick.id] = n; // 2026-11-26 SIDE_REPAY: she pays it back later
       ev.push({ kind: 'gold', n: -n, src: 'sideCost', gold: run.gold, text: TX('interview.sideCostPaid', { name: pick.name, n }) });
     }
     ev.push({ kind: 'sideEffect', id: pick.id, name: pick.name, text: se.effect, more: se.effectMore, against: se.against || null, againstId: se.againstId || null });
@@ -2789,7 +2944,7 @@
     const her = [].concat(...(Array.isArray(id) ? id : [id]).map(herOf)); // 2026-11-20: a squad of two — both say their last words, then the rest once
     const gal = D.gallery && (D.gallery[String(cfg.level)] || D.gallery['4']);
     const lead = (D.leader && D.leader[run.flags && run.flags.seal === 'refuse' ? 'refuse' : 'accept']) || [];
-    const out = her.concat(gal ? [gal] : [], asList((Array.isArray(id) && id.length > 1 && D.narratorMany) || D.narrator).slice(0, 1), lead.length ? [lead[cfg.level % lead.length]] : []);
+    const out = her.concat(gal ? [gal] : [], asList((Array.isArray(id) && id.length > 1 && D.narratorMany) || D.narrator).slice(0, 1).map((x) => (typeof x === 'string' ? { speaker: 'narrator', text: x, fx: 'dragged' } : Object.assign({ fx: 'dragged' }, x))), lead.length ? [lead[cfg.level % lead.length]] : []);
     return her.length ? out : null;
   }
   function postQueue(data, run, cfg) {
@@ -2807,9 +2962,9 @@
       q.push({ phase: 'debuff' });
     }
     // feedback-1112 #14: no more writing your own name — the first sacrifice is name | random, the second is name only
-    if (post === 'sacrifice') q.push({ story: 'sacrificeIntro' }, { phase: 'sacrifice', modes: ['name', 'random'] });
+    if (post === 'sacrifice') q.push({ story: 'sacrificeIntro' }, { phase: 'sacrifice', modes: bellsOn(run) ? ['name', 'random'] : ['name'] }); // BELL_UNLOCK: no 交给规则 before the bells
     // 2026-11-18 growth-flow (用户定「小铃的祝福：第 5 关献祭那一晚，高级加成三选一」): right after the first sacrifice. Switch BLESSING_ON.
-    if (post === 'sacrifice' && BLESSING_ON && blessingPool(data).length && !run.blessing) q.push({ story: 'bellBlessing' }, { phase: 'reward', blessing: true }, { story: 'bellBlessingAfter' }); // 2026-11-19 user: she wishes them well after the pick (and almost lets it slip)
+    if (post === 'sacrifice' && BLESSING_ON && blessingPool(data).length && !run.blessing) { q.push({ story: 'bellBlessing' }, { phase: 'reward', blessing: true }, { story: 'bellBlessingAfter' }); if (ADVISOR_GIFT && advisorUpOf(data, run)) q.push({ story: 'advisorGift' }); } // 2026-11-19 user: she wishes them well after the pick (and almost lets it slip)
     if (post === 'secondSacrifice') { // v2.2 §4.1/§4.2: every branch gets the second sacrifice (no dice)
       q.push({ story: run.branch === 'self' ? 'secondSacrificeIntroSelf' : 'secondSacrificeIntro' }, { phase: 'sacrifice', modes: ['name'] });
     }
@@ -2819,7 +2974,7 @@
       // 2026-11-15 小门: a small door at the side of the path shows the three keys (sideDoor = all three, the button
       // 【打开小门】 → act openDoor; sideDoorPass = an ordinary door, she walks on past on a plain continue). Old saves already
       // past this point keep their queue (no door); a save mid-L10 builds this queue when the battle is won.
-      q.push({ story: trueRoute(data, run) ? 'sideDoor' : 'sideDoorPass' });
+      q.push({ story: !bellsOn(run) ? 'bellDoorReveal' : trueRoute(data, run) ? 'sideDoor' : 'sideDoorPass' }); // BELL_UNLOCK: the first clear shows the door once
       if (trueRoute(data, run)) { noteRecent(run, { when: 'afterDoor' }); q.push({ story: 'trueDoor' }, { startLevel: cfg.level + 1 }); } // 2026-11-19 流程修 M3: the L11 night talks about the door / the bell
       else { run.whiteout = true; q.push({ story: 'normalEnding' }, { story: 'whiteRoom' }, { phase: 'ending', outcome: 'victory' }); } // feedback-1112 #39/#40: the white room, the last talk
       return q;
@@ -2883,6 +3038,13 @@
   // the normal route), all three → 【进去看看】 (act openDoor, the same true route). Each newly lit key → 「你获得了xx之铃」 as the
   // last line of that scene (story ctx.bellGot) + a silent { kind: 'bellKey' } event. false = the old door (walk past, no names).
   const BELL_DOOR = true;
+  // 2026-11-25 用户「解锁铃铛跟木头级没有关系；第一次（没通关过）就不出现 交给规则、循着铃声、挑战规则 三个选项和事件」:
+  // a run started with a meta that has no win yet (run.bellGate, fixed at createRun) has no bells — the L3 seal plays and the
+  // leader just accepts (a plain continue), the first sacrifice is name-only, no bell night, and after L10 the door shows itself
+  // once (story bellDoorReveal: the bells fly off) instead of the side door. A run with no meta at all (tests, tools, old saves)
+  // keeps the bells. false = bells from the first run, as before.
+  const BELL_UNLOCK = true;
+  const bellsOn = (run) => !(run && run.bellGate);
   const BELL_NAME = lazy(() => ({ refuse: TX('bellKey.name.refuse'), rules: TX('bellKey.name.rules'), bell: TX('bellKey.name.bell') }));
   const BELL_HINT_LOST = false; // 2026-11-25 用户「铃铛介绍保持一致 不需要说 你没说 没拿到」: every slot shows just name + how to get it. true = the old 「（你那次点了名…）」
   const BELL_HINT = lazy(() => ({ refuse: TX('bellKey.hint.refuse'), rules: TX('bellKey.hint.rules'), bell: TX('bellKey.hint.bell'), rulesLost: TX('bellKey.hint.rulesLost') }));
@@ -2933,13 +3095,16 @@
   // false: the old deal (a skill-level card, another normal card, a special card).
   const TRAIN_KINDS = true, TRAIN_KIND_IDS = ['drill', 'heart', 'mend'];
   // 2026-11-24 用户「五类里抽三类」(TRAIN_KINDS_V2): 苦练 drill always, then two kinds drawn from TRAIN_KIND_PICK (each one card); false = drill / heart / mend
-  const TRAIN_KINDS_V2 = true, TRAIN_KIND_PICK = ['heart', 'mend', 'luck', 'power', 'vigor'];
+  const TRAIN_KINDS_V2 = true, TRAIN_KIND_PICK = ['heart', 'luck', 'power', 'vigor']; // 2026-11-26 用户「锻炼不要回血的选项，把养伤拿掉」
+  const TRAIN_KIND_PICK_old_2026_11_26 = ['heart', 'mend', 'luck', 'power', 'vigor']; // eslint-disable-line no-unused-vars
   const RULES_NIGHT_TRAIN_FIRST = false; // 2026-11-18 growth-flow round 2: the rules night trains first, then rest / train (false: the plain choice)
   const exploreN = (data, run) => (leaderHas(run, 'explorer') ? EXPLORE_N_OUTLANDER : EXPLORE_N);
   const restAmount = (data, run) => restHp(run) + (advisorFlow(data, run) === 'tea' ? TEA_HP : 0); // H1-1 露西安「热茶」
   // 2026-11-22 试玩「休息只回 7 点，后期上限 20–30 补不回来」(REST_PCT): each member heals the larger of the flat rest and REST_PCT of her 生命上限 (+ 热茶). 0 = the old flat
   const REST_PCT = 0; // 2026-11-22 用户「休息还是恢复固定血，要保持简单为原则」(tried 0.4)
-  const restFor = (data, run, m) => Math.max(0, Math.max(restHp(run), Math.ceil((m.maxHp || 0) * REST_PCT)) + (advisorFlow(data, run) === 'tea' ? TEA_HP : 0) - ascOn(run, 'restLess')); // 白银: −3
+  const restFor0 = (data, run, m) => Math.max(0, Math.max(restHp(run), Math.ceil((m.maxHp || 0) * REST_PCT)) + (advisorFlow(data, run) === 'tea' ? TEA_HP : 0) - ascOn(run, 'restLess')); // 白银: −3
+  // 2026-11-25 heal-limit study (docs/STUDY-2026-11-25-heal-limit.md): sims only — run.tune.restCut n = % off a campfire rest (round up); off by default
+  const restFor = (data, run, m) => { const v = restFor0(data, run, m), c = (run && run.tune && run.tune.restCut) || 0; return c > 0 ? Math.ceil(v * (100 - Math.min(100, c)) / 100) : v; };
   const hasAny = (x) => (Array.isArray(x) ? x.length > 0 : x != null);
   function trainingPool(data) {
     const T = data.training || {};
@@ -3268,12 +3433,30 @@
   const SHOP_ECO0 = { startGold: 10, winBase: 8, winPerLevel: 2, shopLevels: [3, 6, 9], tiers: { 1: 10, 2: 18, 3: 32, 4: 56, 5: 100 } };
   const shopEco = (data) => Object.assign({}, SHOP_ECO0, (data.shop && data.shop.economy) || {});
   const shopItems = (data) => (data.shop && Array.isArray(data.shop.items) ? data.shop.items.filter((it) => !it.retired) : []); // 2026-11-16: retired = off the shelf
+  const SHOP_SURE = true; // 2026-11-26: shop.json shopOnLevels = always on that level's shelf (false = old, all random)
   const SHOP_CORE_FROM = 6; // 2026-11-18 growth-flow: 核心信物 on the shelf from the L6 shop
   const shopItem = (data, id) => shopItems(data).find((x) => x.id === id) || null;
   const guildRelicName = (data, id) => (shopItem(data, id) || {}).name || id; // 2026-11-22 遗物: the name lives in shop.json
   const goldOf = (run) => (Number.isFinite(run.gold) ? run.gold : 0);
   const tierGold = (data, t) => shopEco(data).tiers[t] || Math.round(10 * Math.pow(10, (t - 1) / 4));
   const FLUO = 'fluo';
+  // 2026-11-26 用户 SIDE_REPAY: you backed 琪琪 with the 5 gold (sideCost) and hired her → she pays back sideRepay (10) once:
+  // when she is sacrificed (her parting gift) or, still with you, on the L9 night before 芙洛's shop. false = never.
+  const SIDE_REPAY = true, SIDE_REPAY_LEVEL = 9;
+  const SIDE_REPAY_AT_CAMP = true; // false = the old: said as the reward screen fades (over the item)
+  function sideRepay(data, run, id, ev, key) {
+    const c = cand(data, id);
+    if (!SIDE_REPAY || !c || !(c.sideRepay > 0) || !(run.sidePaid && run.sidePaid[id] > 0) || (run.sideRepaid && run.sideRepaid[id])) return false;
+    (run.sideRepaid || (run.sideRepaid = {}))[id] = true;
+    const ev0 = ev.length;
+    say(data, run, ev, id, key);
+    gainGold(run, c.sideRepay, 'sideRepay', ev);
+    const gv = { name: c.name, n: c.sideRepay };
+    ev.push(lineEvent(data, run, key === 'sideRepayGone' ? TX('side.repayGone', gv) : TX('side.repayGift', gv), {}, 'narrator', { key: 'sideRepay' }));
+    // 2026-11-27 用户「琪琪回来得不是时候——画面还在道具上；应该到篝火，琪琪过来说话」: the L9 gift plays on the campfire screen (its talk lines)
+    if (SIDE_REPAY_AT_CAMP && key === 'sideRepayGift') for (let i = ev0; i < ev.length; i++) if (ev[i] && ev[i].kind === 'line') ev[i].key = 'campfire';
+    return true;
+  }
   function gainGold(run, n, src, ev) {
     if (!(n > 0)) return;
     run.gold = goldOf(run) + n;
@@ -3281,14 +3464,18 @@
     if (src === 'win') run.lastWinGold = { n, level: run.level }; // 2026-11-20b 用户: the loot screen shows what this battle paid (view.winGold)
   }
   // a win: the base by level, plus each 提灯人偶 (relic winGold) worn by someone still in the party
-  function winGold(data, run) {
+  // 2026-11-26 用户「夜鸦加金币，领取时要说明 +2 来自夜鸦」: from = [{ name, n }] — who / what added to the base (view.winGoldFrom)
+  function winGold(data, run, from) {
     const e = shopEco(data);
     let n = e.winBase + e.winPerLevel * (run.level || 0);
     for (const it of shopItems(data)) {
       const fx = it.effect || {};
-      if (fx.type === 'relic' && fx.winGold) n += fx.winGold * run.party.filter((id) => run.members[id] && hasTokenOf(run.members[id], fx)).length; // review #4 (was (tokens || []).includes(fx.tokenName))
+      if (fx.type === 'relic' && fx.winGold) {
+        const k = run.party.filter((id) => run.members[id] && hasTokenOf(run.members[id], fx)).length; // review #4 (was (tokens || []).includes(fx.tokenName))
+        if (k) { n += fx.winGold * k; if (from) from.push({ name: it.name, n: fx.winGold * k }); }
+      }
     }
-    for (const id of run.party) { const pk = perkOf(data, run, id); if (pk && pk.winGold > 0) n += pk.winGold; }
+    for (const id of run.party) { const pk = perkOf(data, run, id); if (pk && pk.winGold > 0) { n += pk.winGold; if (from) from.push({ name: nameOf(data, id), n: pk.winGold }); } }
     n = Math.max(0, n - ascOn(run, 'winGold')); // 晶钻 // 2026-11-24 用户「夜鸦特技：每次战斗结束多获得 2 金币」(perk.winGold)
     return n;
   }
@@ -3347,8 +3534,12 @@
     };
     // 2026-11-18 growth-flow: from SHOP_CORE_FROM on, one 核心信物 (slot core) per shop — the build-defining ones
     const core = run.level >= SHOP_CORE_FROM && !(ONE_LEGEND_RELIC && ownsLegendRelic(data, run)) ? pick('core', 4) : null; // 2026-11-20 ONE_LEGEND_RELIC
+    // 2026-11-26 SHOP_SURE: an item with shopOnLevels [6] is always on that shop's shelf (转向指环 at L6) — it takes the relic pick's place
+    const sure = SHOP_SURE ? shopItems(data).filter((it) => (it.shopOnLevels || []).includes(run.level) && !bought.includes(it.id)).map((it) => it.id) : [];
+    let relicPick = pick('relic', 3);
+    if (sure.length) relicPick = null;
     const offers = shopItems(data).filter((it) => it.slot === 'train').map((it) => it.id)
-      .concat([pick('extra', 1), pick('supply', 2), pick('relic', 3), core, RELICS_ON ? pick('guildRelic', 8) : null]) // 2026-11-22 遗物: one per shop
+      .concat([pick('extra', 1), pick('supply', 2), relicPick].concat(sure, [core, RELICS_ON ? pick('guildRelic', 8) : null])) // 2026-11-22 遗物: one per shop · 2026-11-26 SHOP_SURE
       .concat(shopItems(data).filter((it) => it.slot === 'special' && (it.levels || []).includes(run.level) && !bought.includes(it.id)).map((it) => it.id))
       .filter(Boolean);
     if (leaderHas(run, 'explorer') && outlanderShop(run)) { // 2026-11-19 伤害分摊 §5: 外乡人 = one more shelf (another relic, else a supply / extra not on offer yet)
@@ -3495,6 +3686,7 @@
   const BLESSING_ON = true;
   const RETURNED_NORMAL = true; // 2026-11-18 growth-flow round 2: the L8 returned girl = fixed numbers (false: her own stats + flips, the old way)
   const RETURNED_SKILL_LV = 2;
+  const GONE_DOLL_LV = 3; // L11 wave 2: the dolls of the girls given away / turned down (1 = the old)
   // 2026-11-19 小铃战：镜像玩偶 + 旧人玩偶 (docs/BACKLOG, 用户): L11 runs scenario.levels[11].mirrorWaves instead of .waves —
   // wave 1 = a doll copy of the party (same classes / skills / levels / order, weaker, behind a 「玻璃瓶」 shell of 护甲 that
   // breaks when their round-1 phase starts), wave 2 = dolls of everyone the run gave away / turned down (+ 小铃 herself),
@@ -3558,15 +3750,21 @@
   const rarityOk = (c, level) => (c && c.minLevel != null ? c.minLevel : RARITY_FROM[rarityId(c)] || 1) <= (level || 1);
   // shop relic shelf weights by level (ISSUES-2026-11-16 §4 draft): [common, rare, epic] (legendary has its own slot, SHOP_CORE_FROM)
   const RARITY_W = (lv) => (lv >= 7 ? { common: 45, rare: 38, epic: 17 } : lv >= 4 ? { common: 60, rare: 32, epic: 8 } : { common: 80, rare: 20, epic: 0 });
+  const BLESS_STATS_BOX = true;
   function pickBlessing(data, run, a, ev) {
     const pool = blessingPool(data), card = pool.find((c) => c.id === a.card), fx = card.effect || {};
+    const rows = []; // 2026-11-27 用户「选了铃铛祝福之后也应该出来一个统计框：谁的啥从 x 到 y」 (BLESS_STATS_BOX → kind blessStats)
     if (fx.type === 'teamStat') for (const id of run.party) {
       const m = run.members[id]; if (!m) continue;
       const before = statsOf(m, isLeader(id));
       statEff(m, { type: 'stat', stat: fx.stat, delta: fx.delta });
       m.growth.push({ source: card.id, stat: fx.stat, delta: fx.delta, level: run.level });
       statChange(data, run, ev, id, before, 'blessing');
+      const after = statsOf(m, isLeader(id));
+      if (before[fx.stat] !== after[fx.stat]) rows.push({ id, name: nameOf(data, id), stat: fx.stat, from: before[fx.stat], to: after[fx.stat] });
     }
+    if (fx.type === 'teamCharge') for (const id of run.party) if (run.members[id]) rows.push({ id, name: nameOf(data, id), stat: 'fullAt', from: CHARGE_FULL, to: CHARGE_FULL + (fx.delta || 0) });
+    if (BLESS_STATS_BOX && rows.length) ev.push({ kind: 'blessStats', card: card.name, cardId: card.id, rows });
     run.blessing = { id: card.id, fx: clone(fx), level: run.level };
     run.blessingLeft = run.options.filter((x) => x !== card.id); // 小铃 keeps the other two (her team, later)
     ev.push({ kind: 'card', card: card.id, target: null, reward: true, blessing: true, text: card.name });
@@ -3615,7 +3813,9 @@
     if (eff.type === 'stat') {
       let delta = eff.delta;
       if (isReward && delta > 0 && hasTrait(data, a.target, 'late-bloomer')) { delta += 1; reveal(data, run, ev, a.target, 'late-bloomer'); }
+      const atkWas = m.atk;
       statEff(m, { type: 'stat', stat: eff.stat, delta });
+      if (CURSE_CHIP && !isReward && eff.stat === 'atk' && m.atk < atkWas) m.curseAtk = (m.curseAtk || 0) + (m.atk - atkWas); // 2026-11-26 诅咒 −N: what the curse really took (the leader's is bigger)
       m.growth.push({ source: card.id, stat: eff.stat, delta, level: run.level });
     } else if (eff.type === 'skillUp') {
       const su = skillUpAs(m);
@@ -3690,13 +3890,13 @@
       if (isLeader(a.target)) fail('the leader cannot be sacrificed');
       victims = [a.target];
     } else {
-      victims = rngSample(run, sacrificable(run), diceN(run)); // v2.5: 木头's dice take one
+      victims = rngSample(run, randomSacPool(data, run), diceN(run)); // v2.5: 木头's dice take one · 2026-11-26 M1: never the lone tank
     }
     if (first) run.branch = a.mode;
     run.sacrificeCount += 1;
     const hadRules = keyLit(run, 'rules'); // 2026-11-20 铃之门
     if (a.mode === 'name' && first) run.namedGirl = true; // §4.1: blocks the true route (feedback-1112 #14: only the first, free choice)
-    else run.keys.rules = true; // §4.2 key two
+    else if (bellsOn(run)) run.keys.rules = true; // §4.2 key two (BELL_UNLOCK: none before the bells)
     if (a.mode !== 'name') bump(braveOf(run), 'rules'); // @stats
     const gotRules = bellGot(run, 'rules', hadRules, ev); // 「你获得了公正之铃」 ends the taken story
     ev.push({ kind: 'darkTransition', reason: a.mode === 'name' ? 'sacrifice' : 'taken' });
@@ -3718,6 +3918,7 @@
       }
       ev.push({ kind: 'farewellEnd', id: v0 });
     } else for (const v of victims) say(data, run, ev, v, 'sacrificedRandom');
+    for (const v of victims) sideRepay(data, run, v, ev, 'sideRepayGone'); // 2026-11-26 SIDE_REPAY: her parting gift
     // advisor reaction (after her farewell)
     if (a.mode === 'name' && run.suggestion) {
       const pleased = run.suggestion.id === a.target;
@@ -3738,7 +3939,7 @@
         if (CLOSE[rel.kind]) addMood(d, o, -1, TX('mood.why.friendGone'));
         if (hasTrait(data, o, 'protective')) traitMood(data, run, ev, d, fires, o, -1, 'protective', 'protective-sacrifice');
       }
-      say(data, run, ev, o, 'witnessSacrifice');
+      say(data, run, ev, o, 'witnessSacrifice', { victim: victims.map((v) => nameOf(data, v)).join(TX('list.and')) }); // 2026-11-27 试玩「她让我照顾好大家，『她』是谁」: {victim} in the line
     }
     for (const v of victims) {
       Object.assign(girlMem(run, v), { departure: a.mode === 'name' ? 'named' : 'taken', departLevel: run.level, mood: run.members[v].mood,
@@ -3753,7 +3954,7 @@
     // (pathOn / belowTomb) go AFTER bellBlessingAfter, not to the queue front (was: corridor → back to the gate → corridor)
     if (first) {
       const path = [{ story: a.mode === 'name' ? 'pathOn' : 'pathOnTaken', ctx: { name: victims.map((v) => nameOf(data, v)).join(TX('list.and')) } }, { story: 'belowTomb' }];
-      const bi = run.queue.findIndex((x) => x && x.story === 'bellBlessingAfter');
+      const bi0 = run.queue.findIndex((x) => x && x.story === 'bellBlessingAfter'), bi = bi0 >= 0 && run.queue[bi0 + 1] && run.queue[bi0 + 1].story === 'advisorGift' ? bi0 + 1 : bi0; // ADVISOR_GIFT rides right after her blessing
       run.queue.splice(bi >= 0 ? bi + 1 : 0, 0, ...path);
     }
     if (a.mode === 'name') {
@@ -4076,6 +4277,7 @@
             const u = { ref: id, candidate: true, resummoned: true, corruption: 'possessed', name: c.name, role: c.role, faction: 'fallen',
               maxHp: c.hp + bh, atk: c.atk + ba, skill: Object.assign({ power: 0 }, clone(c.skill)) };
             if (c.combo) u.combo = clone(c.combo);
+            if (GONE_DOLL_LV > 1) u.elv = clamp(GONE_DOLL_LV, 1, SKILL_LV_MAX); // 2026-11-27 用户「小铃战第二波玩偶的技能等级怎么这么低」→「3 级吧」 (was none = Lv1)
             if (s) { u.tokens = s.snapshot.tokens.slice(); memoryFlip(data, u, s.snapshot); u.memory = []; } // her old flips, no second hand-back
             else {
               const g = (run.rejectedInfo[id] && run.rejectedInfo[id].grudge) || 'high';
@@ -4088,14 +4290,16 @@
           const adv = advisorData(data, run);
           if (!adv) continue;
           const bs = adv.boss;
-          let hp = bs.hp + bh, atk = bs.atk + ba + ((e.atkAddBy && e.atkAddBy[adv.id]) || 0); // 2026-11-22j scenario atkAddBy: L10 boss 威力 per advisor
+          const wood10 = (run.difficulty || 0) < L10_PAIN_FROM; // 2026-11-27 晚 用户「木头退回原版」: the L10 boost (威力 + 大招 rhythm) from 青铜 on; 木头 reads the _old_2026_11_27 fields
+          const atkBy = wood10 && e.atkAddBy_old_2026_11_27 ? e.atkAddBy_old_2026_11_27 : e.atkAddBy, tollBy = wood10 && e.tollBy_old_2026_11_27 ? e.tollBy_old_2026_11_27 : e.tollBy;
+          let hp = bs.hp + bh, atk = bs.atk + ba + ((atkBy && atkBy[adv.id]) || 0); // 2026-11-22j scenario atkAddBy: L10 boss 威力 per advisor
           if (run.advisorMood >= 2) { hp += 4; atk += 1; } else if (run.advisorMood <= -2) hp -= 4;
           const ub = { ref: adv.id, advisorBoss: true, name: bs.name, faction: bs.faction || 'noble', maxHp: Math.max(1, hp), atk: Math.max(1, atk), skill: Object.assign({ power: 0 }, bs.skill, BOSS_NEW_SKILLS && bs.skill && bs.skill.text_bossNew ? { text: bs.skill.text_bossNew } : {}) }; // BOSS_NEW_SKILLS: 妮可塔 no longer 坐庄
           if (bs.rampEvery > 0) ub.rampEvery = bs.rampEvery; if (bs.rampStep > 0) ub.rampStep = bs.rampStep; // 2026-11-23 用户 妮可塔「不翻倍，每 N 回合 +2」
           if (bs.thorns > 0) ub.thorns = bs.thorns; // 2026-11-17 用户「荆棘」
           if (bs.hitCap > 0) ub.hitCap = bs.hitCap; // 2026-11-18 妮可塔 L10: one hit takes at most hitCap × her max hp (no 猎人 one-shots); 0 = off
           if (IRON_L10 && e.openBlockHpBy && e.openBlockHpBy[adv.id] > 0) ub.openBlockHp = e.openBlockHpBy[adv.id]; // 2026-11-21 奥德丽: half 血 half 护甲
-          if (e.tollBy && e.tollBy[adv.id]) ub.toll = Object.assign({ every: 3, n: 4, noBell: true }, e.tollBy[adv.id]); // 2026-11-23 用户「没几轮就要群伤一下」: the advisor boss tolls every N rounds (scenario tollBy)
+          if (tollBy && tollBy[adv.id]) ub.toll = Object.assign({ every: 3, n: 4, noBell: true }, tollBy[adv.id]); // 2026-11-23 用户「没几轮就要群伤一下」: the advisor boss tolls every N rounds (scenario tollBy)
           if (e.winOnDown) ub.winOnDown = true; // 2026-11-16 用户「奥德丽先死就胜利」: her fall ends the battle, the rest need not die
           if (e.hpExactBy && e.hpExactBy[adv.id] > 0) ub.hpExact = e.hpExactBy[adv.id]; // 2026-11-16 用户「总督 200」: the real entry hp per advisor (others keep their own)
           { const dT = diffOf(run), hT = dT && e.hpExactByTier && e.hpExactByTier[DIFF_LADDER ? 0 : dT.id]; /* 2026-11-25: 阶梯下每档都用木头的 L10 血量（之前青铜起露西安 150） */ if (hT && hT[adv.id] > 0) ub.hpExact = hT[adv.id]; } // 2026-11-19 调难度: per-tier override of hpExactBy (scenario L10 hpExactByTier { "0": { advisor: hp } }, 木头 only so far)
@@ -4105,7 +4309,7 @@
           if (sm && Array.isArray(sm.cycle) && sm.cycle.length) {
             summon = { cycle: sm.cycle.map((g) => g.slice()), cap: sm.cap || SUMMON_CAP, next: 1, seq: 0, units: {} };
             // 2026-11-17 露西安 L10 召唤战: every (summon each `every` rounds), minions cap by tier, an opening board, ward, devour
-            const hard = (run.difficulty || 0) > 0;
+            const hard = (run.difficulty || 0) >= SUMMON_HARD_FROM; // 2026-11-27 用户「青铜级的露西安为啥一上来这么多」: was > 0 (青铜 opened with 8 and a cap of 10)
             if (sm.every > 0) Object.assign(summon, { every: sm.every, emergency: !!sm.emergency, wardPhase: !!sm.wardPhase, minions: (hard && sm.minionsHard) || sm.minions || SUMMON_CAP, next: sm.next || 0,
               open: ((hard && sm.openHard) || sm.open || sm.cycle[0]).slice(), ward: sm.ward || 0, calls: SUMMON_CALLS ? sm.calls || 0 : 0, /* 2026-11-23 */ devour: sm.devour ? Object.assign({ share: DEVOUR_SHARE, dmgPer: DEVOUR_DMG }, sm.devour) : null });
             for (const id of new Set([].concat(...sm.cycle, summon.open || []))) {
@@ -4212,6 +4416,20 @@
       for (const u of sp) if (u.hpExact > 0) { u.maxHp = u.hpExact; delete u.hpExact; } // 2026-11-17 露西安 L10 召唤战
       for (const u of all) if (u.hpExact > 0) { const pct = u.startHp != null ? u.startHp / u.maxHp : null; u.maxHp = u.hpExact; if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct)); delete u.hpExact; }
       for (const u of all) if (u.mirror) { u.maxHp = u.mirrorHp; u.atk = u.mirrorAtk; delete u.mirrorHp; delete u.mirrorAtk; } // 2026-11-19 镜像玩偶: her own numbers, no tier steps
+      { const la0 = levelNum(data, run.level, 'atkAdd', 0); // 2026-11-27 用户「第六关还是 ×2 血，可以降威力」: scenario level atkAdd on every foe (min 1)
+        if (la0) for (const u of all.concat(sp)) u.atk = Math.max(1, u.atk + la0); }
+      { const lm = levelNum(data, run.level, 'hpMul', 1); // 2026-11-26 用户「第六关敌人总血量太少了，太水了，至少要 ×2」: scenario level hpMul on the final hp (before the tier %)
+        if (lm > 0 && lm !== 1) for (const u of all.concat(sp)) { const pct = u.startHp != null ? u.startHp / u.maxHp : null; u.maxHp = Math.max(1, Math.round(u.maxHp * lm)); if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct)); } }
+      { // 2026-11-25 难度 v3 (青铜 / 精钢 / 秘银): % hp on the final numbers, then the late 威力
+        const hpP = ascOn(run, 'enemyHpPct'), elP = ascOn(run, 'eliteHpPct'), late = run.level >= LATE_ATK_FROM;
+        const la = late ? ascOn(run, 'lateAtk') : 0, laP = late ? ascOn(run, 'lateAtkPct') + ((run.tune && run.tune.lateAtkPct) || 0) : 0; // lateAtkPct: 威力 +n% (round up)
+        if (hpP || elP || la || laP) for (const u of all.concat(sp)) {
+          if (laP) u.atk = Math.ceil(u.atk * (100 + laP) / 100);
+          const p = hpP + (isV3Boss(data, u) ? elP : 0);
+          if (p) { const pct = u.startHp != null ? u.startHp / u.maxHp : null; u.maxHp = Math.round(u.maxHp * (100 + p) / 100); if (pct != null) u.startHp = Math.max(1, Math.ceil(u.maxHp * pct)); }
+          if (la) u.atk += la;
+        }
+      }
       if (df) for (const u of all) { // 方案 B 开场护甲 (after the final hp)
         const t = data.enemies.find((x) => x.id === u.ref);
         const share = u.summoned ? 0 : (t && Number.isFinite(t.openBlock) ? t.openBlock : OPEN_BLOCK_SHARE[openBlockKind(u)]) * levelNum(data, run.level, 'openBlockMul', OPEN_BLOCK_LEVEL[run.level] || 0); // review #5 (was OPEN_BLOCK_LEVEL[run.level] || 0)
@@ -4281,6 +4499,8 @@
       if (!u.noMood && u.mood <= -2) ids.push('mood-low');
       if (u.bond === 'high') ids.push('bond-high'); else if (u.bond === 'low') ids.push('bond-low');
       if ((u.debuffs || []).length) ids.push('debuffed');
+      if (u.critSaved && u.hp > 0) ids.push('crit-saved'); // CRIT_SAVE: used this battle
+      if (B && u.hp > 0 && u.corruptUntil >= powRound(B)) ids.push('corrupted'); // 2026-11-27 试玩「我方被魔化时状态栏没有标记」
       if (u.swapSkip) ids.push('swap-skip'); // 2026-11-19 换位/暂停连做
       if (B && B.mods) for (const k of ['formation', 'luck', 'drum']) if (B.mods[k]) ids.push(k);
     } else {
@@ -4295,13 +4515,22 @@
       if (u.dazed) ids.push('daze'); // 试玩反馈 2026-11-14 晚: 附加条款 → this enemy 发呆 this round (keyword / icon 'daze')
     }
     const chips = ids.map((id) => statusChip(data, id));
+    // 2026-11-27 用户「负面效果图标上要写清楚，现在只说是负面效果」: the chip's tip lists each one — what, from whom, how much
+    if (DEBUFF_TIP_LIST && (u.debuffs || []).length) { const ch = chips.find((c) => c && c.id === 'debuffed'); if (ch) {
+      const sg = (n) => (n > 0 ? '+' : '') + n;
+      const grp = []; // the same one twice (墓气入骨 on L4 and L6) → one row with the sum
+      for (const d of u.debuffs) { if (!d || !d.delta) continue; const g = grp.find((x) => x.card === d.card && x.stat === d.stat && x.from === (d.from || null)); if (g) { g.delta += d.delta; g.n++; } else grp.push({ card: d.card, stat: d.stat, from: d.from || null, delta: d.delta, n: 1 }); }
+      const rows = grp.map((d) => { const cd = cardById(data, d.card), nm = (cd ? cd.name : TX('debt.oldDebt')) + (d.n > 1 ? TX('status.tip.debuffTimes', { n: d.n }) : ''), eff = d.stat === 'atk' ? TX('debt.eff.atk', { delta: sg(d.delta) }) : TX('debt.eff.maxHp', { delta: sg(d.delta) });
+        return d.from ? TX('status.tip.debuffItemFrom', { name: nm, from: d.from, eff }) : TX('status.tip.debuffItem', { name: nm, eff }); });
+      if (rows.length) ch.tip = TX('status.tip.debuffList', { list: rows.join(TX('status.tip.debuffSep')) });
+    } }
     if (u.side === 'enemy' && !u.combo && chargeK(B, u) > 0) chips.push({ id: 'charge', plus: chargeK(B, u), label: TX('status.charge'), tip: u.ref === 'fairy-demon' ? TX('status.tip.chargeFairy', { k: chargeK(B, u) }) : TX('status.tip.chargeEnemy', { k: chargeK(B, u) }) });
     const sto = storeOf(B, u);
     if (sto > 0) chips.push({ id: 'store', plus: sto, label: TX('status.store', { n: sto }), tip: TX('status.tip.store', { n: sto }) });
-    if (u.bell && u.hp > 0 && B) { // 2026-11-20 用户「钟要显示还剩几回合」(倒数挂铜钟上): rounds until the guardian rings it, counted from the coming round
-      const g = (B.enemies || []).find((x) => x.toll && x.hp > 0), R = powRound(B);
+    if (((u.bell && u.hp > 0) || (BOSS_RHYTHM && u.toll && u.toll.noBell && u.hp > 0)) && B) { // 2026-11-20 用户「钟要显示还剩几回合」(倒数挂铜钟上): rounds until the guardian rings it, counted from the coming round · 2026-11-27 BOSS_RHYTHM: a bell-less boss counts down on her own card
+      const g = u.toll && u.toll.noBell ? u : (B.enemies || []).find((x) => x.toll && x.hp > 0), R = powRound(B);
       if (g) for (let d = 0; d <= (g.toll.every || 3); d++) if (tollDue(B, g, R + d)) {
-        chips.push({ id: 'tollIn', num: d + 1, label: g.toll.noBell ? TX('status.chargeIn', { n: d + 1 }) : TX('status.tollIn', { n: d + 1 }), /* the same count as the bell's own 「还剩 N 回合」 pop: the coming round included */ tip: g.toll.noBell ? TX('status.tip.charge', { every: g.toll.every || 3, n: g.toll.n || 4, name: g.name }) : TX('status.tip.toll', { every: g.toll.every || 3, n: g.toll.n || 4, name: g.name }) });
+        chips.push({ id: 'tollIn', num: d + 1, label: g.toll.ult ? TX('status.ultIn', { n: d + 1, ult: g.toll.ult }) : g.toll.noBell ? TX('status.chargeIn', { n: d + 1 }) : TX('status.tollIn', { n: d + 1 }), /* the same count as the bell's own 「还剩 N 回合」 pop: the coming round included */ tip: g.toll.ult ? TX('status.tip.ult', { every: g.toll.every || 3, n: g.toll.n || 4, name: g.name, ult: g.toll.ult, shield: g.toll.shield || 0 }) : g.toll.noBell ? TX('status.tip.charge', { every: g.toll.every || 3, n: g.toll.n || 4, name: g.name }) : TX('status.tip.toll', { every: g.toll.every || 3, n: g.toll.n || 4, name: g.name }) });
         break;
       }
     }
@@ -4311,7 +4540,7 @@
   function unitView(data, B, u) {
     const v = { id: u.ref, uid: u.id, side: u.side, name: u.name, role: u.role || null, hp: u.hp, maxHp: u.maxHp, atk: u.atk,
       keywords: keywordsFor(data, u.skill, u.combo, chargeK(B, u)), skillName: u.skill ? u.skill.name : null, comboName: u.combo ? u.combo.name : null,
-      actionText: actionTextFor(u.side === 'enemy' && foeSplash(u) && !u.skill.splash ? Object.assign({}, u.skill, { splash: true }) : u.skill, u.atk, u.side === 'enemy', u.role, u.elv, u.side === 'enemy' && spreadB(B) ? targetRuleIn(B, u) : null, u.side === 'ally' ? u.perk : null), bonusText: bonusTextFor(u.combo, chargeK(B, u), u.side === 'enemy', chargeKeep(u)),
+      actionText: actionTextFor(u.side === 'enemy' && foeSplash(u) && !u.skill.splash ? Object.assign({}, u.skill, { splash: true }) : u.side !== 'enemy' && u.skill && overBlockOf(data, u.ref) ? Object.assign({}, u.skill, { overBlock: true }) : u.skill, SKILL_TEXT_LIVE && u.side === 'enemy' && B && POWER_LIVE && u.hp > 0 ? powNow(data, B, u, powRound(B)) : u.atk, u.side === 'enemy', u.role, u.elv, u.side === 'enemy' && spreadB(B) ? targetRuleIn(B, u) : null, u.side === 'ally' ? u.perk : null), bonusText: bonusTextFor(u.combo, chargeK(B, u), u.side === 'enemy', chargeKeep(u)),
       statuses: unitStatuses(data, B, u), block: u.block || 0 };
     if (POWER_LIVE && B && u.hp > 0) { v.pow = powNow(data, B, u, powRound(B)); v.powBase = u.atk0 != null ? u.atk0 : u.atk; v.powParts = powParts(data, B, u, powRound(B)).map((p) => ({ label: p.label, amount: p.amount })); } // powParts: 2026-11-24 用户「威力变绿 / 变红，悬停一行一个写清楚是哪些东西加的 / 减的」 // 2026-11-20b: the card's live 威力 + what it is without buffs
     if (u.side === 'ally' || chargeDirOf(u)) Object.assign(v, { charge: u.charge || 0, chargeFull: fullOf(u), chargeDir: chargeDirOf(u), k: chargeK(B, u), chargeKeep: chargeKeep(u), store: storeOf(B, u), extra: u.extraTotal || 0 });
@@ -4323,14 +4552,19 @@
       if (u.traits.includes('bless') && u.skill.kind === 'heal' && (u.elv || 1) >= BLESS_LV) v.actionText += TX('skill.action.blessSuffix');
     }
     // 2026-11-20 用户「单位介绍卡片上要写清楚他的攻击方式」: the toll and the bell were missing from the panel's line
-    if (u.side === 'enemy' && u.toll && v.actionText) v.actionText += u.toll.noBell ? TX('skill.action.chargeSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 }) : TX('skill.action.tollSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 });
+    if (u.side === 'enemy' && u.toll && v.actionText && !(BELL_BROKEN_FRONT2 && !u.toll.noBell && B && B.bellBroken)) v.actionText += /* 2026-11-27 试玩「铜钟碎了以后说明还写着每第 2 回合敲钟」 */ u.toll.ult ? TX('skill.action.ultSuffix', { every: u.toll.every || 3, n: u.toll.n || 4, ult: u.toll.ult, shield: u.toll.shield || 0 }) : u.toll.noBell ? TX('skill.action.chargeSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 }) : TX('skill.action.tollSuffix', { every: u.toll.every || 3, n: u.toll.n || 4 });
     if (u.side === 'enemy' && u.bell) { const g = B && (B.enemies || []).find((x) => x.toll); v.actionText = TX('skill.action.bellIdle', { every: (g && g.toll.every) || 2 }); } // 2026-11-22: the number from data (was a fixed 3)
-    if (u.side === 'enemy' && u.dodgeAura && !u.bell) v.actionText = TX('skill.action.amuletIdle', { pct: Math.round(u.dodgeAura * 100) }); // 2026-11-20 L9 灰羽护符
+    if (u.side === 'enemy' && u.dodgeAura && !u.bell) v.actionText = TX((B && (B.enemies || []).some((x) => x.hp > 0 && (x.traits || []).includes('enrageOnAmulet'))) ? 'skill.action.amuletIdleEnrage' : 'skill.action.amuletIdle', { pct: Math.round(u.dodgeAura * 100) }); // 2026-11-20 L9 灰羽护符 · 2026-11-26 试玩: its own card says the boss enrages when it breaks (was only in the wave-start rules)
+    if (u.side === 'enemy' && u.hp > 0 && u.dodgeAura) v.aura = true; // 2026-11-27 用户「雕像从顶上散射曲线到其他卡片，表示在护卫」: the UI draws its lines to the ones it covers (auraBy)
+    if (u.side === 'enemy' && u.hp > 0 && !u.dodgeAura && B && (B.enemies || []).some((x) => x !== u && x.dodgeAura && x.hp > 0)) v.auraBy = (B.enemies || []).find((x) => x !== u && x.dodgeAura && x.hp > 0).id;
     if (u.side === 'enemy' && u.hp > 0 && DODGE_ON && B) { const dp = dodgeOf(B, u); if (dp > 0) v.dodge = Math.round(dp * 100); } if (u.side === 'enemy' && u.hp > 0 && grazeState(u)) v.grazeOn = true; // 2026-11-23 蓝边 // 2026-11-20 L9: the dodge chance now (UI tip)
     // 2026-11-20 用户「灰羽首领的介绍 i 根本没写它的闪避特质」: an enemy's trait lines (enemies.json traitText) + her dodge chance now, for her panel
     if (u.side === 'enemy') { const def = (data.enemies || []).find((x) => x.id === u.ref), tt = (def && def.traitText) || {}; const lines = (u.traits || []).map((k) => tt[k]).filter(Boolean); if (v.dodge > 0) lines.unshift(TX('battle.dodgeNow', { pct: v.dodge })); if (lines.length) v.traitLines = lines; }
     if (u.side === 'enemy' && u.brood && v.actionText) v.actionText += (u.brood.atkEvery > 1 ? TX('skill.action.broodSuffixEvery', { n: u.brood.n, cost: u.brood.selfCost > 0 && u.brood.selfCost < 1 ? TX('skill.action.broodCostHalf') : TX('skill.action.broodCostFull'), cap: u.brood.cap, hpStep: u.brood.hpStep || 0, atkStep: u.brood.atkStep || 0, every: NUM_CN()[u.brood.atkEvery] || u.brood.atkEvery }) : TX('skill.action.broodSuffix', { n: u.brood.n, cost: u.brood.selfCost > 0 && u.brood.selfCost < 1 ? TX('skill.action.broodCostHalf') : TX('skill.action.broodCostFull'), cap: u.brood.cap, hpStep: u.brood.hpStep || 0, atkStep: u.brood.atkStep || 0 })) + (u.winOnDown ? TX('skill.action.winOnDownSuffix', { name: u.name }) : '');
     if (u.side === 'enemy' && u.wanderBack && u.wander > 0 && v.actionText) v.actionText += TX('skill.action.wanderBackSuffix', { pct: Math.round(u.wander * 100) });
+    else if (u.side === 'enemy' && u.wander > 0 && v.actionText) v.actionText += TX('skill.action.wanderSuffix', { pct: Math.round(u.wander * 100) }); // 2026-11-26 试玩: L1 史莱姆 hit the back row and the text never said so
+    if (u.side === 'enemy' && u.enraged && ENRAGE_PIERCE && u.skill && (u.skill.kind === 'strike' || u.skill.kind === 'guard')) v.actionText = (CHIEF_FRONT === 1 ? TX('skill.action.enragedPierceFront1', { dmg: SKILL_TEXT_LIVE && B && POWER_LIVE && u.hp > 0 ? powNow(data, B, u, powRound(B)) : u.atk }) : ENRAGE_FRONT ? TX('skill.action.enragedPierceFront', { n: ENRAGE_FRONT, min: SWEEP_MIN, dmg: SKILL_TEXT_LIVE && B && POWER_LIVE && u.hp > 0 ? powNow(data, B, u, powRound(B)) : u.atk }) : TX('skill.action.enragedPierce', { n: ENRAGE_FRONT, min: SWEEP_MIN, dmg: SKILL_TEXT_LIVE && B && POWER_LIVE && u.hp > 0 ? powNow(data, B, u, powRound(B)) : u.atk })); // 2026-11-26 试玩: after the enrage her text still read 「第 1 位或第 2 位」
+    if (u.side === 'enemy' && u.advisorBoss && B && B.summon && B.summon.ward && v.actionText) v.actionText += TX('skill.action.wardSuffix', { n: WARD_HP }); // 2026-11-26 试玩: 露西安 契约庇护 in her own text
     if (u.side === 'ally' && u.perk && u.perk.id === 'anvil' && u.block > 1) v.blockKeep = Math.floor(u.block / 2); // 铁砧不卸: kept at the next clear
     if (u.side === 'ally') { v.mood = u.noMood ? null : u.mood; if (isLeader(u.id)) v.isLeader = true; if (u.skill) v.skillLv = lvOf(u.skill); v.perkText = perkText(u.perk); }
     else { if (spreadB(B)) { const r = targetRuleIn(B, u); v.targetRule = r; v.targetText = foeSplash(u) ? actionTextFor(u.skill, u.atk, true, u.role, u.elv, r) : RULE_TIP()[(u.skill && u.skill.kind === 'heal' ? 'heal.' : '') + r] || ''; /* 2026-11-23 ENEMY_SPARK_SPLASH */ // 2026-11-19 伤害分摊: the rule in plain words (the tip)
@@ -4351,6 +4585,7 @@
     if (u.corruption) v.corruption = u.corruption;
     if (u.grudge) v.grudge = u.grudge;
     if (u.side === 'ally' && u.role === 'adc' && u.skill && u.skill.kind === 'aim') v.aim = u.aimLock || null; // 猎人锁定
+    if (u.side === 'ally' && u.stance === 'defend') v.stance = 'defend'; // 2026-11-25 防御姿态 (absent = 行动)
     if (u.side === 'ally' && u.skill && u.skill.kind === 'heal' && !coat(u)) { // 2026-11-20 牧师治疗: her picks + how many shares + the rule (tip)
       if (HEAL_PICK) { v.healPick = (u.healPick || []).filter((id) => ((B && B.allies) || []).some((x) => x.id === id && x.hp > 0)); /* 2026-11-20 用户「牧师倒下报错点不了继续」: finishBattle builds the report with B = null */ v.healN = HEAL_FOCUS ? 1 : HEAL_LV[lvOf(u.skill) - 1].n; }
       if (HEAL_TRIAGE) v.healRule = TX('skill.healRule.triage');
@@ -4358,7 +4593,7 @@
     return v;
   }
 
-  const statRow = (u) => ({ uid: u.id, id: u.ref, name: u.name, damage: u.damage || 0, healed: u.healing || 0, taken: u.taken || 0, kills: u.kills || 0, maxChain: u.maxChain || 0, extra: u.extraTotal || 0, actions: u.actions || 0 });
+  const statRow = (u) => ({ uid: u.id, id: u.ref, name: u.name, damage: u.damage || 0, healed: u.healing || 0, taken: u.taken || 0, kills: u.kills || 0, charged: u.gave || 0, maxChain: u.maxChain || 0, extra: u.extraTotal || 0, actions: u.actions || 0 });
   // ---------- battle (§2.3 interactive, one round per pause) ----------
   const KIND_VERB = lazy(() => ({ guard: TX('skill.verb.attack'), aim: TX('skill.verb.aim'), strike: TX('skill.verb.attack'), backstab: TX('skill.verb.backstab'), heal: TX('skill.verb.attack'), spark: TX('skill.verb.spark') }));
   const SIDE_LABEL = lazy(() => ({ ally: TX('battle.side.ally'), enemy: TX('battle.side.enemy') }));
@@ -4377,6 +4612,8 @@
   const POWER_LIVE = true;
   // 2026-11-20 POW_SOURCE: powNow split into named parts (the same sum: atk + Σ parts = powNow) — a 'pow' event says which
   // parts changed, so the card's float names its source (「高昂 威力 +1」), never a bare number
+  const CORRUPT_HIT_ATK = 1; // 魔化 (trait corruptHit): 威力 −1 on the ally hit, one round (用户 先说 −2，后改「威力 −1 吧」)
+  const DEBT_ATK_CHIP = true; // false = the old: a debt's 威力 −N went straight into the base (no red chip, no reason)
   function powParts(data, B, u, r) {
     const out = [], add = (ic, label, amount) => { if (amount) out.push({ ic, label, amount }); };
     if (u.side === 'ally') {
@@ -4391,6 +4628,9 @@
       if (B && B.allies && B.allies.some((x) => x.id !== u.id && x.hp > 0 && x.hp * 2 <= x.maxHp && hasTrait(data, x.ref || x.id, 'crisis-leader'))) add('crisisLeader', TX('battle.bonus.crisisLeader'), 1);
       if (u.blessUntil >= r) add('bless', TX('battle.bonus.bless'), BLESS_ADD);
       if (hornOn(B, u, r)) add('warHorn', guildRelicName(data, 'war-horn'), RELIC_HORN); // 2026-11-22 遗物 号角
+      if (u.curseAtk < 0) add('curse', TX('battle.bonus.curse'), u.curseAtk); // CURSE_CHIP
+      if (u.debtAtk < 0) add('debt', TX('battle.bonus.debt'), u.debtAtk); // DEBT_ATK_CHIP
+      if (u.corruptUntil >= r) add('corrupt', TX('battle.bonus.corrupt'), -CORRUPT_HIT_ATK); // corruptHit
     } else if (u.side === 'enemy' && !u.turned && B) {
       const rr = enemyRamp(B, u, r);
       add('ramp', TX('battle.bonus.ramp', { n: rr }), rr);
@@ -4402,6 +4642,9 @@
   }
   // 2026-11-21 用户 奥德丽战「取消每回合威力 +1，但奥德丽本身会加威力」: B.rampBossOnly → only the advisor boss ramps (IRON_L10, scenario rampBossOnlyFor)
   // 2026-11-21 用户「前三关敌人不加威力」: no per-round 威力 ramp before ENEMY_RAMP_FROM_LV (1 = the old: every level)
+  const L10_PAIN_FROM = 1; // tier from which L10 uses the 2026-11-27 boost (露西安 威力 +4, 大招 every 3rd round −15 + shield); 0 = every tier
+  const BOSS_RHYTHM = true; // false = no shield after the big hit (toll.shield ignored)
+  const SUMMON_HARD_FROM = 8; // the summoner's openHard / minionsHard from this tier (difficulty plan tier 8 「首领多带帮手」); 1 = the old (every tier above 木头)
   const ENEMY_RAMP_FROM_LV = 4;
   const BROOD_NO_RAMP = true; // 2026-11-23: L7 small slimes take no per-round ramp (false = the old: born with the battle's ramp)
   function enemyRamp(B, u, r) {
@@ -4420,6 +4663,9 @@
       if (B && B.allies && B.allies.some((x) => x.id !== u.id && x.hp > 0 && x.hp * 2 <= x.maxHp && hasTrait(data, x.ref || x.id, 'crisis-leader'))) a += 1;
       if (u.blessUntil >= r) a += BLESS_ADD;
       if (hornOn(B, u, r)) a += RELIC_HORN; // 2026-11-22 遗物 号角
+      if (u.curseAtk < 0) a += u.curseAtk; // CURSE_CHIP
+      if (u.debtAtk < 0) a += u.debtAtk; // DEBT_ATK_CHIP
+      if (u.corruptUntil >= r) a -= CORRUPT_HIT_ATK; // corruptHit
     } else if (u.side === 'enemy' && !u.turned && B) {
       a += enemyRamp(B, u, r);
       if (u.blessUntil >= r) a += BLESS_ADD; // 2026-11-20 enemy 祝福
@@ -4437,6 +4683,16 @@
   const rawAmount = rawAmount0;
 
   // 试玩反馈 2026-11-15: a member's skill text is copied at hire time; show the current data's text (rules change, saves don't)
+  // 2026-11-26 青铜 治疗减半: the skill carries healHalf (actionTextFor reads it) and its text says 「威力的一半」 instead of 「威力 −1」
+  function healHalfSkill(run, sk) {
+    if (!sk || sk.kind !== 'heal') return sk;
+    if (ascOn(run, 'healHalf')) { const o = Object.assign({}, sk, { healHalf: true }); if (o.text) { const t0 = String(o.text); o.text = t0.replace(TX('skill.text.healLess'), TX('skill.text.healHalf')); if (o.text === t0) o.text += TX('skill.text.healHalfTag'); } return o; }
+    const cut = ascOn(run, 'healCut'); // 2026-11-26 晚 青铜 −20%: 「每份 = 威力 −20%（去掉零头）」
+    if (!cut) return sk;
+    const o = Object.assign({}, sk, { healCut: cut });
+    if (o.text) { const t0 = String(o.text); o.text = t0.replace(TX('skill.text.healLess'), TX('skill.text.healCut', { n: cut })); if (o.text === t0) o.text += TX('skill.text.healCutTag', { n: cut }); } // HEAL_POOL texts have no 「每份」 → a tag
+    return o;
+  }
   function freshSkill(data, run, id, sk0) {
     const sk = clone(sk0);
     if (!sk) return sk;
@@ -4444,7 +4700,7 @@
       : (((data.candidates || []).find((c) => c.id === id) || {}).skill);
     if (src && src.kind === sk.kind && src.text) sk.text = src.text;
     if (sk.text) sk.text = skillTextAtLv(sk.kind, sk.text, lvOf(sk), perkOf(data, run, id)); // 2026-11-16 用户「改一下技能说明」: the data text is the Lv1 text — show her current level's numbers
-    return sk;
+    return healHalfSkill(run, sk);
   }
   // the bold level number in a skill text → the number at Lv lv (波及 N 个 · 连击 ×N · 治疗 ×N · 暴击 N%): the data text is the
   // Lv1 text, so the Lv1 phrase (built from the same TX template) is swapped for this level's — no Han in code (i18n test).
@@ -4452,6 +4708,7 @@
     const i = clamp(lv, 1, SKILL_LV_MAX) - 1, sw = (a, b) => (a && text.indexOf(a) >= 0 ? text.replace(a, b) : text);
     if (kind === 'spark') return sw(TX('skill.text.sparkN', { n: SPARK_TEXT_BASE }), SPARK_TARGETS[i] === Infinity ? TX('skill.text.sparkAll') : SPARK_TARGETS[i] === 1 ? TX('skill.text.sparkOne') : TX('skill.text.sparkN', { n: SPARK_TARGETS[i] }));
     if (kind === 'backstab') return sw(TX('skill.text.backstabN', { n: BACKSTAB_HITS[0] }), TX('skill.text.backstabN', { n: BACKSTAB_HITS[i] }));
+    if (kind === 'heal' && HEAL_POOL) return sw(TX('skill.text.healX', { x: 1 }), TX('skill.text.healX', { x: HEAL_POOL_LV[i].x }) + healSpillTag('skill.text', HEAL_POOL_LV[i]));
     if (kind === 'heal') return sw(TX('skill.text.healN', { n: HEAL_LV[0].n }), TX('skill.text.healN', { n: HEAL_LV[i].n }));
     if (kind === 'aim') return sw(TX('skill.text.aim', { pct: Math.round(CRIT_RATE[0] * 100), x: CRIT_X_LV[0] }), TX('skill.text.aim', { pct: Math.round(CRIT_RATE[i] * 100), x: CRIT_X_LV[i] }) + (i + 1 >= CRIT_PIERCE_LV ? TX('skill.text.pierceTag') : ''));
     if (kind === 'guard') {
@@ -4463,6 +4720,7 @@
     }
     return text;
   }
+  const DEBUFF_TIP_LIST = true; // false = the old one-line tip 「身上带着你亲手给的负面效果。」
   function allyUnit(data, run, id, idx) {
     const m = run.members[id];
     const c = cand(data, id);
@@ -4486,11 +4744,16 @@
       const eff = card && card.effect;
       if (eff && eff.type === 'stat') u.debuffs.push({ card: cid, stat: eff.stat, delta: eff.delta });
     }
+    if (CURSE_CHIP && m.curseAtk < 0) { u.atk -= m.curseAtk; u.curseAtk = m.curseAtk; } // 2026-11-26: the base 威力 back, the curse rides as a part (诅咒 −N on every action; the chip goes red)
     return u;
   }
   // holy water: undo debuff stat deltas (battle only), clear slow-start, lift a bad mood to 0
   function cleanse(u) {
+    if (u.curseAtk < 0) { u.curseAtk = 0; } // CURSE_CHIP: the curse part goes (the base 威力 never had it)
+    if (u.debtAtk < 0) u.debtAtk = 0; // DEBT_ATK_CHIP: same for 旧账
     for (const d of u.debuffs || []) {
+      if (d.chip) continue;
+      if (d.stat === 'atk' && CURSE_CHIP && u.curseAtk === 0) continue;
       if (d.stat === 'atk') u.atk -= d.delta;
       else if (d.stat === 'maxHp') { u.maxHp -= d.delta; }
     }
@@ -4524,7 +4787,7 @@
     }
     // 2026-11-14 满血休息: a member who rested at full hp carries +1 护甲 into this battle's round 1 (then it is spent)
     for (const u of B.allies) { const m = run.members[u.id]; if (m && m.restBlock > 0) { u.openBlock = (u.openBlock || 0) + m.restBlock; m.restBlock = 0; } }
-    if (OPEN_SHIELD > 0) for (const u of B.allies) if (hasTok(u, 'openShield')) u.openBlock = (u.openBlock || 0) + OPEN_SHIELD; // 2026-11-22 开场护盾: 护甲 +8 in round 1
+    if (OPEN_SHIELD > 0) for (const u of B.allies) if (hasTok(u, 'openShield')) { u.openBlock = (u.openBlock || 0) + OPEN_SHIELD; u.openShieldN = OPEN_SHIELD; } // 2026-11-22 开场护盾: 护甲 +8 in round 1 (openShieldN: its own log line, 2026-11-26)
     B.guildRelics = RELICS_ON ? (run.guildRelics || []).slice() : []; // 2026-11-22 遗物
     if (bRelic(B, 'war-banner')) { // 战旗: every ally starts with 充能 +RELIC_BANNER (already on the cards when the battle opens)
       for (const u of B.allies) u.charge = (u.charge || 0) + RELIC_BANNER;
@@ -4595,6 +4858,7 @@
         if (u.luckCharmAtk > 0) out.push({ from: u.id, ic: 'luckCharm', label: TX('battle.bonus.luckCharm'), amount: u.luckCharmAtk }); // 2026-11-22 幸运护符
         if (u.chargeCharmAtk > 0) out.push({ from: u.id, ic: 'chargeCharm', label: TX('battle.bonus.chargeCharm'), amount: u.chargeCharmAtk }); // 2026-11-22 充能护符 // 刃风护符: +1 per hit so far this battle (用户 2026-11-16「这场战斗一直有效」)
         { const sw = shieldWallOf(u); if (sw > 0) out.push({ from: u.id, ic: 'shieldWall', label: hasWall(u) ? TX('battle.bonus.shieldWall') : TX('battle.bonus.guardSlam'), amount: sw }); } // 2026-11-17 爆发实验 盾爆流: 威力 + her current 护甲
+        if (u.curseAtk < 0) out.push({ from: u.id, ic: 'curse', label: TX('battle.bonus.curse'), amount: u.curseAtk }); // CURSE_CHIP
         const cl = crisisOn();
         if (cl && cl.id !== u.id) { out.push({ from: cl.id, ic: 'crisisLeader', label: TX('battle.bonus.crisisLeader'), amount: 1 }); fireInBattle(cl, 'crisis-leader'); }
         if (target && target.faction === 'bandit' && hasTrait(data, u.ref || u.id, 'old-master')) { out.push({ from: u.id, ic: 'oldMaster', label: TX('battle.bonus.oldMaster'), amount: 1 }); fireInBattle(u, 'old-master'); }
@@ -4697,6 +4961,13 @@
       u.luckySeq = seq;
       return true;
     }
+    function grazeSay(t) { // GRAZE_SAY: 「看我灵体护身！」 — her bubble the first time a hit grazes her each round
+      const ln = GRAZE_SAY && t.side === 'enemy' ? grazeLineOf(data, t) : null; if (!ln) return;
+      const said = B.grazeSaid || (B.grazeSaid = {}); if (said[t.id] === B.round) return; said[t.id] = B.round;
+      const e = lineEvent(data, run, ln, { name: t.name }, t.ref, { key: 'enemyBark', bark: 'graze', id: t.ref, uid: t.id, round: B.round });
+      e.name = t.name; // 2026-11-27 用户「灰羽首领说灵体台词的时候 bandit-chief——英文混进来了」: an enemy id is not a candidate / advisor → resolveLine fell back to the id
+      pending.push(e);
+    }
     function hit(u, t, amount, crit, pierceOk, w) {
       const tr = { uid: t.id, id: t.ref, amount: 0, hpAfter: t.hp, kind: 'damage' };
       let dmg, pierce = false;
@@ -4713,7 +4984,7 @@
       else {
       // 2026-11-20 用户 L9「灰羽护符活着时其他敌人闪避 30%；首领本回合每被打中一次闪避 +10%」(DODGE_ON): our hit on a dodging enemy
       // may miss (tr.dodge); the chief's landed hits this round stack her dodge (dodgeHits, reset at the round start)
-      if (DODGE_ON && u.side === 'ally' && t.side === 'enemy') { const p = dodgeOf(B, t); if (p > 0) { t.dodgeRoll = (t.dodgeRoll || 0) + 1; if (hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, B.seq || 0, strHash(t.id), t.dodgeRoll, 71) < p) { tr.dodge = true; if (!DODGE_GRAZE) { tr.miss = true; return tr; } /* 2026-11-20 用户「落空不要不掉血，改成掉一滴，带着 落空 −1」: a dodged hit still takes 1 hp (no 护甲, no bonus) */ tr.graze = true; t.hp = Math.max(0, t.hp - 1); tr.amount = 1; tr.hpAfter = t.hp; return tr; } } }
+      if (DODGE_ON && u.side === 'ally' && t.side === 'enemy') { const p = dodgeOf(B, t); if (p > 0) { t.dodgeRoll = (t.dodgeRoll || 0) + 1; if (hashRand(run.seed || 0, B.level || 0, B.wi || 0, B.round || 0, B.seq || 0, strHash(t.id), t.dodgeRoll, 71) < p) { tr.dodge = true; if (!DODGE_GRAZE) { tr.miss = true; return tr; } /* 2026-11-20 用户「落空不要不掉血，改成掉一滴，带着 落空 −1」: a dodged hit still takes 1 hp (no 护甲, no bonus) */ tr.graze = true; t.hp = Math.max(0, t.hp - 1); tr.amount = 1; tr.hpAfter = t.hp; grazeSay(t); return tr; } } }
       if (u.side === 'enemy' && B.mods.smoke && rngNext(run) < SMOKE_MISS) { tr.miss = true; return tr; } // 试玩反馈 2026-11-14 晚 #4 烟雾弹: each enemy hit misses SMOKE_MISS of the time
       const cx = crit ? (typeof crit === 'number' ? crit : CRIT_X) : 1;
       dmg = Math.floor(Math.floor(amount * cx) * lx * dx) * (B.mult || 1); // §C frenzy multiplies every hit before the block; a crit first · 2026-11-20 幸运 ×LUCK_X (stacks with the crit)
@@ -4734,7 +5005,7 @@
         if (!B.dollWardSaid) { B.dollWardSaid = true; pending.push(lineEvent(data, run, FD(TX('fairy.mirror.ward', { n: WARD_HP }), 'happy'), {}, 'fairy-demon', { key: 'l11.mirror.ward', id: t.ref, uid: t.id, round: B.round })); }
       } else if (t.advisorBoss && dmg > WARD_HP && B.summon && B.summon.ward && (B.wardRound === B.round || B.enemies.some((x) => x.summoned && x.hp > 0))) { // 2026-11-17 露西安 L10 召唤战「护身」
         tr.ward = dmg - WARD_HP; dmg = WARD_HP;
-        if (B.wardSaid !== B.round) { B.wardSaid = B.round; pending.push({ kind: 'line', key: 'ward', speaker: 'narrator', name: '', expr: null, round: B.round, uid: t.id, id: t.ref, text: TX('battle.ward', { name: t.name, n: WARD_HP }) }); }
+        if (WARD_SAY_ONCE ? !B.wardSaidOnce : B.wardSaid !== B.round) { B.wardSaid = B.round; B.wardSaidOnce = true; pending.push({ kind: 'line', key: 'ward', speaker: 'narrator', name: '', expr: null, round: B.round, uid: t.id, id: t.ref, text: TX('battle.ward', { name: t.name, n: WARD_HP }) }); }
       }
       if (t.hitCap > 0 && dmg > 0) { // 2026-11-18 妮可塔 L10: per-hit cap (hitCap × max hp), after 护甲 / crit — the cut part is logged as tr.hitCapped
         const cap = Math.max(1, Math.floor(t.maxHp * t.hitCap));
@@ -4746,6 +5017,7 @@
         const cb = advA && bossCombatOf(advA);
         pending.push({ kind: 'line', speaker: 'advisor', speakerId: advA ? advA.id : 'advisor', name: advA ? advA.name : '', expr: null, combat: 'clause', id: t.id, text: TX('battle.clauseSave', { clause: (cb && cb.name) || TX('battle.clauseName'), name: t.name }) });
       }
+      if (CRIT_SAVE && crit && u.side === 'enemy' && t.side === 'ally' && !t.critSaved && t.hp > 1 && dmg >= t.hp) { t.critSaved = true; dmg = t.hp - 1; tr.critSaved = true; pending.push({ kind: 'line', speaker: 'narrator', name: '', expr: null, key: 'critSave', id: t.id, uid: t.id, round: B.round, text: TX('battle.critSave', { name: t.name }) }); }
       // 2026-11-20 用户「徽章应该回合末起来——敌人行动轮完全结束时，不影响下一轮」(BADGE_ROUND_END): she falls as usual; at the
       // end of the round (after the enemy phase) she stands up at 1 hp (badgeRevive). false = old: the lethal hit leaves 1 hp.
       if (BADGE_ROUND_END && t.side === 'ally' && hasTok(t, 'guard') && !t.badgeUsed && t.hp > 0 && dmg >= t.hp) { t.badgeUsed = true; t.badgeRevive = true; }
@@ -4766,6 +5038,12 @@
       t.taken = (t.taken || 0) + dmg;
       tr.amount = dmg;
       tr.hpAfter = t.hp;
+      // 2026-11-27 用户 第 8 关魔化小队「特质：被击中的敌人威力 −2，一回合」 (trait corruptHit): the ally she hits — 威力 −CORRUPT_HIT_ATK
+      // through the end of the next round (like 祝福 the other way); a new hit refreshes the time, never stacks
+      if (u.side === 'enemy' && t.side === 'ally' && t.hp > 0 && (dmg > 0 || tr.blocked) && Array.isArray(u.traits) && u.traits.includes('corruptHit')) {
+        const fresh = !(t.corruptUntil >= B.round); t.corruptUntil = B.round + 1; tr.corrupt = true;
+        if (fresh) pending.push({ kind: 'corruptHit', round: B.round, uid: t.id, id: t.ref, by: u.id, n: CORRUPT_HIT_ATK, text: TX('battle.corruptHit', { name: t.name, by: u.name, n: CORRUPT_HIT_ATK }) });
+      }
       // §2.7 possessed: one flashback the first time she drops below half
       if (t.corruption === 'possessed' && !t.flashbackDone && t.hp > 0 && t.hp * 2 < t.maxHp) {
         t.flashbackDone = true;
@@ -4783,9 +5061,10 @@
     function downLine(t) {
       if (t.dodgeAura && t.side === 'enemy') { // 2026-11-20 用户 L9「护符坏掉后首领狂暴，每次打前两人」
         push({ kind: 'line', key: 'amuletBroken', speaker: 'narrator', name: '', expr: null, round: B.round, uid: t.id, id: t.ref, text: TX('battle.amuletBroken', { name: t.name }) });
-        for (const x of B.enemies) if (x.hp > 0 && Array.isArray(x.traits) && x.traits.includes('enrageOnAmulet') && !x.enraged) { x.enraged = true; if (ENRAGE_CLEAR_CHARGE) { x.charge = 0; x.raised = 0; } if (ENRAGE_ONCE) x.atk += ENRAGE_ONCE; /* 2026-11-23 用户「狂暴：攻击穿透全场 威力+2」: +2 once (was +2 every round) */ push({ kind: 'line', key: 'enraged', speaker: 'narrator', name: '', expr: null, round: B.round, uid: x.id, id: x.ref, text: TX('battle.enraged', { name: x.name }) }); }
+        for (const x of B.enemies) if (x.hp > 0 && Array.isArray(x.traits) && x.traits.includes('enrageOnAmulet') && !x.enraged) { x.enraged = true; if (ENRAGE_CLEAR_CHARGE) { x.charge = 0; x.raised = 0; } if (ENRAGE_ONCE && ENRAGE_ONCE_BONUS) x.atk += ENRAGE_ONCE; /* 2026-11-23 用户「狂暴：攻击穿透全场 威力+2」: +2 once (was +2 every round) */ push({ kind: 'line', key: 'enraged', speaker: 'narrator', name: '', expr: null, round: B.round, uid: x.id, id: x.ref, text: TX('battle.enraged', { name: x.name }) }); }
       }
-      if (t.bell) push({ kind: 'line', key: 'bellBroken', speaker: 'narrator', name: '', expr: null, round: B.round, uid: t.id, id: t.ref, text: TX('battle.bellBroken', { name: t.name }) }); // 2026-11-20 L5: no more tolls
+      if (t.bell) B.bellBroken = true; // 2026-11-26 BELL_BROKEN_FRONT2
+      if (t.bell) push({ kind: 'line', key: 'bellBroken', speaker: 'narrator', name: '', expr: null, round: B.round, uid: t.id, id: t.ref, text: BELL_BROKEN_FRONT2 ? TX('battle.bellBrokenFront2', { name: t.name }) : TX('battle.bellBroken', { name: t.name }) }); // 2026-11-20 L5: no more tolls
       if (t.candidate) {
         const path = t.corruption === 'possessed' ? ['possessed', 'down'] : ['vengeful', t.grudge || 'high', 'down'];
         if (v2Line(t, path)) return;
@@ -4942,9 +5221,12 @@
       if (eff.type === 'gold') return TX('debt.eff.mood', { delta: '-1' }); // 2026-11-19 诅咒维度: in battle a fine turns into mood −1
       return '';
     }
-    function applyEff(a, eff, cardId) {
-      if (eff.type === 'stat' && eff.stat === 'atk') { const before = a.atk; a.atk = Math.max(1, a.atk + eff.delta); a.debuffs.push({ card: cardId, stat: 'atk', delta: a.atk - before }); }
-      else if (eff.type === 'stat' && eff.stat === 'maxHp') { const before = a.maxHp; a.maxHp = Math.max(3, a.maxHp + eff.delta); a.hp = Math.min(a.hp, a.maxHp); a.debuffs.push({ card: cardId, stat: 'maxHp', delta: a.maxHp - before }); }
+    function applyEff(a, eff, cardId, from) {
+      if (DEBT_ATK_CHIP && eff.type === 'stat' && eff.stat === 'atk' && eff.delta < 0 && a.side === 'ally') { // 2026-11-27 用户「被对方减的威力没有变红，没有显示原因」: a part, like 诅咒 — the base 威力 stays
+        const now = a.atk + (a.curseAtk || 0) + (a.debtAtk || 0), take = Math.max(1, now + eff.delta) - now;
+        if (take < 0) { a.debtAtk = (a.debtAtk || 0) + take; a.debuffs.push({ card: cardId, stat: 'atk', delta: take, chip: true, from: from || null }); }
+      } else if (eff.type === 'stat' && eff.stat === 'atk') { const before = a.atk; a.atk = Math.max(1, a.atk + eff.delta); a.debuffs.push({ card: cardId, stat: 'atk', delta: a.atk - before, from: from || null }); }
+      else if (eff.type === 'stat' && eff.stat === 'maxHp') { const before = a.maxHp; a.maxHp = Math.max(3, a.maxHp + eff.delta); a.hp = Math.min(a.hp, a.maxHp); a.debuffs.push({ card: cardId, stat: 'maxHp', delta: a.maxHp - before, from: from || null }); }
       else if (eff.type === 'status' && eff.status === 'slow-start') { if (a.acts === 0) a.slowStart = true; }
       else if (eff.type === 'mood' && !a.noMood) { if (a.mood + eff.delta < -1 && hasTrait(data, a.id, 'loyal')) fireInBattle(a, 'loyal'); a.mood = clamp(a.mood + eff.delta, hasTrait(data, a.id, 'loyal') ? -1 : -2, 2); }
       else if (eff.type === 'charge') a.fullAt = fullOf(a) + (eff.delta || 0); // 2026-11-19 诅咒维度: this battle only
@@ -4986,18 +5268,21 @@
         return src.length ? [rngPick(run, src)] : [];
       };
       if (!living.length) return;
+      // 2026-11-26 M1 高手青铜报告 #2「L6 太陡」: when two girls come back in one battle (L6), each brings only her main debt
+      // (no extra 诅咒卡 / 站队 debts), so round 1 is not 迟疑 + 威力 −1 + 心情 −1 stacked twice. false = up to 3 each (old).
+      const maxDebts = DEBT_PAIR_ONE && B.enemies.filter((x) => !x.mirror && (data.candidates || []).some((c) => c.id === x.ref)).length >= 2 ? 1 : 3;
       if (h.departure === 'named') debts.push({ source: 'named', label: TX('debt.named'), eff: { type: 'stat', stat: 'maxHp', delta: -2 }, allies: one(h.friend, false, DEBT_RIVAL_LEADER ? 'leader' : null) }); // 2026-11-23 her friend gone → the leader
       else if (h.departure === 'taken') debts.push({ source: 'taken', label: TX('debt.taken'), eff: { type: 'mood', delta: -1 }, allies: one(h.friend, true, DEBT_RIVAL_LEADER ? 'leader' : null) }); // 2026-11-23 her friend gone → the leader
       else if (h.departure === 'rejected') debts.push({ source: 'rejected', label: u.grudge === 'low' ? TX('debt.rejectedLow') : TX('debt.rejected'), eff: { type: 'stat', stat: 'atk', delta: -1 }, allies: one(h.rival, false, DEBT_RIVAL_LEADER ? 'leader' : null) }); // 2026-11-23 试玩 16/17「夜鸦削的是阿雾」: the girl hired over her is gone → the leader (who chose), not a random one
       const usedMem = new Set();
       (u.memory || []).forEach((mm, i) => {
-        if (mm.flip !== 'debuff-returned' || debts.length >= 3) return;
+        if (mm.flip !== 'debuff-returned' || debts.length >= maxDebts) return;
         const card = cardById(data, mm.card);
         if (!card) return;
         usedMem.add(i);
         debts.push({ source: 'debuff', card: card.id, label: TX('debt.card', { card: card.name }), eff: card.effect || {}, allies: u.resentful ? living.slice() : [rngPick(run, living)], all: !!u.resentful });
       });
-      if (debts.length < 3 && h.sided && h.sided !== u.ref && h.sidedFor === false) {
+      if (debts.length < maxDebts && h.sided && h.sided !== u.ref && h.sidedFor === false) {
         const first = living.every((a) => a.acts === 0) && !(DEBT_ONE_DAZE && B.debtDazed); // 2026-11-22 DEBT_ONE_DAZE: one grudge daze per battle; a second one is 心情 −1
         if (first && DEBT_ONE_DAZE) B.debtDazed = true;
         debts.push({ source: 'sidedAgainst', label: quickRun(run) ? TX('debt.sidedAgainstQuick') : DEBT_SIDED_WHO && h.sided ? TX('debt.sidedAgainstWho', { rival: nameOf(data, h.sided) }) : TX('debt.sidedAgainst'), /* 2026-11-24 试玩「琪琪说你没站在我这边，挨效果的却是夜鸦，看不懂」: name the girl you backed */ /* 2026-11-19 试玩修 剧情 */ eff: first ? { type: 'status', status: 'slow-start' } : { type: 'mood', delta: -1 }, allies: one(h.sided, !first, DEBT_RIVAL_LEADER ? 'leader' : null) }); // 2026-11-23 试玩 19「夜鸦『你没站在我这边』打到塞西」: the girl you sided with is gone → the leader
@@ -5007,7 +5292,7 @@
         debts: debts.map((d, i) => ({ index: i, label: d.label, text: DEBT_WHO_FIRST ? `${who(d)} ${effText(d.eff)}` : `${effText(d.eff)} → ${who(d)}`, source: d.source, card: d.card || null, allies: d.allies.map((a) => a.id) })) });
       debts.forEach((d, i) => {
         const hpWas = d.allies.map((a) => ({ uid: a.id, hp: a.hp, maxHp: a.maxHp })); // batch6 H2-14: the UI shows the old numbers until the dots land
-        for (const a of d.allies) applyEff(a, d.eff, d.card || 'debt:' + d.source);
+        for (const a of d.allies) applyEff(a, d.eff, d.card || 'debt:' + d.source, u.name);
         const e = { kind: 'memory', hpWas, id: u.ref, unit: u.id, allies: d.allies.map((a) => a.id), card: d.card || null, flip: d.source === 'debuff' ? 'debuff-returned' : 'debt', debt: i, source: d.source, label: d.label,
           text: d.card ? TX('debt.returnCard', { name: u.name, card: cardById(data, d.card).name, who: who(d) }) : TX('debt.return', { name: u.name, label: d.label, who: who(d), eff: effText(d.eff) }) };
         if (d.allies.length === 1) e.ally = d.allies[0].id;
@@ -5237,6 +5522,12 @@
           return null;
         }
       }
+      if (!free && defending(u) && u.skill && u.skill.kind !== 'guard') { // 2026-11-25 防御姿态: no skill, 护甲 = her 威力 now, no charge, no chain (runPhase: r = null)
+        const b = atkBonuses(u, null), a0 = u.atk + sum(b), p = Math.max(Math.min(1, a0), a0 - (u.weak || 0));
+        const n = gainBlock(u, p, u.id, false, { name: u.name, skill: TX('battle.defendSkill') });
+        push({ kind: 'defend', round: rnd, side: u.side, actor: u.id, actorId: u.ref, uid: u.id, amount: n, power: p, text: TX('battle.defend', { name: u.name, n }) });
+        return null;
+      }
       if (SUMMON_ON_ACTION && !free && u.side === 'enemy' && u.advisorBoss && B.summon && u.hp > 0) { summonRound(); if (spreadOn(run)) rollIntents(run, B, B.round); } // 2026-11-24 用户「露西安应召应该发生在她行动的时候，而不是回合开始」: she calls, then strikes
       if (!free && u.side === 'enemy' && u.toll && u.hp > 0 && tollDue(B, u, B.round)) { toll(u); return null; } // 2026-11-20 L5 钟楼守卫: the toll replaces his strike
       if (!free && u.side === 'enemy' && u.xlPhase === 2 && u.xlMark != null && u.hp > 0) { // 2026-11-19 小铃强 玩偶弱: the knell replaces her bell
@@ -5278,6 +5569,8 @@
       };
       // §4 crit: our hunters only; the roll is a hash, never the main rng
       const critOf = (t, i) => {
+        if (!ENEMY_AIM_CRIT && u.side !== 'ally' && sk.kind === 'aim') return false; // 2026-11-26 用户「敌方的猎人还是不要暴击了——一下子后排就没了」(rejected girls + mirror dolls too)
+        if (run._probe && !(!ally && sk.kind === 'spark' && sk.bigEvery > 0 && bigRoundOf(sk, B.round))) return false; // 2026-11-25 意图 v2: the look-ahead shows the plain hit (a sure 大招 stays)
         const hx = ally && sk.kind === 'aim' && hasTok(u, 'hawkEye') ? (u.hawkX || 0) : 0; // 2026-11-17 爆发实验 猎人暴击流: added to the crit x, before 见血加价
         if (run.expect) { /* 理论值: the chance itself, { p, x } — see expectHit */
           if (!ally && sk.kind === 'spark' && sk.bigEvery > 0) return bigRoundOf(sk, B.round) ? { p: 1, x: JACKPOT_X } : false; // 2026-11-18 大招
@@ -5307,11 +5600,18 @@
         if (hurt.length) {
           // §C per-battle heal cap: prefer the lowest-hp ally still below her cap; if every hurt ally is capped, the heal is wasted
           const room = (x) => HEAL_CAP_X * x.maxHp - (x.healedIn || 0);
-          const hl = ally ? HEAL_LV[li] : { n: HEAL_LV[li].n }; // enemy priests: Lv shares (Lv1 = one), never 护甲 (用户 2026-11-15 第 4–7 关)
+          const hl = ally ? ((run.tune && run.tune.healNoOver) || !overBlockOf(data, u.ref) ? Object.assign({}, HEAL_LV[li], { over: false }) : HEAL_LV[li]) : { n: HEAL_LV[li].n }; // healNoOver (sims only): overflow does not turn into 护甲 // enemy priests: Lv shares (Lv1 = one), never 护甲 (用户 2026-11-15 第 4–7 关)
           const r = powerFor(null);
           bon = r.b;
-          const share = healShare(r.p);
-          const raw0 = B.mult > 1 ? Math.floor(share / 2) : share, raw = raw0; // §C healing halved in frenzy · raw0 = the first share (HEAL_DECAY)
+          const poolOn = HEAL_POOL && ally, hpl = L5 ? HEAL_POOL_LV5 : HEAL_POOL_LV[li];
+          const share = poolOn ? healPoolAmt(healShare(r.p), hpl) : healShare(r.p);
+          const raw00 = B.mult > 1 ? Math.floor(share / 2) : share; // §C healing halved in frenzy
+          // 2026-11-25 用户「回血限制…威力的一半？」「试试1」: rule healHalf (not on any tier yet; sims set run.tune.healHalf) — our priests heal half
+          // 2026-11-25 用户 (哈迪斯「治疗每级 −25%」): rule healCut n = % off (healHalf = 50); sims: run.tune.healCut / healHalf
+          const T0 = run.tune || {};
+          const cutP = ally ? Math.min(100, ascOn(run, 'healCut') + (ascOn(run, 'healHalf') ? 50 : 0) + (T0.healCut || 0) + (T0.healHalf ? 50 : 0)) : 0;
+          const lessN = ally ? (T0.healLess || 0) + (cutP > 0 ? 0 : healLessAt(sk)) : 0; // 青铜 治疗减半: half instead of −1 (not both) // 2026-11-25 heal-limit study (sims only, off by default): run.tune.healLess n = each of our shares heals n less (min 1)
+          const raw0 = Math.max((lessN || cutP) && raw00 > 0 ? 1 : 0, (cutP > 0 && raw00 > 0 ? Math[cutP >= 50 ? 'ceil' : 'floor'](raw00 * (100 - cutP) / 100) : raw00) - lessN), raw = raw0; // 用户「减半但是向上取整」: round up // raw0 = the first share (HEAL_DECAY)
           let refund = 0;
           heal = true;
           // three-factors §3.4: hl.n shares, each to whoever is lowest right then (the same ally may get several);
@@ -5321,11 +5621,11 @@
           const threat = HEAL_TRIAGE ? healThreat(mine) : null;
           const picks = ally && HEAL_PICK && Array.isArray(u.healPick) ? (u.healPick = u.healPick.filter((id) => mine.some((x) => x.id === id && x.hp > 0))) : [];
           const overOk = !!hl.over && pid !== 'refund';
-          const triage = (n) => { // the endangered ally who can be saved with the shares left and needs the least (tie → front-most)
-            const pot = (hl.n - n) * raw;
+          const triage = (n, pot0, skip) => { // the endangered ally who can be saved with the shares left and needs the least (tie → front-most)
+            const pot = pot0 != null ? pot0 : (hl.n - n) * raw;
             let best = null, bn = Infinity;
             for (const x of alive(mine)) {
-              if (x.bell || room(x) <= 0 || (x.hp >= x.maxHp && !overOk)) continue;
+              if (x.bell || room(x) <= 0 || (x.hp >= x.maxHp && !overOk) || (skip && skip.has(x.id))) continue;
               const need = (threat[x.id] || 0) - (x.hp + (x.block || 0)) + 1;
               if (need <= 0) continue; // not in danger
               const can = overOk ? pot : Math.min(pot, x.maxHp - x.hp, room(x));
@@ -5333,7 +5633,36 @@
             }
             return best;
           };
-          if (L5) { // 2026-11-25 Lv5 牧师: one full share for every living ally (what it cannot heal → 护甲, 回本 → damage)
+          if (poolOn) { // HEAL_POOL: one pool, spilling on
+            let pool = raw0, last = null;
+            const done = new Set();
+            const give = (t, amt, ob) => {
+              t.hp += amt; t.healedIn = (t.healedIn || 0) + amt; u.healing += amt; healAmt += amt;
+              if (pid === 'vigil' && amt > 0) { t.vigil = pn; t.vigilFrom = u.id; } // 塞西「守夜」
+              const prev = targets.find((x) => x.uid === t.id);
+              if (prev) { prev.amount += amt; prev.hpAfter = t.hp; if (ob) prev.overBlock = (prev.overBlock || 0) + ob; return; }
+              const tr = { uid: t.id, id: t.ref, amount: amt, hpAfter: t.hp, kind: 'heal' };
+              if (ob) tr.overBlock = ob;
+              targets.push(tr);
+            };
+            for (let n = 0; n <= hpl.spill && pool > 0; n++) {
+              const left = alive(mine).filter((x) => x.hp < x.maxHp && !x.bell && !done.has(x.id) && room(x) > 0);
+              if (!left.length) break;
+              let pick = null;
+              if (n === 0 && picks[0]) pick = left.find((x) => x.id === picks[0]) || null; // 重点照顾: the first ally
+              if (!pick && n === 0 && threat) { const tg = triage(0, pool, done); if (tg && left.includes(tg)) pick = tg; }
+              const t = pick || (HEAL_TRIAGE ? left.reduce((b, x) => (x.maxHp - x.hp > b.maxHp - b.hp ? x : b), left[0]) : left.reduce((b, x) => (x.hp < b.hp ? x : b), left[0]));
+              const amt = Math.max(0, Math.min(pool, t.maxHp - t.hp, room(t)));
+              pool -= amt; done.add(t.id); last = t;
+              give(t, amt, 0);
+            }
+            if (hpl.plus1) for (const t of alive(mine).filter((x) => !x.bell && x.hp < x.maxHp && !done.has(x.id) && room(x) > 0)) { done.add(t.id); give(t, 1, 0); } // Lv5: everyone at least +1
+            if (pool > 0) { // nobody left to spill to
+              if (pid === 'refund') refund += pool; // 葛蕾「回本」
+              else if (hl.over) { const t = last || alive(mine).filter((x) => !x.bell).reduce((b, x) => (x.hp < b.hp ? x : b), alive(mine).filter((x) => !x.bell)[0]); if (t) { gainBlock(t, pool, u.id, true, { name: u.name, skill: sk.name }); give(t, 0, pool); } }
+            }
+          }
+          if (L5 && !poolOn) { // 2026-11-25 Lv5 牧师: one full share for every living ally (what it cannot heal → 护甲, 回本 → damage)
             for (const t of alive(mine).filter((x) => !x.bell)) {
               const amt = Math.max(0, Math.min(raw0, t.maxHp - t.hp, room(t))), over = raw0 - amt;
               if (over > 0 && pid === 'refund') refund += over; else if (over > 0 && hl.over) gainBlock(t, over, u.id, true, { name: u.name, skill: sk.name });
@@ -5344,7 +5673,7 @@
               targets.push(tr);
             }
           }
-          for (let n = 0; n < (L5 ? 0 : hl.n); n++) {
+          for (let n = 0; n < (L5 || poolOn ? 0 : hl.n); n++) {
             const raw = HEAL_SPLIT ? (n > 0 ? Math.max(1, Math.ceil(raw0 / 2)) : raw0) : ally && HEAL_DECAY && raw0 > 0 ? Math.max(1, raw0 - HEAL_DECAY * n) : raw0; // 2026-11-24 HEAL_SPLIT // 2026-11-20 用户「补血量逐份 −2，像刺客一样」
             const left = alive(mine).filter((x) => x.hp < x.maxHp && !x.bell);
             let pick = null;
@@ -5443,7 +5772,7 @@
           const sArgs = { name: u.name, skill: sk.name, n: targets.length, hits: targets.map((r) => { const hv = { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount }; return r.jackpot ? TX('battle.sparkHitJackpot', hv) : TX('battle.sparkHit', hv); }).join(TX('list.comma')) };
           text = nT === Infinity ? TX('battle.spark', sArgs) : targets.length > 1 ? TX('battle.sparkN', sArgs) : TX('battle.sparkOne', sArgs);
         } else if (!ally && sk.sweepStep > 0 && alive(foes).length > 1) { // 2026-11-25 用户 露西安「每个人都打一遍，往后每人 −2」: first full 威力, each next one sweepStep less (min 1)
-          targets = alive(foes).map((t, i) => hitOne(t, 0, 1, (a) => Math.max(1, a - sk.sweepStep * i)));
+          targets = alive(foes).map((t, i) => hitOne(t, 0, 1, (a) => (ENRAGE_FRONT ? (i < ENRAGE_FRONT ? a : Math.max(1, Math.ceil(a / 2))) : Math.max(SWEEP_MIN, a - sk.sweepStep * i)))) // 2026-11-26 用户「露西安也改」: same as 狂暴 — front two full, the rest half);
           targets.forEach((tr, i) => { tr.line = i; });
           text = TX('battle.multiHit', { name: u.name, skill: sk.name, n: targets.length, hits: targets.map((r) => TX('battle.multiHitItem', { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount, hp: r.hpAfter })).join(TX('list.comma')) });
         } else if (sk.kind === 'backstab') {
@@ -5467,12 +5796,15 @@
           for (let i = 0; i < n; i++) { const lv = alive(foes); if (!lv.length) break; targets.push(hitOne(sp ? (front.hp > 0 ? front : intentTarget(run, B, u, lv, true)) : lv[0], i, n, null, true)); } // 2026-11-19 伤害分摊: both cuts at the rolled target
           for (const tr of targets) tr.of = n;
           text = TX('battle.multiHit', { name: u.name, skill: sk.name, n: targets.length, hits: targets.map((r) => TX('battle.multiHitItem', { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount, hp: r.hpAfter })).join(TX('list.comma')) });
+        } else if (BELL_BROKEN_FRONT2 && !ally && u.toll && !u.toll.noBell && B.bellBroken && alive(foes).length > 1) { // 2026-11-26 用户「铜钟坏了之后，敲钟人每回合攻击两人」: the front two, full 威力 each
+          targets = alive(foes).slice(0, 2).map((t, i) => hitOne(t, 0, 1, i > 0 && BELL_SECOND_HALF ? (x) => Math.max(1, Math.ceil(x / 2)) : null)); // 2026-11-27 用户「打第二个人一半威力」
+          text = TX('battle.frontTwoHit', { name: u.name, skill: sk.name, hits: targets.map((r) => TX('battle.multiHitItem', { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount, hp: r.hpAfter })).join(TX('list.comma')) });
         } else if (IRON_L10 && !ally && sk.front3AfterGuard && !B.enemies.some((x) => x.ref === 'gate-guardian' && x.hp > 0) && alive(foes).length > 1) { // 2026-11-21 用户「石门守卫死掉的话，奥德丽的阵线攻击变成每回合打前排 3 人」
           if (!u.frontLineSaid) { u.frontLineSaid = true; push({ kind: 'line', speaker: 'advisor', speakerId: u.ref, name: u.name, expr: 'special', round: B.round, text: TX('battle.frontLineCall') }); }
           targets = alive(foes).slice(0, 3).map((t) => hitOne(t, 0, 1));
           text = TX('battle.frontLineHit', { name: u.name, skill: sk.name, hits: targets.map((r) => TX('battle.multiHitItem', { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount, hp: r.hpAfter })).join(TX('list.comma')) });
         } else if (!ally && u.enraged && (sk.kind === 'strike' || sk.kind === 'guard') && alive(foes).length > 1) { // 2026-11-20 L9 狂暴: ENRAGE_PIERCE = one shot through the whole line from the front, each one passed halves it (min 1); false = old: both front-most, full 威力
-          targets = ENRAGE_PIERCE ? alive(foes).map((t, i) => hitOne(t, 0, 1, (a) => Math.max(1, Math.floor(a / Math.pow(2, i))))) : alive(foes).slice(0, 2).map((t) => hitOne(t, 0, 1));
+          targets = ENRAGE_PIERCE ? alive(foes).map((t, i) => hitOne(t, 0, 1, (a) => (CHIEF_FRONT ? (i < CHIEF_FRONT ? a : Math.max(1, Math.ceil(a / 2))) : Math.max(SWEEP_MIN, Math.floor(a / Math.pow(2, i)))))) : alive(foes).slice(0, 2).map((t) => hitOne(t, 0, 1));
           if (ENRAGE_PIERCE) targets.forEach((tr, i) => { tr.line = i; }); // UI: one beam through the line, the hits land one after another
           text = TX('battle.enragedHit', { name: u.name, skill: sk.name, hits: targets.map((r) => TX('battle.multiHitItem', { target: foes.find((x) => x.id === r.uid).name, dmg: r.amount, hp: r.hpAfter })).join(TX('list.comma')) });
         } else if (softHeart(u, front)) { // §D: she cannot bring herself to hit a girl she once fought beside
@@ -5486,7 +5818,7 @@
             if (nx) { const tr2 = hit(u, nx, targets[0].overkill); tr2.passOn = true; targets.push(tr2); }
           }
           { const hv = { name: u.name, skill: sk.name, verb: KIND_VERB()[sk.kind] || TX('skill.verb.attack'), target: front.name, dmg: targets[0].amount, hp: front.hp };
-          text = targets[0].pierce ? TX('battle.hitPierce', hv) : targets[0].crit ? TX('battle.hitCrit', hv) : TX('battle.hit', hv);
+          text = targets[0].graze ? TX('battle.hitGraze', hv) /* 2026-11-27 试玩「灵体闪避写成『暴击！造成 1 点伤害』」 */ : targets[0].pierce ? TX('battle.hitPierce', hv) : targets[0].crit ? TX('battle.hitCrit', hv) : TX('battle.hit', hv);
           if (targets[0].blocked) text += TX('battle.blockAbsorb', { n: targets[0].blocked }); }
           const other = u.side === 'enemy' && hasTrait0(u, 'twinShot') ? alive(foes).filter((x) => x !== front) : [];
           if (other.length) { // feedback-1112 #34 连弩: a second bolt at another random ally
@@ -5679,7 +6011,7 @@
       giveCharge0(u, gen, q, st);
       if (charm && B.allies.some((y) => (y.charge || 0) > was.get(y))) { B.chargeCharmN = (B.chargeCharmN || 0) + 1; if (B.chargeCharmN % CHARGE_CHARM_EVERY === 0) charmFeed(B, 'chargeCharm', 'chargeCharmAtk', 1); } // 用户「每两次行动 +1」 // 2026-11-22 充能护符: +1 once per action that charged anyone (用户「一次行动只算一次」; was +1 per ally charged)
       for (const x of echo) {
-        if (!B.allies.some((y) => y !== x && (y.charge || 0) > was.get(y)) || (x.extraRound || 0) >= EXTRA_CAP || broken(x) || x.hp <= 0) continue;
+        if (!B.allies.some((y) => y !== x && (y.charge || 0) > was.get(y)) || (x.extraRound || 0) >= EXTRA_CAP || broken(x) || defending(x) || x.hp <= 0) continue;
         const before = x.charge || 0; x.charge = before + ECHO_EAR;
         push({ kind: 'charge', round: B.round, side: 'ally', self: true, echo: true, chainId: st ? st.chainId : null, from: x.id, to: x.id, amount: ECHO_EAR, before, after: x.charge, gen,
           text: TX('battle.chargeEcho', { name: x.name, n: ECHO_EAR }) });
@@ -5702,9 +6034,9 @@
         u.springTo = null;
         if (amt > 0) for (const id of ids) {
           const t = mine.find((x) => x.id === id);
-          if (!t || t.hp <= 0 || broken(t) || (t.extraRound || 0) >= EXTRA_CAP) continue;
+          if (!t || t.hp <= 0 || broken(t) || defending(t) || (t.extraRound || 0) >= EXTRA_CAP) continue;
           const store = storeOf(B, t), n = amt + store, before = t.charge || 0;
-          t.charge = before + n;
+          t.charge = before + n; u.gave = (u.gave || 0) + n; // 2026-11-27 用户「战斗统计也要包括给别人的充能」
           push({ kind: 'charge', round: B.round, side: u.side, chainId: st ? st.chainId : null, from: u.id, to: t.id, amount: n, before, after: t.charge, gen,
             text: TX('battle.charge', { name: u.name, target: t.name, n }) });
           enqueue(q, t, gen + 1, u.id);
@@ -5722,9 +6054,9 @@
       if (!(amt > 0)) return; // 0 = nothing at all
       const targets = dir === 'all' ? mine.filter((x) => x !== u && x.hp > 0) : (dir === 'both' ? ['prev', 'next'] : [dir]).map((d) => neighbour(mine, u, d));
       for (const t of targets) {
-        if (!t || t.hp <= 0 || broken(t) || (t.extraRound || 0) >= EXTRA_CAP) continue;
+        if (!t || t.hp <= 0 || broken(t) || defending(t) || (t.extraRound || 0) >= EXTRA_CAP) continue;
         const store = storeOf(B, t), n = amt + store, before = t.charge || 0, after = before + n;
-        t.charge = after;
+        t.charge = after; u.gave = (u.gave || 0) + n; // 战斗统计「充能」
         hawkFed(t, n); // 2026-11-17 爆发实验 猎人暴击流
         if (!HOLY_SPRING_V4 && ours && u.skill.kind !== 'heal' && hasTok(u, 'holySpring') && (t.springAny || 0) < HOLY_SPRING_ANY_CAP) { t.springAny = (t.springAny || 0) + 1; t.springAtk = (t.springAtk || 0) + HOLY_SPRING_ANY; t.springFrom = u.id; } // 2026-11-19 文字修 圣泉通用: any non-priest holder, +威力 per charge she gives
         wallFeed(t, n * SHIELD_WALL_PIP, u.id); // 2026-11-17 爆发实验 盾爆流
@@ -5737,6 +6069,7 @@
     }
     function broken(x) { return x.side === 'ally' && !x.noMood && x.mood <= -2; } // 原来: a −2 member never starts a chain and never answers one
     function enqueue(q, t, gen, from) {
+      if (defending(t)) return; // 防御姿态: never raised
       if ((t.charge || 0) >= fullOf(t) && (t.extraRound || 0) < EXTRA_CAP && !q.some((x) => x.t === t)) q.push({ t, gen, from });
     }
     // CONTRACT-2026-11-16-charge-release「先蓄后放」(用户拍板): the queue, first in first out — whoever is full spends CHARGE_FULL and
@@ -5843,8 +6176,11 @@
         u.damage = (u.damage || 0) + dmg;
         targets.push({ uid: t.id, id: t.ref, amount: dmg, blocked, blockAfter: t.block || 0, hpAfter: t.hp, kind: 'damage' });
       }
-      push({ kind: 'quake', toll: true, round: B.round, side: 'enemy', from: u.id, amount: n, targets, text: (u.toll.noBell ? TX('battle.allOut', { name: u.name, n }) /* 2026-11-25: was a 2nd 'battle.charge' key that overwrote the 充能 line */ : TX('battle.toll', { name: u.name, n })) + groupHitEach(B.allies, targets) });
+      push({ kind: 'quake', toll: true, round: B.round, side: 'enemy', from: u.id, amount: n, targets, text: (u.toll.ult ? TX('battle.bossUlt', { name: u.name, ult: u.toll.ult, n }) : u.toll.noBell ? TX('battle.allOut', { name: u.name, n }) /* 2026-11-25: was a 2nd 'battle.charge' key that overwrote the 充能 line */ : TX('battle.toll', { name: u.name, n })) + groupHitEach(B.allies, targets) });
       downs(targets, B.allies);
+      // 2026-11-27 晚 用户「隔 2 个回合一个大招让我放掉很多血，下一个回合 boss 给自己加个护盾——有节奏的」(BOSS_RHYTHM): after the big hit
+      // she shields herself (toll.shield 护甲) — it stands through our next turn, so that turn is for healing and repositioning
+      if (BOSS_RHYTHM && u.toll.shield > 0 && u.hp > 0) { gainBlock(u, u.toll.shield, u.id, true, { name: u.name, skill: u.toll.ult || '' }); push({ kind: 'line', speaker: 'narrator', name: '', expr: null, key: 'bossShield', round: B.round, uid: u.id, text: TX('battle.bossShield', { name: u.name, n: u.toll.shield }) }); }
     }
     // 2026-11-20 L7 分裂史莱姆: a split unit hit and still standing splits (at the next check): it keeps half its hp (rounded up),
     // a copy with the other half comes in on its right — max hp halves too, and both lose split.atkDrop (default 1) 威力. Never more than split.cap living split units on the
@@ -5863,7 +6199,7 @@
         if (Array.isArray(u.traits)) c.traits = u.traits.slice();
         const di = B.enemies.findIndex((x) => x.split && x.hp <= 0); // a fallen slime's card makes room (its stats go to B.gone), like the summons
         if (di >= 0) { B.gone = (B.gone || []).concat([statRow(B.enemies[di])]); c.slotOf = B.enemies[di].id; B.enemies[di] = c; } else B.enemies.splice(B.enemies.indexOf(u) + 1, 0, c);
-        push({ kind: 'summon', split: true, round: B.round, uid: u.id, units: [unitView(data, B, c)], slots: c.slotOf ? [{ uid: c.id, was: c.slotOf }] : [], parent: { uid: u.id, hp: u.hp, maxHp: u.maxHp }, text: TX('battle.split', { name: u.name }) });
+        push({ kind: 'summon', split: true, round: B.round, uid: u.id, units: [unitView(data, B, c)], slots: c.slotOf ? [{ uid: c.id, was: c.slotOf }] : [], parent: { uid: u.id, hp: u.hp, maxHp: u.maxHp }, bannerText: TX('battle.splitBanner'), text: TX('battle.split', { name: u.name }) });
       }
     }
     function releaseRaised(side, st) {
@@ -5905,7 +6241,7 @@
         const hitList = u.resentful ? living : [rngPick(run, living)];
         const eff = card.effect || {};
         const hpWas = hitList.map((a) => ({ uid: a.id, hp: a.hp, maxHp: a.maxHp })); // batch6 H2-14
-        for (const a of hitList) applyEff(a, eff, card.id);
+        for (const a of hitList) applyEff(a, eff, card.id, u.name);
         const entry = { kind: 'memory', hpWas, id: cid, unit: u.id, allies: hitList.map((a) => a.id), card: card.id, flip: mm.flip,
           text: TX('battle.memoryReturn', { name: u.name, card: card.name, who: u.resentful ? TX('battle.wholeTeam') : hitList[0].name }) };
         if (hitList.length === 1) entry.ally = hitList[0].id;
@@ -6115,6 +6451,7 @@
             const raw = fi[k.ref][advA.id];
             push(lineEvent(data, run, Object.assign({ speaker: advA.id, expr: 'calm' }, typeof raw === 'string' ? { text: raw } : raw), {}, advA.id, { key: 'foeIntroAdv', round: B.round, uid: k.u.id, foe: k.ref }));
             seen.add('intro|' + k.ref);
+            for (const c of (Array.isArray(fi[k.ref].covers) ? fi[k.ref].covers : [])) { if (!run.foesMet.includes(c)) run.foesMet.push(c); seen.add('intro|' + c); } // 2026-11-27 one line for a squad (魔化): its kinds count as told
           }
         }
         for (const u of B.enemies) {
@@ -6127,7 +6464,7 @@
           push(lineEvent(data, run, { speaker: 'narrator', text: TX('battle.foeRule', { name: u.baseName || u.name, rules: rules.join('；') }) }, {}, 'narrator', { key: 'foeRule', round: B.round, uid: u.id }));
         }
       }
-      if (ADV_GROWN_LINE && B.wi === 0 && B.level === ADV_SKILL_LV2 && run.advisorPresent && advA && !run.advGrownSaid) { // 2026-11-23 试玩 19「技能 +1 悄悄变 +2」: say it once, the battle it grows (no word about the sacrifice)
+      if (ADV_GROWN_LINE && !(ADVISOR_GIFT && run.advisorGiftSeen) && B.wi === 0 && B.level === ADV_SKILL_LV2 && run.advisorPresent && advA && !run.advGrownSaid) { // 2026-11-23 试玩 19「技能 +1 悄悄变 +2」: say it once, the battle it grows (no word about the sacrifice)
         const cb = combatOf(advA), pr = cb && ADV_SKILL_SCALE && ['formation', 'overtime', 'luckUp'].includes(cb.kind) ? advSkillPair(cb.kind) : null;
         if (pr && pr[0] < pr[1]) { run.advGrownSaid = true; push({ kind: 'line', key: 'advGrown', speaker: 'narrator', name: '', expr: null, round: B.round, text: TX('battle.advGrown', { name: advA.name, skill: cb.name, from: pr[0], to: pr[1] }) }); }
       }
@@ -6298,10 +6635,11 @@
         if (side === 'enemy' && u.sumBlock > 0 && (u.block || 0) < u.sumBlock) gainBlock(u, u.sumBlock - (u.block || 0), u.id, false, { name: u.name, skill: STATUS_LABELS().shell }); // 2026-11-17 露西安 召唤物 (骷髅)
         if (side === 'ally' && u.openCrest > 0) { const n = u.openCrest, nm = guildRelicName(data, 'guild-crest'); u.openCrest = 0; gainBlock(u, n, u.id, false, { name: nm, skill: nm }); } // 2026-11-22 遗物 公会徽记
         if (side === 'ally' && u.openBlock > 0) {
-          const n = u.openBlock; u.openBlock = 0;
+          let n = u.openBlock; u.openBlock = 0;
+          if (u.openShieldN > 0) { const sh = Math.min(u.openShieldN, n); u.openShieldN = 0; n -= sh; gainBlock(u, sh, u.id, false, { name: u.name, skill: TX('token.openShield') }); } // 2026-11-26 试玩「开场护盾 +8 记在退伍老兵名下」: its own line
           const vet = u.openVeteran;
           if (u.openVeteran) { u.openVeteran = false; push(B.veteranTeam ? { kind: 'veteran', team: true, round: B.round, uid: u.id, n: B.veteranTeam, text: TX('battle.veteranTeam', { name: u.name, n: B.veteranTeam }) } : { kind: 'veteran', round: B.round, uid: u.id, text: TX('battle.veteranGuard', { name: u.name }) }); } // 2026-11-19 伤害分摊: the whole team
-          gainBlock(u, n, isLeader(u.id) || !B.veteranTeam ? u.id : (B.allies.find((x) => isLeader(x.id)) || u).id, false, { name: u.name, skill: vet || B.veteranTeam ? TX('battle.blockSrc.veteran') : TX('camp.rest.label') });
+          if (n > 0) gainBlock(u, n, isLeader(u.id) || !B.veteranTeam ? u.id : (B.allies.find((x) => isLeader(x.id)) || u).id, false, { name: u.name, skill: vet || B.veteranTeam ? TX('battle.blockSrc.veteran') : TX('camp.rest.label') });
         }
       }
       if (side === 'ally' && B.mods.formation) { const cb = advA && combatOf(advA); for (const u of alive(arr)) gainBlock(u, B.formationN != null ? B.formationN : FORMATION_BLOCK, 'advisor', false, { name: advA ? advA.name : '', skill: (cb && cb.name) || STATUS_LABELS().formation }); }
@@ -6311,6 +6649,7 @@
     // Our start-of-round gains (开场护甲 退伍老兵 / 满血休息, 列阵) land first and our own round-1 phase does not clear them;
     // the enemies keep their opening block (no clear) until their normal round-1 phase.
     function runPhase(side, ambush) {
+      if (run._probe && run._probe !== side) return null; // 2026-11-25 意图 v2 (intentProbe): a look-ahead plays one side only
       const arr = side === 'ally' ? B.allies : B.enemies;
       const ps = { count: 0 }; // count = this phase's extra actions (their side: ENEMY_EXTRA_MAX)
       if (!ambush) for (const u of arr) u.extraRound = 0; // 充能: EXTRA_CAP counts per side phase
@@ -6493,7 +6832,7 @@
           else B.enemies.splice(B.enemies.indexOf(m), 0, f);
         }
         push({ kind: 'summon', brood: true, round: B.round, uid: m.id, units: fresh.map((u) => unitView(data, B, u)), short: true, slots,
-          parent: { uid: m.id, hp: m.hp, maxHp: m.maxHp, hpBefore: m.hp + k * cost1 }, text: TX('battle.brood', { name: m.name, n: k, atk: fresh[0].atk }) + (BROOD_SHOW_COST ? TX('battle.broodCost', { lost: k * cost1, hp: m.hp }) : '') }); // 2026-11-25 试玩: 母体分裂扣的血写进战报
+          parent: { uid: m.id, hp: m.hp, maxHp: m.maxHp, hpBefore: m.hp + k * cost1 }, bannerText: TX('battle.broodBanner', { n: k }) /* 2026-11-26 用户「大字废话太多」: the banner is short, the log keeps the whole line */, text: TX('battle.brood', { name: m.name, n: k, atk: fresh[0].atk }) + (BROOD_SHOW_COST ? TX('battle.broodCost', { lost: k * cost1, hp: m.hp }) : '') }); // 2026-11-25 试玩: 母体分裂扣的血写进战报
       }
       // 2026-11-20 用户「还是有死掉的史莱姆没清理」(BROOD_CLEAR_END): the fallen ones no new slime replaced leave right after the spit,
       // at the end of the round they fell in, instead of staying grey through the next round's start
@@ -6512,6 +6851,7 @@
     // left is a 「吞噬」 instead: she eats S.devour.share of her minions (lowest hp first), their hp left joins hers (max hp
     // grows with it), then every living ally loses eaten × dmgPer (护甲 first, like 地震). Event 'devour' (quake format).
     function rollCall(S, boss) {
+      if (SUMMON_PRUNE) { const dead = B.enemies.filter((u) => u.summoned && u.hp <= 0 && !u.devoured); if (dead.length) { B.gone = (B.gone || []).concat(dead.map(statRow)); B.enemies = B.enemies.filter((u) => !dead.includes(u)); push({ kind: 'lineupOut', round: B.round, side: 'enemy', uids: dead.map((u) => u.id), prune: true }); } } // 2026-11-26 用户「先清理，后召唤」: the UI takes the fallen cards away before the new ones come in
       const wr = B.round - (B.waveStart || 1);
       const mins = alive(B.enemies).filter((u) => u.summoned);
       if (wr % S.every && !(S.emergency && !mins.length)) return; // 2026-11-17 紧急召唤 (anti 清场再爆发): an empty board is refilled at once
@@ -6693,6 +7033,7 @@
       B.mods = {};
       B.emods = {};
       for (const u of B.enemies) if (u.dazed) u.dazed = false;
+      for (const u of B.allies) if (u.diceLuck) { u.luck = Math.max(0, (u.luck || 0) - u.diceLuck); u.diceLuck = 0; } // 2026-11-26 幸运骰盅
       for (const u of B.enemies) { if (u.vuln) u.vuln = false; if (u.powderWeak) { u.weak = Math.max(0, (u.weak || 0) - u.powderWeak); u.powderWeak = 0; } } // 2026-11-22 易伤药水 / 虚弱粉: one round
       B.lastRound = R;
       return R;
@@ -6956,7 +7297,7 @@
       if (guildHas(run, 'supply-cart')) { // 2026-11-22 遗物 补给马车: every living member 生命 +RELIC_CART (never above max)
         for (const id of run.party) { const m = run.members[id]; if (!m || hpOf(m) <= 0 || hpOf(m) >= m.maxHp) continue; const before = statsOf(m, isLeader(id)); m.hp = Math.min(m.maxHp, hpOf(m) + RELIC_CART); statChange(data, run, ev, id, before, 'relic:supply-cart'); }
       }
-      gainGold(run, winGold(data, run), 'win', ev); // 2026-11-14 金币
+      { const from = []; gainGold(run, winGold(data, run, from), 'win', ev); if (run.lastWinGold && run.lastWinGold.level === run.level) run.lastWinGold.from = from; } // 2026-11-14 金币 · 2026-11-26 from
     }
     let comment = null;
     if (win && run.advisorPresent) {
@@ -6998,7 +7339,7 @@
     const combo = ringCombo(isLeader(id) ? m.combo : c.combo, m); // 2026-11-21 转向指环: the formation arrow turns too
     const pu = { side: 'ally', combo, bond: m.bond || null, mood: m.mood || 0, noMood: moodless(run, id), tokens: m.tokens || [] }, mk = chargeK(null, pu); // 充能 k outside battle
     const common = { keywords: keywordsFor(data, m.skill, combo, mk), skillName: m.skill.name, comboName: combo ? combo.name : null, chargeDir: combo ? combo.direction : null, k: mk,
-      actionText: actionTextFor(m.skill, m.atk, false, isLeader(id) ? m.role : c.role, null, null, perkOf(data, run, id)), bonusText: bonusTextFor(combo, mk, false, chargeKeep(pu)),
+      actionText: actionTextFor(healHalfSkill(run, overBlockOf(data, id) && m.skill ? Object.assign({}, m.skill, { overBlock: true }) : m.skill), m.atk, false, isLeader(id) ? m.role : c.role, null, null, perkOf(data, run, id)), bonusText: bonusTextFor(combo, mk, false, chargeKeep(pu)),
       skillLv: lvOf(m.skill), perkText: perkText(perkOf(data, run, id)), chargeFull: fullOf({ side: 'ally', bond: m.bond || null, tokens: m.tokens || [], fullAt: run.blessing && run.blessing.fx && run.blessing.fx.type === 'teamCharge' ? CHARGE_FULL + (run.blessing.fx.delta || 0) : 0 }) + (m.chargeSlow > 0 ? m.chargeSlow : 0) /* 2026-11-24 用户「查看队伍时看不到充能满格数」 */, ...xpInfo(m), // 2026-11-16 经验条
       chargeFull: fullOf(Object.assign({}, pu, run.blessing && run.blessing.fx && run.blessing.fx.type === 'teamCharge' ? { fullAt: CHARGE_FULL + (run.blessing.fx.delta || 0) } : {})) + (m.chargeSlow > 0 ? m.chargeSlow : 0) }; // 2026-11-22g 试玩7 #15: her 充能 full mark before a battle (信赖 / 短弦扣 / 铃之急响 / 面具印记), view only: xp / lv / xpLvStart / xpNext / maxed
     if (isLeader(id)) {
@@ -7110,6 +7451,7 @@
         advisorSkill: cb ? { available: !B.advisorSkillUsed, used: !!B.advisorSkillUsed, kind: cb.kind, name: cb.name, text: (combatView(advisorData(data, run), run) || cb).text } : null,
         items: itemsView(data, run),
         canAim: B.allies.filter((u) => u.hp > 0 && !coat(u) && u.role === 'adc' && u.skill && u.skill.kind === 'aim').map((u) => u.id), // 猎人锁定
+        ...(run.defendOn ? { canStance: B.allies.filter((u) => u.hp > 0 && !coat(u) && u.skill && u.skill.kind !== 'guard').map((u) => u.id) } : {}), // 2026-11-25 防御姿态 (only with run.defendOn)
         canHealPick: HEAL_PICK ? B.allies.filter((u) => u.hp > 0 && !coat(u) && u.skill && u.skill.kind === 'heal').map((u) => u.id) : [], // 2026-11-20 牧师治疗
       },
     };
@@ -7121,6 +7463,11 @@
       out.enemies.forEach((e) => { if (iv.intents[e.uid]) e.intent = iv.intents[e.uid]; });
       out.allies.forEach((x) => { x.aimedBy = iv.aimedBy[x.uid] || 0; });
     }
+    if (INTENT_PROBE && !B.over && !run._probe && (B.opening || B.round > 0)) { // 2026-11-25 意图 v2: intent2 = { extra, lines: [{ kind: atk|burst|heal|block|defend, dmg, x, targets, all }] }
+      const pe = intentProbe(data, run, 'enemy'), pa = INTENT_PROBE_MINE ? intentProbe(data, run, 'ally') : null;
+      if (pe) out.enemies.forEach((e) => { if (pe[e.uid]) e.intent2 = pe[e.uid]; });
+      if (pa) out.allies.forEach((x) => { if (pa[x.uid]) x.intent2 = pa[x.uid]; });
+    }
     return out;
   }
   // the round the intents are for: B.round + 1 at a pause (rolled at the end of the round), B.round at the opening pause.
@@ -7129,6 +7476,62 @@
     const r = B.opening ? B.round : B.round + 1;
     const ens = (B.enemies || []).map((u) => Object.assign({}, u, { intent: u.intent ? Object.assign({}, u.intent, { uids: (u.intent.uids || []).slice() }) : u.intent }));
     return Object.assign({}, B, { round: r, enemies: ens });
+  }
+  // 2026-11-25 意图 v2 (用户「意图显示在敌人卡片下方，学杀戮尖塔：数字 + 招式 + 目标头像」): at a pause, play the next round on a
+  // copy with ONE side acting (run._probe; no random crit) and read back what each unit would do. Enemies: per line the hit before
+  // 护甲 (amount + blocked: every bonus, ramp and the target's own cuts counted), the allies it lands on, ×hits; quake / toll =
+  // a burst line; 护甲 / heal lines. Ours: the same lines with no numbers. Our hp is padded in the enemy look so nobody falls and
+  // retargets. The run itself is never touched. false = no v2 fields (the UI then draws the old marks).
+  const INTENT_PROBE = true;
+  const INTENT_PROBE_MINE = false; // 2026-11-25 用户「我方意图还是不显示了吧——感觉剧透了，早就算好谁会死了」: ours off (true = allies[].intent2 again)
+  function intentProbe(data, run, side) {
+    const r = clone(run), B = r.battle;
+    r._probe = side;
+    if (side === 'enemy') for (const a of B.allies) if (a.hp > 0) a.hp += 1e6;
+    let R;
+    try { R = battleOps(data, r, B).round([]); } catch (e) { return null; }
+    const ids = new Set((run.battle[side === 'enemy' ? 'enemies' : 'allies'] || []).filter((u) => u.hp > 0).map((u) => u.id));
+    const foeIds = new Set((run.battle[side === 'enemy' ? 'allies' : 'enemies'] || []).map((u) => u.id));
+    const mineIds = new Set((run.battle[side === 'enemy' ? 'enemies' : 'allies'] || []).map((u) => u.id));
+    const out = {}, acts = {};
+    const add = (id, line) => {
+      if (!ids.has(id) || (acts[id] || 0) > 1) return; // the first action only (+ a quake before it); more = the extra flag
+      const L = out[id] || (out[id] = []), k = JSON.stringify([line.kind, line.dmg, line.x, line.targets, line.all]);
+      if (!L.some((l) => l._k === k)) L.push(Object.assign({ _k: k }, line));
+    };
+
+    const dmgLine = (kind, tl) => {
+      const ts = tl.filter((t) => t.kind === 'damage' && foeIds.has(t.uid));
+      if (!ts.length) return null;
+      const uniq = []; for (const t of ts) if (!uniq.includes(t.uid)) uniq.push(t.uid);
+      const raw = ts.map((t) => (t.amount || 0) + (t.blocked || 0));
+      const per = {}; for (const t of ts) per[t.uid] = (per[t.uid] || 0) + 1;
+      const multi = Object.values(per).some((n) => n > 1); // 2026-11-26 试玩「琪琪 意图 ×2、说明 ×4」: ×N = the hits she swings in all (a split spell / a sweep: one hit each, no ×)
+      const hi = Math.max(...raw), lo = Math.min(...raw);
+      const out = { kind, dmg: hi, x: multi ? ts.length : 0, targets: uniq, all: uniq.length > 3 };
+      if (lo < hi && !multi) out.low = lo; // 2026-11-26 试玩「小满 主目标 10、其余 5」/ 露西安 往后每人少 2: the smallest hit too (UI 「10/5」)
+      return out;
+    };
+    let cur = null;
+    for (const e of R || []) {
+      if (e.kind === 'phase') { cur = null; continue; }
+      if (e.kind === 'quake' && e.from && !e.chill && !e.fire && !e.chestnut) { const l = dmgLine('burst', e.targets || []); if (l) { l.all = l.all || l.targets.length > 1; add(e.from, l); } continue; }
+      if (e.kind === 'daze' && e.actor) { add(e.actor, { kind: 'daze', targets: [], all: false }); continue; }
+      if (e.kind === 'defend' && e.actor) { add(e.actor, { kind: 'defend', targets: [], all: false }); continue; }
+      if (e.kind === 'block' && cur && e.from === cur) { add(cur, { kind: 'block', targets: [], all: false }); continue; }
+      if (e.kind !== 'action' || !e.actor) continue;
+      cur = e.actor; acts[cur] = (acts[cur] || 0) + 1;
+      const tl = e.targets || [];
+      const heals = []; for (const t of tl) if (t.kind === 'heal' && mineIds.has(t.uid) && !heals.includes(t.uid)) heals.push(t.uid);
+      if (heals.length) add(e.actor, { kind: 'heal', dmg: side === 'enemy' ? Math.max(...tl.filter((t) => t.kind === 'heal').map((t) => t.amount || 0)) : null, targets: heals, all: heals.length > 3 });
+      const l = dmgLine('atk', tl);
+      if (l && side === 'enemy') { const eu = (run.battle.enemies || []).find((x) => x.id === e.actor); if (eu && eu.skill && eu.skill.kind === 'heal') l.orHeal = true; } // 2026-11-26 试玩: a priest hits now but heals once a friend is hurt (our side acts first)
+      if (l) add(e.actor, l);
+    }
+    const rank = (l) => (l.kind === 'defend' || l.kind === 'block' ? 0 : 1); // 护甲 first, as in the mock
+    const res = {};
+    for (const id of Object.keys(out)) res[id] = { extra: (acts[id] || 0) > 1, lines: out[id].map((l) => { const o = Object.assign({}, l); delete o._k; if (side !== 'enemy') delete o.dmg; return o; }).sort((a, b) => rank(a) - rank(b)) };
+    return res;
   }
   function summary(data, run) {
     const fates = data.candidates.map((c) => {
@@ -7237,18 +7640,20 @@
         v.storyId = run.story.id;
         v.lines = (storyLines(data, run, run.story.id) || []).map((p) => resolveLine(data, run, p, ctx, 'narrator'));
         if (BELL_DOOR && ctx && ctx.bellGot && BELL_NAME()[ctx.bellGot]) v.lines.push(Object.assign(resolveLine(data, run, { speaker: 'narrator', text: TX('bellKey.got', { name: BELL_NAME()[ctx.bellGot] }) }, ctx, 'narrator'), { bellGot: ctx.bellGot })); // 2026-11-20 铃之门
+        if (run.story.id === 'advisorGift') { const au = advisorUpOf(data, run); if (au) { v.advisorUp = au; v.lines = v.lines.map((l) => (l.fx === 'advisorUp' ? Object.assign({}, l, { text: TX('advisor.up.line', { name: au.name, skill: au.skill }) }) : l)); } else v.lines = v.lines.filter((l) => l.fx !== 'advisorUp'); }
         v.paragraphs = v.lines.map((l) => l.text); // v1 compatibility
         if (run.story.rollcall) { v.rollcall = clone(run.story.rollcall); v.rally = clone(run.story.rally || []); } // v2.4 [9] teamAssembled
         if (run.story.levelCard) v.levelCard = clone(run.story.levelCard); // v2.4 [9] levelIntro
         if (run.story.noCard) v.noCard = true;
         if (run.story.id === 'sealRefuse') { // feedback-1112 #7: { hpFrom, hpTo } for the curse line
           v.curse = { hpFrom: ctx.hpFrom, hpTo: ctx.hpTo };
+          if (TEAM_HURT_BOX && ctx.teamTo && ctx.teamFrom) v.curse.team = Object.keys(ctx.teamTo).map((id) => ({ id, name: nameOf(data, id), stat: 'hp', from: ctx.teamFrom[id], to: ctx.teamTo[id] })).filter((r) => r.from !== r.to); // 2026-11-27 用户「全队挨打只有我自己的血量提示，应该也给个 box」
           // 2026-11-19 用户亲测 流程: the hp event sits on the beat itself (the fx 'curse' line, where she is pinned to the ground)
           if (SEAL_HP_AT_BEAT && ctx.hpFrom != null) { const l = v.lines.find((x) => x && x.fx === 'curse'); if (l) l.hp = { id: LEADER_ID, from: ctx.hpFrom, to: ctx.hpTo, text: ctx.teamTo ? TX('story.sealBeatenAll', { n: SEAL_HIT }) : TX('story.sealBeaten', { hp: ctx.hpTo }) }; }
         }
         if (run.story.door) v.door = doorView(data, run); // 2026-11-15 小门: { slots: [{ key, got }], open }
-        if (run.story.door && BELL_DOOR) v.bellDoor = bellDoorView(data, run); // 2026-11-20 铃之门: names + hints + how many
-        if (run.story.choice === 'seal') v.sealOptions = clone(SEAL_OPTIONS()); // feedback-1112 #7: act story.sealChoice { choice }
+        if (run.story.door && BELL_DOOR) { v.bellDoor = bellDoorView(data, run); if (run.story.id === 'bellDoorReveal') v.bellDoor.reveal = true; } // BELL_UNLOCK: the first sight — no names / hints / count (用户「不要有任何三个铃铛的 tooltip」) // 2026-11-20 铃之门: names + hints + how many
+        if (run.story.choice === 'seal' && bellsOn(run)) v.sealOptions = clone(SEAL_OPTIONS()); // feedback-1112 #7: act story.sealChoice { choice }
         break;
       }
       case 'leader':
@@ -7290,7 +7695,7 @@
           v.targets = run.party.slice(); v.bagFull = run.items.length >= BAG_MAX;
           break;
         }
-        if (run.phase === 'reward' && run.lastWinGold && run.lastWinGold.level === run.level) v.winGold = run.lastWinGold.n; // 2026-11-20b 用户: this battle's gold on the loot screen
+        if (run.phase === 'reward' && run.lastWinGold && run.lastWinGold.level === run.level) { v.winGold = run.lastWinGold.n; v.winGoldFrom = (run.lastWinGold.from || []).map((x) => TX('reward.goldFrom', x)).join(' · ') || null; } // 2026-11-20b 用户: this battle's gold on the loot screen
         if (FORTUNE_NOTE && run.phase === 'reward' && advisorFlow(data, run) === 'fortune' && !leaderHas(run, 'extra-option')) { const ad = advisorData(data, run); v.fortuneNote = TX('reward.fortuneNote', { name: (ad && ad.name) || '' }); } // 2026-11-23 试玩 19「看不出哪张是她多翻的」
         const pool = run.phase === 'reward' ? data.cards.rewards : data.cards.debuffs;
         v.options = run.options.map((id) => {

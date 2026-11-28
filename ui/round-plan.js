@@ -13,6 +13,7 @@
       var f = evs[j];
       if (f.kind === 'action' && (!f.chainDepth || f.side !== e.side || (e.chainId != null && f.chainId != null && f.chainId !== e.chainId))) break;
       if (STOP[f.kind]) break;
+      if (f.kind === 'daze' || (f.kind === 'line' && f.key === 'softLine')) break; // 2026-11-27 用户「对手发呆的一瞬间没有台词」: another unit's 发呆 (and her soft line) is not part of this chain — it was swallowed with it
       j++;
       if (f.kind === 'chainEnd') break;
     }

@@ -5,8 +5,8 @@
 /* ===== 1. fonts: bundled-font slot (activates when ui/fonts/*.woff2 exists; otherwise falls through to system fonts) ===== */
 /* 得意黑 Smiley Sans Oblique (display) + 霞鹜文楷 LXGW WenKai (body, regular + medium). Licenses in ui/fonts/. */
 @font-face { font-family: "ChooserDisplay"; src: url("fonts/display.woff2") format("woff2"); font-display: swap; }
-@font-face { font-family: "ChooserBody"; src: url("fonts/body.ttf") format("truetype"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "ChooserBody"; src: url("fonts/body-medium.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "ChooserBody"; src: url("fonts/body.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "ChooserBody"; src: url("fonts/body-medium.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 
 /* ===== 2. tokens ===== */
 :root {
@@ -865,7 +865,7 @@ body.act-3 .spark:not(.heal):not(.debt) { background: radial-gradient(circle, #f
 
 /* ===== campfire rest (prep) ===== */
 body[data-phase="prep"] { --bg-blur: 0px; --bg-dim: .8; }
-.camp-wrap .stand { height: 720px; width: 540px; bottom: -40px; }
+.camp-wrap .stand { height: 720px; width: 540px; bottom: -48px; }
 .camp-wrap .stand.at-left { left: 160px; } .camp-wrap .stand.at-right { right: 160px; }
 .camp-wrap .lane-prep { transition: top .5s ease, opacity .4s; }
 .camp-wrap.talking .lane-prep { top: 104px; pointer-events: none; }
@@ -966,7 +966,7 @@ body.epi-on .topbar { display: none; }
 .cine.whiteout.on .wo-flood { opacity: .97; }
 .cine.whiteout .wo-cap { position: absolute; left: 0; right: 0; top: 470px; text-align: center; font: 400 var(--fs-xxl) var(--font-display); letter-spacing: .16em; color: #5a5650; }
 .wo-cap span { display: inline-block; animation: woIn 2.2s ease-out both; }
-.wo-cap .wo-2 { display: block; margin-top: var(--sp-5); font-size: var(--fs-xl); color: #625d55; animation-duration: 3s; } /* feedback-1112 #22: was #8a847a (3.7 on white) */
+.wo-cap .wo-2 { display: block; margin-top: var(--sp-5); font-size: var(--fs-xl); color: #625d55; animation-duration: 1.2s; } /* 2026-11-26: was 3s — a click / the fade came before it showed */ /* feedback-1112 #22: was #8a847a (3.7 on white) */
 .cine.whiteout.fade { opacity: 0; transition: opacity 1.6s; }
 /* feedback-1112 #42: while the ending cinematics play (white text → fates), the stats board underneath stays hidden */
 body.end-hold .screen-ending { visibility: hidden; }
@@ -1419,7 +1419,7 @@ body[data-phase="sacrifice"] .vn-box.tone-bewildered .vn-text { color: #e8eef8; 
 
 /* ---------- v2.5 difficulty: the fairy asks, ten tiers ---------- */
 .screen-difficulty .heading { left: 0; right: 0; top: 96px; }
-.df-fairy { position: absolute; left: 20px; bottom: -40px; width: 640px; height: 900px; z-index: 1; pointer-events: none; }
+.df-fairy { position: absolute; left: 20px; bottom: -48px; width: 640px; height: 900px; z-index: 1; pointer-events: none; }
 .df-fairy .stand-img { width: 100%; height: 100%; object-fit: contain; object-position: bottom center; filter: drop-shadow(0 10px 30px rgba(0,0,0,.5)); }
 .df-fairy .fs-bob { display: block; width: 100%; height: 100%; animation: dfBob 3.2s ease-in-out infinite; }
 @keyframes dfBob { 50% { transform: translateY(-12px); } }
@@ -1571,7 +1571,6 @@ body.act-3 .vn-box.tone-bewildered { background: linear-gradient(170deg, #e8eef6
 .sd-go[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .sd-open.lit .sd-slot.got, .sd-open.lit .sd-slot.got .gi { animation-duration: .01s; animation-delay: 0s; } }
 /* 2026-11-20 铃之门 (app.js bellDoorHtml): each slot shows the bronze bell (relic-bell icon); missing = dark + faint, got = lit */
-.bd-slot { position: relative; }
 .bd-slot .pic.bd-bell { width: 46px; height: 46px; object-fit: contain; filter: grayscale(1) brightness(.35); opacity: .6; transition: filter .4s, opacity .4s; }
 .bd-slot .pic-fb .gi { width: 42px; height: 42px; }
 .side-door.lit .bd-slot.got .pic.bd-bell { filter: none; opacity: 1; }
@@ -1845,7 +1844,7 @@ b.sk-num { font-weight: 800; color: var(--c-gold-hi, #f6d27a); text-shadow: 0 1p
 .credits .cr-stage { position: absolute; inset: 0; }
 .credits .cr-card { position: absolute; inset: 0; opacity: 0; transition: opacity 1.1s; }
 .credits .cr-card.on { opacity: 1; }
-.credits .cr-art { position: absolute; left: 140px; bottom: -40px; width: 720px; height: 1000px; transform: translateY(24px); transition: transform 2.4s ease-out; }
+.credits .cr-art { position: absolute; left: 140px; bottom: -48px; width: 720px; height: 1000px; transform: translateY(24px); transition: transform 2.4s ease-out; }
 .credits .cr-card.on .cr-art { transform: none; }
 .credits .cr-art .pic, .credits .cr-art img { width: 100%; height: 100%; object-fit: contain; object-position: bottom center; }
 .credits .cr-text { position: absolute; left: 900px; right: 160px; top: 260px; color: #f8eedc; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
@@ -2256,6 +2255,11 @@ body.icons-b .gi { --fxc: var(--c); --holec: none; --holes: var(--c); --fxw: 2.2
 .heal-btn { position: absolute; left: 50%; top: -30px; margin-left: -26px; z-index: 7; width: 52px; height: 52px; padding: 9px; border-radius: 50%; border: 2px solid #c8ffd0; background: radial-gradient(circle, #1f6a3a, #0c2a16); color: #c8ffd0; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.6); } /* 2026-11-20 牧师治疗 */
 .heal-btn svg { width: 100%; height: 100%; display: block; }
 .heal-btn.locked { color: #6bff8a; border-color: #6bff8a; }
+.stance-btn { position: absolute; left: 50%; bottom: -48px; transform: translateX(-50%); z-index: 7; min-width: 128px; height: 46px; padding: 3px; display: flex; gap: 2px; border-radius: 23px; border: 2px solid #d8e4ff; background: #142038; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.6); font: inherit; font-size: 21px; } /* 2026-11-25 防御姿态 */
+.stance-btn span { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 10px; border-radius: 19px; color: #8a96b0; white-space: nowrap; }
+.stance-btn:not(.defend) .st-a { background: #e8a53a; color: #1a1206; font-weight: 700; }
+.stance-btn.defend .st-d { background: #5aa0ff; color: #06121f; font-weight: 700; }
+.stance-btn.defend { border-color: #5aa0ff; }
 .heal-btn.on { background: radial-gradient(circle, #4adf7a, #12602a); color: #fff; box-shadow: 0 0 0 3px #c8ffd0, 0 0 22px rgba(80,230,120,.9); }
 .heal-mark { position: absolute; left: 6px; top: 6px; z-index: 6; width: 40px; height: 40px; color: #5ce87e; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.8)); }
 .heal-mark.heal-2 { left: 48px; }
@@ -2488,10 +2492,10 @@ body[data-phase="battle"] .story-skip { top: 164px; }
 @keyframes luIn { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
 
 /* #2 战报: one row per member — face + name · 4 numbers under one header line · 经验 + bar · 「升级」 */
-.result.rr-panel { width: 1240px; max-width: 1840px; padding: var(--sp-5) var(--sp-6); }
+.result.rr-panel { width: 1360px; max-width: 1840px; /* 2026-11-27 +充能 column: was 1240 (the 升级 button fell outside) */ padding: var(--sp-5) var(--sp-6); }
 .rr-list { margin: var(--sp-3) 0 var(--sp-4); color: var(--c-paper-ink); }
-.rr-row { display: grid; grid-template-columns: 64px minmax(170px, 1fr) repeat(4, 96px) 236px 136px; align-items: center; column-gap: 14px; padding: 8px 12px; border-bottom: 1px solid rgba(160,122,70,.3); }
-.rr-panel.no-xp .rr-row { grid-template-columns: 64px minmax(170px, 1fr) repeat(4, 110px); }
+.rr-row { display: grid; grid-template-columns: 64px minmax(150px, 1fr) repeat(5, 88px) 220px 136px; align-items: center; column-gap: 14px; padding: 8px 12px; border-bottom: 1px solid rgba(160,122,70,.3); }
+.rr-panel.no-xp .rr-row { grid-template-columns: 64px minmax(170px, 1fr) repeat(5, 110px); }
 .rr-row.rr-head { padding-top: 0; padding-bottom: 6px; border-bottom: 2px solid var(--c-paper-line); }
 .rr-h { font: 400 var(--fs-s) var(--font-display); letter-spacing: .08em; color: #6a4a20; text-align: center; white-space: nowrap; cursor: help; }
 .rr-h-xp { text-align: left; }
@@ -2813,3 +2817,192 @@ body.act-3 .rr-n.zero { color: #5e4c38; }
 .rg-tap { opacity: .55; font-size: var(--fs-s); margin-top: var(--sp-2); }
 @keyframes rg-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .relic-fly img { width: 56px; height: 56px; object-fit: contain; }
+/* 2026-11-25 意图 v2 (样板 ui/dev/mock-intent.html): no plate, no border — icons + numbers + faces with a shadow; one line per thing */
+.bcard > .it2 { position: absolute; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 3px; white-space: nowrap; pointer-events: auto;
+  filter: drop-shadow(0 0 2px #000) drop-shadow(0 2px 4px rgba(0,0,0,.9)); }
+.bcard > .it2-foe { top: calc(100% + 8px); }
+.bcard > .it2-mine { bottom: calc(100% + 8px); }
+.it2 .i2-line { display: flex; align-items: center; gap: 3px; }
+.it2 .i2-ic { width: 40px; height: 40px; flex: none; color: #ffcf9a; display: block; }
+.it2-mine .i2-ic { width: 34px; height: 34px; color: #d8e6ff; }
+.it2 .i2-ic svg, .it2 .i2-all svg, .it2 .i2-arrow svg, .bcard > .i2-bolt svg { width: 100%; height: 100%; display: block; }
+.it2 .i2-n { font: 400 30px/1 var(--font-num); color: #fff; text-shadow: 0 2px 0 #7a1010, 0 0 6px #000; min-width: 20px; text-align: center; }
+.it2 .i2-x { font: 700 22px/1 var(--font-num); font-style: normal; color: #ffd0b0; }
+.it2 .i2-arrow { width: 14px; height: 14px; flex: none; color: #ff9a80; }
+.it2-mine .i2-arrow { color: #a8c4ff; }
+.it2 .i2-faces { display: flex; }
+.it2 .it-face { width: 34px; height: 34px; border: 2px solid #ffb0a0; }
+.it2-mine .it-face { width: 30px; height: 30px; border-color: #b8ccff; }
+.it2 .it-face + .it-face { margin-left: -9px; }
+.it2 .it-face { display: block; border-radius: 50%; overflow: hidden; background: #2a1520; flex: none; }
+.it2 .it-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+.it2 .it-face .pic.failed { display: none; }
+.it2 .i2-all { width: 36px; height: 36px; color: #ff6a50; }
+.it2-mine .i2-all { width: 32px; height: 32px; color: #9fc0ff; }
+.it2 .k-heal .i2-ic { color: #7ce89a; } .it2 .k-heal .it-face { border-color: #9fe8b0; } .it2 .k-heal .i2-arrow { color: #9fe8b0; } .it2 .k-heal .i2-n { text-shadow: 0 2px 0 #0e5a24, 0 0 6px #000; }
+.it2 .k-block .i2-ic, .it2 .k-defend .i2-ic { color: #9fd0ff; }
+.it2 .k-daze .i2-ic { color: #c8b8e8; }
+.it2 .k-burst .i2-ic { color: #ff5a3a; animation: i2Throb 1.1s ease-in-out infinite; } .it2 .k-burst .i2-n { color: #ffd0b0; }
+@keyframes i2Throb { 50% { transform: scale(1.18); filter: drop-shadow(0 0 8px #ff4a20); } }
+.bcard > .i2-bolt { position: absolute; right: -12px; top: -12px; z-index: 7; width: 34px; height: 34px; border-radius: 50%; padding: 6px; background: radial-gradient(circle at 40% 35%, #fff6b0, #f0b020 65%, #8a5a00); border: 2px solid #fff3c0; box-shadow: 0 0 12px rgba(255,210,80,.9); color: #4a2a00; }
+@media (prefers-reduced-motion: reduce) { .it2 .k-burst .i2-ic { animation: none; } }
+.bcard > .it2.it2-one { flex-direction: row; gap: 4px; } /* 2026-11-25 用户: one line ([盾] + the intent), no arrow */
+.it2-one .i2-faces { margin-left: 2px; }
+/* 2026-11-25 BELL_UNLOCK: the reveal — the three bells light up (bd-wake), then fly off as lights (bell-orb) and the slots go dark (bd-empty) */
+.side-door.bd-wake .bd-slot .gi, .side-door.bd-wake .bd-slot img { opacity: 1; animation: bdWake 1s ease-in-out calc(var(--i) * .25s) infinite alternate; }
+.side-door.bd-wake .bd-slot .gi svg { fill: #ffd76a; }
+.side-door.bd-wake .bd-slot { box-shadow: inset 0 4px 10px rgba(0,0,0,.6), 0 0 26px rgba(255,214,110,.75); }
+@keyframes bdWake { from { filter: drop-shadow(0 0 4px #ffd76a) brightness(1.1); transform: scale(1); } to { filter: drop-shadow(0 0 18px #fff0b0) brightness(1.6); transform: scale(1.15); } }
+.side-door.bd-empty .bd-slot .gi, .side-door.bd-empty .bd-slot img { opacity: .2; filter: grayscale(1) brightness(.5); animation: none; transition: opacity .6s, filter .6s; }
+.bell-orb { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; pointer-events: none; z-index: 30;
+  background: radial-gradient(circle, #fffbe6 0 25%, #ffd76a 45%, rgba(255,190,60,0) 72%); box-shadow: 0 0 24px 10px rgba(255,214,110,.75);
+  animation: bellFly 2.8s cubic-bezier(.5,0,.35,1) calc(var(--i) * .22s) both; }
+.bell-orb::after { content: ''; position: absolute; inset: -40px; border-radius: 50%; background: radial-gradient(circle, rgba(255,230,150,.35), transparent 60%); }
+@keyframes bellFly {
+  0% { transform: translate(0, 0) scale(.4); opacity: 0; }
+  15% { transform: translate(0, -24px) scale(1.5); opacity: 1; }
+  30% { transform: translate(0, -30px) scale(1.3); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(.45); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .bell-orb { display: none; } .side-door.bd-wake .bd-slot .gi, .side-door.bd-wake .bd-slot img { animation: none; } }
+/* 2026-11-25 BELL_UNLOCK: the unlock info box */
+.bell-unlock { max-width: 760px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); }
+.bell-unlock .bu-bell { width: 120px; height: 120px; filter: drop-shadow(0 0 18px rgba(255,214,110,.8)); }
+.bell-unlock .bu-bell img { width: 100%; height: 100%; object-fit: contain; }
+.bell-unlock h2 { margin: 0; color: var(--c-gold-hi); letter-spacing: .12em; }
+.bell-unlock p { margin: 0; font-size: var(--fs-text); line-height: 1.6; }
+.bell-unlock .bu-note { color: var(--c-ink-2); }
+/* 2026-11-26 难度页 B3 (DF_B3; 样板 ui/sample-tiers-m1.html): badges top-right, info panel under, 小铃 bottom-left */
+.dfb-wrap { position: absolute; inset: 0; }
+.dfb-title { position: absolute; left: 860px; width: 980px; top: 96px; text-align: center; font: 400 56px var(--font-display); letter-spacing: .2em; color: var(--c-gold-hi); text-shadow: 0 4px 14px #000; }
+.dfb-rank { position: absolute; left: 860px; width: 980px; top: 172px; text-align: center; font-size: var(--fs-s); color: var(--c-ink-2); text-shadow: 0 2px 4px #000; }
+.dfb-grid { position: absolute; left: 860px; top: 220px; width: 980px; display: grid; grid-template-columns: repeat(6, 1fr); justify-items: center; --s: 140px; z-index: 2; }
+.dfb { position: relative; border: none; padding: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--c-ink); font-family: inherit; transition: transform .2s; }
+.dfb-med { position: relative; width: var(--s); height: var(--s); display: block; }
+.dfb-med .pic, .dfb-med img { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,.7)); }
+.dfb-nm { font: 400 26px var(--font-display); letter-spacing: .1em; text-shadow: 0 2px 6px #000; }
+.dfb.locked .dfb-med img { filter: grayscale(1) brightness(.3) drop-shadow(0 4px 8px rgba(0,0,0,.7)); }
+.dfb.locked .dfb-nm { color: #6d6470; }
+.dfb.future { cursor: default; }
+.dfb-tick { display: none; z-index: 3; position: absolute; right: 4%; bottom: 6%; width: 28%; height: 28%; border-radius: 50%; background: #3f6b3a; border: 3px solid #cfe9b8; box-shadow: 0 2px 6px rgba(0,0,0,.6); }
+.dfb-tick::after { content: ""; position: absolute; left: 32%; top: 18%; width: 24%; height: 46%; border: solid #fff; border-width: 0 5px 5px 0; transform: rotate(45deg); }
+.dfb.cleared .dfb-tick { display: block; }
+.dfb.true-end .dfb-med::before { content: ""; position: absolute; z-index: 0; inset: -22%; border-radius: 50%; background: radial-gradient(circle, rgba(255,226,130,.75), rgba(255,190,80,.25) 45%, transparent 68%); animation: dfbGlow 2.4s ease-in-out infinite; }
+/* 真结局: a gold star mark instead of the green tick, and sparkles circling the badge */
+.dfb.true-end .dfb-tick { display: block; background: radial-gradient(circle at 40% 35%, #fff6c0, #f0b828 60%, #9a6a00); border-color: #fff0b0; box-shadow: 0 0 14px rgba(255,214,90,.95); }
+.dfb.true-end .dfb-tick::after { left: 18%; top: 16%; width: 64%; height: 64%; border: none; transform: none; background: #fff; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.dfb.true-end .dfb-med .pic, .dfb.true-end .dfb-med img { position: relative; z-index: 0; }
+.dfb.true-end .dfb-sp { position: absolute; z-index: 2; width: 14px; height: 14px; background: #fff6c8; clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); filter: drop-shadow(0 0 6px #ffd76a); animation: dfbSpark 2.2s ease-in-out infinite; }
+@keyframes dfbSpark { 0%, 100% { opacity: 0; transform: scale(.3) rotate(0); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); } }
+@media (prefers-reduced-motion: reduce) { .dfb.true-end .dfb-sp, .dfb.true-end .dfb-med::before { animation: none; } }
+@keyframes dfbGlow { 50% { opacity: .35; transform: scale(.94); } }
+.dfb.sel { transform: scale(1.1); }
+.dfb.sel .dfb-med::after { content: ""; position: absolute; z-index: 1; inset: 3%; border-radius: 50%; box-shadow: 0 0 0 5px var(--c-gold-hi), 0 0 36px rgba(255,210,120,.85); }
+.dfb.sel .dfb-nm { color: var(--c-gold-hi); }
+.dfb:not(.locked):hover:not(.sel) { transform: scale(1.04); }
+.dfb.nope { animation: dfbNope .35s; } @keyframes dfbNope { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.dfb-info { position: absolute; left: 860px; width: 980px; top: 540px; height: 320px; z-index: 2; background: rgba(20,14,22,.9); border: 1px solid rgba(232,194,122,.35); border-radius: 18px; padding: 26px 36px; box-shadow: 0 20px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 18px; }
+.dfb-head { display: flex; align-items: center; gap: 20px; }
+.dfb-head .dfb-hic, .dfb-head .dfb-hic img { width: 72px; height: 72px; object-fit: contain; }
+.dfb-head .dfb-hic.off img { filter: grayscale(1) brightness(.35); }
+.dfb-head h2 { margin: 0; font: 400 48px var(--font-display); letter-spacing: .14em; color: var(--c-gold-hi); }
+.dfb-rules { margin: 0; padding: 0 0 0 4px; list-style: none; font-size: var(--fs-m); line-height: 1.5; flex: 1; }
+.dfb-rules li::before { content: "●"; color: var(--c-gold-hi); font-size: .6em; margin-right: 12px; vertical-align: middle; }
+.dfb-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.dfb-chip.c-lock { padding: 6px 16px; border-radius: 20px; background: rgba(80,70,90,.6); color: #c8bcd8; font-size: var(--fs-s); }
+/* 2026-11-26 用户「芙洛的商店又出现 scroll 了——没有办法严格控制卡片的高度吗？」: the panel's content box is 834 − 42 (padding) = 792px.
+   Every layout now has a FIXED card height that fits: 2 rows of 380 (+16 gap) = 776; 3 rows (dense) of 248 (+2×16) = 776.
+   A card never grows: the text block shrinks / clips, the price stays at the bottom. */
+.shop-n3 .shop-card, .shop-n4 .shop-card { height: 380px; min-height: 0; overflow: hidden; }
+.shop-dense .shop-card { height: 248px; }
+.shop-card .ch-text, .shop-card .ch-eff { min-height: 0; overflow: hidden; flex-shrink: 1; }
+.shop-card .ch-head, .shop-card .ch-name, .shop-card .sc-price, .shop-card .sc-sold { flex-shrink: 0; }
+/* 2026-11-26 转向指环: the confirm box after giving it — her portrait + from → to */
+.ring-done { display: flex; align-items: center; gap: var(--sp-5); max-width: 860px; }
+.ring-done .rd-face, .ring-done .rd-face img { width: 220px; height: 300px; object-fit: cover; object-position: 50% 15%; border-radius: 14px; flex: none; }
+.ring-done .rd-body { display: flex; flex-direction: column; gap: var(--sp-3); text-align: left; }
+.ring-done h2 { margin: 0; color: var(--c-gold-hi); letter-spacing: .12em; }
+.ring-done p { margin: 0; font-size: var(--fs-m); line-height: 1.6; }
+.it2 .i2-lo { font-size: .6em; color: #ffd0b0; margin-left: 1px; } /* 2026-11-26: 「10/5」 the smallest hit */
+.it2 .i2-ic.i2-orheal { width: 26px; height: 26px; color: #7ce89a; margin-right: -4px; } /* a priest: heals instead if a friend is hurt */
+/* 2026-11-26 用户「被白手套拖走」: her own picture full screen (L4 / L6 rejected defeat, the sacrifice); two girls = side by side */
+.cine.dragged { display: block; pointer-events: auto; cursor: pointer; background: #030206; opacity: 0; transition: opacity .9s; }
+.cine.dragged.on { opacity: 1; }
+.cine.sac.dragged { background: #030206; }
+.dragged-cg { position: absolute; inset: 0; display: flex; }
+.gcl-from { display: block; font-size: var(--fs-s); opacity: .85; margin-top: 2px; } /* 2026-11-26 「（含 夜鸦 +2）」 */
+/* 2026-11-26 用户「太直了：灰暗 / 动效 / 渐入渐出」 — the dragged CG: dim, desaturated, a slow push-in, dark edges, a caption; .sink = it drowns in black */
+.cine.dragged, .cine.sac.dragged { background: #000; }
+.cine.dragged { transition: opacity 1.4s ease-out; }
+.dragged-cg { overflow: hidden; background: #000; }
+.dragged-cg .dg-frame { position: relative; flex: 1 1 0; min-width: 0; overflow: hidden; opacity: 0; animation: dgIn 1.8s .2s ease-out forwards; }
+.dragged-cg.n2 .dg-frame:nth-child(2) { animation-delay: .9s; border-left: 2px solid #000; }
+.dragged-cg .dg-img { width: 100%; height: 100%; object-fit: cover; animation: dgPush 7s ease-out both; filter: grayscale(.6) sepia(.15) brightness(.62) contrast(1.08); transition: filter 1.2s, opacity 1.2s; }
+.dg-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 70% 62% at 50% 46%, transparent 35%, rgba(0,0,0,.55) 72%, rgba(0,0,0,.92) 100%), linear-gradient(180deg, rgba(0,0,0,.35) 0%, transparent 22%, transparent 62%, rgba(0,0,0,.85) 100%); }
+.dg-cap { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); width: min(1100px, 86%); text-align: center; color: #e9e2d4; font: 400 var(--fs-l) var(--font-display); letter-spacing: .08em; line-height: 1.6; text-shadow: 0 2px 10px #000, 0 0 2px #000; opacity: 0; animation: dgCap 1.4s 1.6s ease-out forwards; }
+.cine.sink .dg-img { filter: grayscale(1) brightness(.18); opacity: .6; }
+.cine.sink .dg-cap { opacity: 0 !important; transition: opacity 1s; animation: none; }
+@keyframes dgIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dgPush { from { transform: scale(1.0); } to { transform: scale(1.09) translateY(1.5%); } }
+@keyframes dgCap { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .dragged-cg .dg-img { animation: none; } }
+/* 2026-11-26 失败过场: the dragged picture inside the epilogue */
+.ep-drag { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity .9s; z-index: 3; }
+.ep-drag.on { opacity: 1; }
+.ep-drag .dg-cap { white-space: pre-line; }
+.ep-drag.sink .dg-img { filter: grayscale(1) brightness(.18); opacity: .6; }
+.ep-drag.sink .dg-cap { opacity: 0 !important; transition: opacity 1s; animation: none; }
+.dg-cap { white-space: pre-line; }
+
+/* 2026-11-27 顾问升级框 (小铃送礼之后): her stand on the left, the words on the right (用户: no strike-through) */
+.adv-up { width: 1000px; max-width: 100%; display: flex; flex-direction: row; align-items: center; gap: var(--sp-6); text-align: left; }
+.adv-up .au-stand { flex: 0 0 380px; height: 560px; filter: drop-shadow(0 0 22px rgba(255,214,110,.45)); }
+.adv-up .au-stand img { width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; }
+.adv-up .au-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--sp-4); }
+.adv-up h2 { margin: 0; color: var(--c-gold-hi); letter-spacing: .12em; }
+.adv-up p { margin: 0; font-size: var(--fs-text); line-height: 1.6; }
+.adv-up .au-skill b { margin-right: var(--sp-1); }
+.adv-up .au-rows { display: flex; flex-direction: column; gap: var(--sp-2); }
+.adv-up .au-from { color: var(--c-ink-2); }
+.adv-up .au-to { font-weight: 700; color: var(--c-gold-hi); }
+.adv-up .au-rows span { display: inline-block; min-width: 3.5em; margin-right: var(--sp-2); font-size: .85em; font-weight: 400; opacity: .8; }
+/* 2026-11-27 用户「两屏的时候伊芙的图片中心不在她的脸上」: her face sits at ~20% of the picture → aim the crop there */
+/* (the new picture 2026-11-27 has her face in the middle — the 20% 30% crop is off) .dragged-cg .dg-frame.dg-eve .dg-img { object-position: 20% 30%; } */
+/* 2026-11-27 小铃祝福统计框 */
+.bless-stats { width: 820px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); }
+.bless-stats h2 { margin: 0; color: var(--c-gold-hi); letter-spacing: .12em; }
+.bless-stats .bs-list { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: var(--sp-2); }
+.bless-stats .bs-row { display: grid; grid-template-columns: 72px 1fr auto auto; align-items: center; gap: var(--sp-4); padding: var(--sp-2) var(--sp-4); border-radius: 10px; background: rgba(255,255,255,.05); font-size: var(--fs-text); }
+.bless-stats .bs-face { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,.3); }
+.bless-stats .bs-face img { width: 100%; height: 100%; object-fit: cover; } /* A.face: the expression head (was the stand, cropped) */
+.bless-stats .bs-stat { display: inline-flex; align-items: center; gap: var(--sp-1); opacity: .85; }
+.bless-stats .bs-v { display: inline-flex; align-items: baseline; gap: var(--sp-2); min-width: 7em; justify-content: flex-end; }
+.bless-stats .bs-from { color: var(--c-ink-2); }
+.bless-stats .bs-to { color: var(--c-gold-hi); font-size: 1.2em; }
+/* 2026-11-27 用户「这是什么破 UI」: the .modal .panel is 640 wide — these two boxes need their own width */
+.modal .panel:has(.adv-up) { width: 1060px; padding: var(--sp-6) var(--sp-7); }
+.modal .panel:has(.bless-stats) { width: 900px; }
+.adv-up { width: 100%; gap: var(--sp-6); }
+.adv-up .au-stand { flex: 0 0 340px; height: 520px; }
+.adv-up .au-body { min-width: 0; gap: var(--sp-4); }
+.adv-up h2 { font-size: var(--fs-xl); white-space: nowrap; }
+.adv-up .au-rows p { display: flex; gap: var(--sp-3); align-items: baseline; }
+.adv-up .au-rows span { flex: 0 0 auto; }
+.adv-up .row { justify-content: flex-start; }
+.adv-up .btn, .bless-stats .btn { white-space: nowrap; min-width: 220px; }
+.bless-stats .bs-row { text-align: left; }
+.bless-stats .bs-to { font-size: 1.3em; }
+.modal .panel:has(.bell-unlock) { width: 860px; }
+.gi-luck, .gi-luckUp { --c: #f4eed8; } /* 2026-11-27 用户「幸运的标志是黄的分不清，四叶草换成绿色」: a cream disc with a green clover (was a white clover on gold, like 威力) */
+.gi-luck svg, .gi-luckUp svg, body.icons-a .gi-luck svg, body.icons-b .gi-luck svg { fill: #2f8f3e; }
+.luck-badge .gi.gi-luck svg { fill: #2f8f3e; }
+.bless-stats.hurt h2 { color: #d2464b; } .bless-stats.hurt .bs-to { color: #d2464b; } /* 2026-11-27 全队挨打 box (red, not gold) */
+/* 2026-11-27 灰羽雕像 → the ones it covers (AURA_LINES) */
+.aura-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; transition: opacity .8s; }
+.aura-lines.aura-gone { opacity: 0; }
+.aura-lines .al-ln { fill: none; stroke: #dbe4ff; stroke-width: 5; stroke-dasharray: 14 8; opacity: .95; filter: drop-shadow(0 0 2px #1a1030) drop-shadow(0 0 8px #9fb4ff); transition: opacity .3s, stroke-width .3s; }
+.aura-lines .al-ln.flash { opacity: 1; stroke: #ffffff; stroke-width: 6; }
+.aura-lines .al-dot { fill: #ffffff; r: 7; filter: drop-shadow(0 0 8px #b8c8ff); }
+.aura-lines .al-end { fill: #e6ecff; opacity: .9; filter: drop-shadow(0 0 6px #9fb4ff); }
+.aura-lines .al-src { fill: #e6ecff; filter: drop-shadow(0 0 14px #9fb4ff); }

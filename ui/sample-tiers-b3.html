@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>难度页 · 方案 B3 样例</title>
+<!-- 2026-11-25 样例 only (not wired into the game): 方案 B3 — B's two badge rows + info panel, 小铃 (the live layered
+     animation from assets.js) peeking from the bottom-left. Badges = art/cells/ui-icons/tier-N.png. Save state is fake. -->
+<script src="../art/web/manifest.js"></script>
+<script src="assets.js"></script>
+<style>
+@font-face { font-family: "ChooserDisplay"; src: url("fonts/display.woff2") format("woff2"); }
+@font-face { font-family: "ChooserBody"; src: url("fonts/body.ttf") format("truetype"); }
+:root { --gold-hi: #ffe2a3; --ink: #f6ead2; --ink2: #bfae90; --panel: rgba(20,14,22,.9); --line: rgba(232,194,122,.35); }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #07050b; color: var(--ink); font-family: "ChooserBody", "PingFang SC", sans-serif; overflow: hidden; }
+#stage { position: absolute; width: 1920px; height: 1080px; transform-origin: 0 0; background: url("../art/web/scenes/guild-hall-day.webp") center/cover; overflow: hidden; }
+#stage::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8,6,12,.55), rgba(8,6,12,.82)); }
+.title { position: absolute; left: 900px; width: 940px; top: 40px; text-align: center; font: 56px "ChooserDisplay", serif; letter-spacing: .2em; color: var(--gold-hi); text-shadow: 0 4px 14px #000; }
+
+/* badges: B's size, two rows of five */
+.grid { z-index: 1; position: absolute; left: 900px; top: 140px; width: 940px; display: grid; grid-template-columns: repeat(5, 1fr); row-gap: 22px; justify-items: center; --s: 156px; }
+.badge { position: relative; border: none; padding: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink); font-family: inherit; transition: transform .2s; }
+.badge .med { position: relative; width: var(--s); height: var(--s); }
+.badge img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0,0,0,.7)); }
+.badge .nm { font: 26px "ChooserDisplay", serif; letter-spacing: .1em; text-shadow: 0 2px 6px #000; }
+.badge.locked .med img { filter: grayscale(1) brightness(.28) drop-shadow(0 4px 8px rgba(0,0,0,.7)); }
+.badge.locked .nm { color: #6d6470; }
+.badge .tick { display: none; position: absolute; right: 4%; bottom: 6%; width: 28%; height: 28%; border-radius: 50%; background: #3f6b3a; border: 3px solid #cfe9b8; box-shadow: 0 2px 6px rgba(0,0,0,.6); }
+.badge .tick::after { content: ""; position: absolute; left: 32%; top: 18%; width: 24%; height: 46%; border: solid #fff; border-width: 0 5px 5px 0; transform: rotate(45deg); }
+.badge.cleared .tick { display: block; }
+.badge.trueEnd .med::before { content: ""; position: absolute; inset: -14%; border-radius: 50%; background: radial-gradient(circle, rgba(255,214,110,.6), transparent 65%); animation: glow 2.4s ease-in-out infinite; }
+@keyframes glow { 50% { opacity: .35; transform: scale(.94); } }
+.badge.sel { transform: scale(1.1); }
+.badge.sel .med::after { content: ""; position: absolute; inset: 3%; border-radius: 50%; box-shadow: 0 0 0 5px var(--gold-hi), 0 0 36px rgba(255,210,120,.85); }
+.badge.sel .nm { color: var(--gold-hi); }
+.badge:hover:not(.sel) { transform: scale(1.04); }
+
+/* info panel, right */
+.info { position: absolute; left: 900px; width: 940px; top: 590px; bottom: 40px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 34px; box-shadow: 0 20px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 18px; }
+.info .head { display: flex; align-items: center; gap: 20px; }
+.info .head img { width: 72px; height: 72px; object-fit: contain; }
+.info h2 { margin: 0; font: 44px "ChooserDisplay", serif; letter-spacing: .14em; color: var(--gold-hi); }
+.info .rules { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; gap: 6px 28px; }
+.info .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; }
+.info .foot .go { margin: 0; font-size: 32px; padding: 12px 56px; }
+.info .rules li { position: relative; padding-left: 30px; font-size: 25px; line-height: 1.4; color: #ece0c6; }
+.info .rules li::before { content: ""; position: absolute; left: 6px; top: .55em; width: 12px; height: 12px; border-radius: 50%; background: #c9a46a; }
+.info .rules li.nw { color: var(--gold-hi); }
+.info .rules li.nw::before { background: #ffd27a; box-shadow: 0 0 10px rgba(255,210,120,.8); }
+.info .new-unused { font-size: 34px; line-height: 1.4; padding: 14px 20px; border-radius: 12px; background: rgba(122,45,45,.45); border-left: 6px solid #e0805a; }
+.info .new b, .info .old b { display: block; font-size: 20px; letter-spacing: .1em; font-weight: 400; margin-bottom: 6px; }
+.info .new b { color: #f2b59a; } .info .old b { color: var(--ink2); }
+.info .old ul { margin: 0; padding-left: 1.2em; font-size: 23px; line-height: 1.6; color: #d9cbb0; }
+.info .rec { font-size: 24px; }
+.chip { display: inline-block; padding: 4px 16px; border-radius: 999px; margin-right: 10px; }
+.c-clear { background: #3f6b3a; } .c-true { background: linear-gradient(90deg, #a77a1c, #f1cd68); color: #2a1a00; } .c-last { background: #4a3a4e; } .c-new { background: #2d4a6b; } .c-lock { background: #333; color: #999; }
+.go { align-self: center; margin-top: auto; font: 40px "ChooserDisplay", serif; letter-spacing: .2em; padding: 18px 80px; border-radius: 14px; border: 2px solid #e2a77a; color: #fff; background: linear-gradient(180deg, #a63c3c, #6e2222); box-shadow: 0 8px 20px rgba(0,0,0,.5); cursor: pointer; }
+.go:disabled { filter: grayscale(1) brightness(.6); cursor: default; }
+
+/* 小铃, bottom-left under the badges: upper body, the rest below the frame; a gentle bob like her stands */
+.fairy { position: absolute; left: 20px; bottom: -40px; width: 640px; height: 900px; z-index: 0; pointer-events: none; animation: bob 3.2s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-10px); } }
+.fairy .fanim, .fairy > img { width: 100%; height: 100%; filter: drop-shadow(0 0 24px rgba(255,190,120,.25)); }
+.fairy > img { object-fit: contain; object-position: bottom center; }
+.say { position: absolute; left: 110px; top: 305px; width: 460px; z-index: 2; padding: 18px 26px; border-radius: 16px; background: rgba(16,12,22,.94); border: 1px solid var(--line); font-size: 27px; line-height: 1.5; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.say::before { content: ""; position: absolute; left: 50%; bottom: -14px; margin-left: -14px; border: 14px solid transparent; border-top-color: rgba(16,12,22,.94); border-bottom: 0; }
+.say b { display: block; font: 22px "ChooserDisplay", serif; color: var(--gold-hi); letter-spacing: .1em; }
+/* the layered fairy (copied from style.css: .fanim) */
+.fanim { display: block; position: relative; }
+.fanim .fa-l { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; visibility: hidden; }
+.fanim .fa-body, .fanim[data-f="1"] .fa-w1, .fanim[data-f="2"] .fa-w2, .fanim[data-f="3"] .fa-w3, .fanim[data-f="4"] .fa-w4, .fanim[data-f="5"] .fa-w5, .fanim[data-f="6"] .fa-w6,
+.fanim[data-b="1"] .fa-k1, .fanim[data-b="2"] .fa-k2 { visibility: visible; }
+.note { position: absolute; right: 24px; bottom: 14px; font-size: 18px; color: #9a8c78; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="title">选择难度</div>
+  <div class="grid" id="grid"></div>
+  <div class="fairy" id="fairy"></div>
+  <div class="say"><b>小铃</b><span id="say"></span></div>
+  <div class="info" id="info"></div>
+  <div class="note">样例 · 存档是假的 · 没接进游戏</div>
+</div>
+<script>
+var T = [
+  { n: '木头', say: '先从这里熟悉一下公会吧～', add: '基础难度：怪物比较弱，休息回 7 血，招人有 130 金币，只献祭一次。' },
+  { n: '青铜', say: '怪物的皮，好像厚了一点点。', add: '所有敌人生命 +2' },
+  { n: '白银', say: '夜里会睡不踏实哦。', add: '篝火休息少回 3 血' },
+  { n: '精钢', say: '公会的钱袋……紧起来了。', add: '招人只有 100 金币' },
+  { n: '黄金', say: '新人都不太情愿来呢。', add: '录用时每个人心情低一档' },
+  { n: '秘银', say: '首领们开始认真了！', add: '精英和首领威力 +1' },
+  { n: '山铜', say: '诅咒会更毒一点。', add: '诅咒卡加重一级' },
+  { n: '晶钻', say: '赏金缩水啦，省着点花。', add: '每场胜利少拿 2 金币' },
+  { n: '龙鳞', say: '首领们都穿上盔甲了。', add: '精英和首领开场带 6 点护甲' },
+  { n: '星辰', say: '到这里，大家都在拼命了。', add: '所有敌人威力 +1' }
+];
+var ST = [{ trueEnd: 1, cleared: 1 }, { cleared: 1 }, { cleared: 1 }, { cleared: 1 }, { cleared: 1 }, { last: 7 }, { locked: 1 }, { locked: 1 }, { locked: 1 }, { locked: 1 }];
+var sel = 5, icon = function (i) { return '../art/cells/ui-icons/tier-' + i + '.png'; };
+function render() {
+  document.getElementById('grid').innerHTML = T.map(function (t, i) {
+    var s = ST[i];
+    return '<button class="badge' + (s.locked ? ' locked' : '') + (s.cleared ? ' cleared' : '') + (s.trueEnd ? ' trueEnd' : '') + (i === sel ? ' sel' : '') + '" data-i="' + i + '"><span class="med"><img src="' + icon(i) + '" alt=""><span class="tick"></span></span><span class="nm">' + t.n + '</span></button>';
+  }).join('');
+  var s = ST[sel], t = T[sel], h;
+  if (s.locked) {
+    h = '<div class="head"><img src="' + icon(sel) + '" alt="" style="filter:grayscale(1) brightness(.35)"><h2>' + t.n + '</h2></div><div class="foot"><div class="rec"><span class="chip c-lock">先通关「' + T[sel - 1].n + '」才能打开</span></div><button class="go" disabled>就这个难度</button></div>';
+    document.getElementById('say').textContent = '那边还看不清……先把前面的打通吧。';
+  } else {
+    var rules = []; for (var k = 1; k <= sel; k++) rules.push(T[k].add); if (!sel) rules = ['适合第一次玩，放心冒险吧'];
+    var rec = (s.trueEnd ? '<span class="chip c-true">真结局</span>' : '') + (s.cleared ? '<span class="chip c-clear">已通关</span>' : s.last ? '<span class="chip c-last">上次倒在第 ' + s.last + ' 关</span>' : '<span class="chip c-new">还没打过</span>');
+    h = '<div class="head"><img src="' + icon(sel) + '" alt=""><h2>' + t.n + '</h2></div>' +
+      '<ul class="rules" style="grid-template-rows: repeat(' + Math.ceil(rules.length / 2) + ', auto)">' + rules.map(function (x, j) { return '<li' + (sel && j === rules.length - 1 ? ' class="nw"' : '') + '>' + x + '</li>'; }).join('') + '</ul>' +
+      '<div class="foot"><div class="rec">' + rec + '</div><button class="go">就这个难度</button></div>';
+    document.getElementById('say').textContent = t.say;
+  }
+  document.getElementById('info').innerHTML = h;
+}
+document.addEventListener('click', function (e) { var b = e.target.closest('.badge'); if (b) { sel = +b.dataset.i; render(); } });
+// 小铃: the game's layered stack (wings + body + blink), driven by the same timing helpers; static fairy.png if anything fails
+(function () {
+  var A = window.ChooserAssets || window.A || window.CHOOSER_ASSETS, box = document.getElementById('fairy');
+  if (!A || !A.fairyAnimHtml) { box.innerHTML = '<img src="../art/portraits/fairy.png" alt="">'; return; }
+  box.innerHTML = A.fairyAnimHtml('fairy', '', '小铃');
+  var n = box.querySelector('.fanim'), t0 = performance.now(), nextBlink = t0 + A.fairyBlinkGap(), blinkAt = -1;
+  box.querySelectorAll('img').forEach(function (im) { im.onerror = function () { box.innerHTML = '<img src="../art/portraits/fairy.png" alt="">'; n = null; }; });
+  (function tick(now) {
+    if (!n) return;
+    n.dataset.f = A.fairyFrameAt('fairy', now - t0);
+    if (blinkAt < 0 && now >= nextBlink) blinkAt = now;
+    if (blinkAt >= 0) { var b = A.fairyBlinkAt(now - blinkAt); n.dataset.b = b; if (b === 0 && now - blinkAt > 60) { blinkAt = -1; nextBlink = now + A.fairyBlinkGap(); } }
+    requestAnimationFrame(tick);
+  })(t0);
+})();
+function fit() { var w = innerWidth, h = innerHeight, s = Math.min(w / 1920, h / 1080), st = document.getElementById('stage'); st.style.transform = 'scale(' + s + ')'; st.style.left = (w - 1920 * s) / 2 + 'px'; st.style.top = (h - 1080 * s) / 2 + 'px'; }
+addEventListener('resize', fit); fit(); render();
+</script>
+</body>
+</html>

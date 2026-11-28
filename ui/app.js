@@ -39,6 +39,9 @@
   // 2026-11-19 意图预告: each enemy card shows whom it hits this round (faces / a group-hit shape / a heal shape, no letters);
   // each ally card a red 准星 corner when aimed (a numeral when more than one); the formation shows round 1. false (or ?intent=0) = none
   var INTENT_UI = Q.get('intent') ? Q.get('intent') === '1' : true;
+  // 2026-11-25 意图 v2 (用户「意图显示在敌人卡片下方，学杀戮尖塔」, 样板 ui/dev/mock-intent.html): the engine's intent2 lines — enemy plate under
+  // the card (招式 + 真实伤害 + 目标头像, >3 人 = 全体), ours above the card (no numbers). Switch: ☰ 游戏 (prefs.intent2, default on) or ?intent2=0|1
+  function intent2On() { var q = Q.get('intent2'); return q ? q === '1' : prefs.intent2 !== false; }
   // 2026-11-19 用户亲测 界面: 开战前不能知道谁在瞄准 — the formation draws nothing of round 1 (the engine's v.preIntent is kept,
   // just not rendered). true = the old faces on the 「?」 cards + 准星 on our formation cards
   var PRE_INTENT_UI = false;
@@ -200,12 +203,13 @@
   // 2026-11-19 战报 XP 栏 (用户「+XP 在战报里显示，不要刚结束、还没出战报就冒泡升级」): true = the battle's +XP / level-ups are a
   // column in the result table and the 'battle:xp' stat bubbles are not played; false = the old bubbles, no column.
   var XP_IN_REPORT = true;
+  var SAC_SPIN_INTRO = 1000; // 2026-11-26 用户「随机的开始，四个人每个人过一下（假装选到 1s），左边出她的立绘，然后开始随机选框」: ms per girl; 0 = old (spin at once)
   var SAC_SPIN = true; // 2026-11-19 交给规则·老虎机: the frame cycles the cards before the engine's pick is revealed (false = the old instant reveal)
   var prefs = lsGet(PKEY, { speed: 2, auto: false });
   // 2026-11-20 用户「x2 现在是默认，再给 x0.5 和 x1.5（旧的 x1 x3）」: the three speeds keep their real pace (SPD 0.7 / 1 / 2);
   // they are now called ×0.5 / ×1 / ×1.5 and the middle one (old ×2) is the default — once, for saves made before this
-  if (prefs.speedV !== 2) { prefs.speedV = 2; prefs.speed = 2; lsSet(PKEY, prefs); }
-  var SPD_NAME = { 1: '0.5', 2: '1', 3: '1.5' };
+  if (prefs.speedV !== 3) { prefs.speedV = 3; prefs.speed = 1; lsSet(PKEY, prefs); } // v3: ×1 / ×2 / ×4, everyone starts at ×1
+  var SPD_NAME = { 1: '1', 2: '2', 3: '4' }; // 2026-11-27 用户「最高 4 倍」: the label is the real speed (was 0.5 / 1 / 1.5 on 0.7 / 1 / 2)
   function spdName(n) { return '×' + (SPD_NAME[n] || n); }
   // v2.4 [15]: auto-continue is a fresh opt-in (prefs.autoCont, default off); an old saved prefs.auto no longer applies
   if (prefs.autoCont == null) prefs.autoCont = false;
@@ -676,6 +680,7 @@
     if (gallery) cue('gallery', null, 1500);
     if (ui.onSpeak) ui.onSpeak(sid, l);
     if (l.onShow) l.onShow(l);
+    else if (l.text && new RegExp(T('ui.dialog.bellRe')).test(l.text)) cue('bell', null, 0); // 2026-11-27 用户「小铃出现的时候叮铃一下，出音效」: a line that says 叮铃 rings (a line with its own onShow cues itself)
     var el = $('vnText'), txt = fixWords(l.text), i = 0;
     if (REDUCED || txt.length < 2) { el.textContent = txt; return; }
     vn.typing = true; vnEl.classList.add('typing');
@@ -693,6 +698,7 @@
     if (e.target.closest && e.target.closest('.story-skip')) { e.preventDefault(); e.stopPropagation(); cue('advance'); storySkip(); return; } /* 2026-11-15 跳过剧情 */
     if (!vnActive()) return;
     if (e.target.closest && e.target.closest('.vn-pass')) return;
+    if (modalEl && !modalEl.hidden) return; // 2026-11-27 用户「出来确认 box 的时候点 button 变成过对话，box 卡住」(顾问升级 / 祝福统计 / 三铃解锁): an open box gets its own clicks; the line waits
     e.preventDefault(); e.stopPropagation(); vnAdvance();
   }, true);
 
@@ -700,12 +706,34 @@
   function stages(list) { // list of [fn, ms]; click skips to the next stage
     return function (done, it) {
       var i = -1, t = null;
-      function next() { clearTimeout(t); i++; if (i >= list.length) { done(); return; } var s = list[i]; s[0](); t = setTimeout(next, REDUCED ? Math.min(s[1], 400) : s[1]); }
+      function next() { clearTimeout(t); i++; if (i >= list.length) { done(); return; } var s = list[i]; s[0](); t = setTimeout(next, REDUCED && s[2] !== 'noskip' ? Math.min(s[1], 400) : s[1]); } // a 'noskip' beat keeps its full time (2026-11-26 用户「……吗 没有出现就过去了」)
       it.skip = function () { if (list[i] && list[i][2] === 'noskip') return; next(); };
       next();
     };
   }
   function cine(cls, html) { cineEl.className = 'cine ' + cls; cineEl.innerHTML = html || ''; void cineEl.offsetWidth; }
+  // 2026-11-26 用户「被白手套拖走」: her own picture (art/scenes/dragged-<id>.png) full screen; two girls = side by side. DRAGGED_CG false = off.
+  var DRAGGED_CG = true;
+  // 2026-11-26 用户「图片没有带剧情和字，给得太直了，要灰暗 / 动效 / 渐入渐出」: dim + desaturated, a slow push-in, dark edges,
+  // and the line as a caption under it (cap); the picture fades in, holds, and sinks into the dark
+  function draggedHtml(ids, cap) {
+    ids = (ids || []).filter(function (id) { return A.isCandidate(id) || id === 'leader'; });
+    if (!ids.length) return '';
+    return '<div class="dragged-cg n' + ids.length + '">' + ids.map(function (id) { return '<div class="dg-frame dg-' + esc(id) + '">' + pic(A.scene('dragged-' + id), 'dg-img', '', '') + '</div>'; }).join('') +
+      '<i class="dg-vig"></i>' + (cap ? '<div class="dg-cap">' + esc(cap) + '</div>' : '') + '</div>';
+  }
+  function draggedCap(ids) {
+    var names = (ids || []).filter(function (id) { return A.isCandidate(id); }).map(function (id) { return nameOf(id); });
+    return names.length ? T(names.length > 1 ? 'ui.sacrifice.draggedCapMany' : 'ui.sacrifice.draggedCap', { name: names.join(T('engine.list.comma')) }) : '';
+  }
+  function draggedFx(ids, cap) {
+    var h = draggedHtml(ids, cap);
+    return stages([
+      [function () { cine('dragged', h); requestAnimationFrame(function () { cineEl.classList.add('on'); }); }, 4600],
+      [function () { cineEl.classList.add('sink'); }, 1200],
+      [function () { cineOff(); }, 900]
+    ]);
+  }
   function cineOff() { cineEl.classList.add('out'); setTimeout(function () { if (cineEl.classList.contains('out')) { cineEl.className = 'cine'; cineEl.innerHTML = ''; } }, 900); }
   function darkFx(reason, nextView) {
     return stages([
@@ -756,12 +784,14 @@
         [function () { cine('sac sw on write', swHtml); }, 1300 + 420 * nm.length],
         [function () { cineEl.classList.add('face'); }, 2600],
         [function () { cineEl.classList.add('cut'); cue('nameStrike'); }, 2600],
+        [function () { if (DRAGGED_CG) cine('sac dragged on', draggedHtml(goneIds, draggedCap(goneIds))); }, DRAGGED_CG ? 4600 : 0],
+        [function () { if (DRAGGED_CG) cineEl.classList.add('sink'); }, DRAGGED_CG ? 1200 : 0],
         [function () { cine('sac s3 on', rowHtml); }, 3000],
         [function () { setRain(1); cineOff(); }, 900]
       ]);
     }
     return stages([
-      [function () { var l = app.querySelector('.sac-left'); if (l) l.classList.add('gone'); setRain(2.2); cine('sac s1' + (random ? ' random' : ''), random ? '<div class="sc-taken">' + pic(A.scene('taken'), 'sc-scene', '', '') + '</div>' : '<div class="sc-drain">' + bust + '</div>'); requestAnimationFrame(function () { cineEl.classList.add('on'); }); }, 3200],
+      [function () { var l = app.querySelector('.sac-left'); if (l) l.classList.add('gone'); setRain(2.2); cine('sac s1' + (random ? ' random' : ''), random ? (DRAGGED_CG && goneIds.length && goneIds.every(function (g) { return A.isCandidate(g); }) ? draggedHtml(goneIds, draggedCap(goneIds)) : '<div class="sc-taken">' + pic(A.scene('taken'), 'sc-scene', '', '') + '</div>') : '<div class="sc-drain">' + bust + '</div>'); requestAnimationFrame(function () { cineEl.classList.add('on'); }); }, random && DRAGGED_CG ? 5200 : 3200],
       [function () { cine('sac s2 on', listHtml); }, 1000],
       [function () { cineEl.classList.add('strike'); cue('nameStrike'); }, 2600],
       [function () { cine('sac s3 on', rowHtml); }, 3000],
@@ -792,14 +822,18 @@
       var plan = A.spinPlan(rows.length, ti, REDUCED), k = -1, t = null, over = false;
       app.classList.add('sac-spinning'); rows.forEach(function (r) { r.classList.remove('sel'); });
       function light(i) { rows.forEach(function (r, j) { r.classList.toggle('spin-on', j === i); }); }
+      var left = app.querySelector('.sac-left');
+      function bust(i) { if (!left) return; left.innerHTML = i < 0 ? '' : '<div class="sac-bust tone-none">' + pic(A.portrait(ids[i]), 'stand-img', nameOf(ids[i]), '') + '</div>'; }
       function finish() { if (over) return; over = true; clearTimeout(t); app.classList.remove('sac-spinning'); rows.forEach(function (r) { r.classList.remove('spin-on', 'spin-lock'); }); done(); }
       function land() {
-        clearTimeout(t); k = plan.length; light(ti); rows[ti].classList.add('spin-lock'); cue('pick', null, 0);
+        clearTimeout(t); k = plan.length; light(ti); bust(ti); rows[ti].classList.add('spin-lock'); cue('pick', null, 0);
         it.skip = finish; t = setTimeout(finish, A.SAC_SPIN_LOCK);
       }
       function step() { k++; if (k >= plan.length) { land(); return; } light(plan[k].index); cue('chargeTick', { n: 2 }, 20); if (k === plan.length - 1) { land(); return; } t = setTimeout(step, plan[k + 1].delayMs); }
       it.skip = land;
-      t = setTimeout(step, plan[0].delayMs);
+      var per = REDUCED ? Math.min(400, SAC_SPIN_INTRO) : SAC_SPIN_INTRO, q = -1;
+      function intro() { q++; if (q >= rows.length) { light(-1); bust(-1); t = setTimeout(step, plan[0].delayMs); return; } light(q); bust(q); cue('pick', null, 0); t = setTimeout(intro, per); } // each girl in turn, as if picked
+      if (per > 0) intro(); else t = setTimeout(step, plan[0].delayMs);
     };
   }
   function withFarewell(fx, ids) { return function (done, it) { sacLock(); fx(function () { sacFarewellStage(ids); done(); }, it); }; }
@@ -913,6 +947,48 @@
   // One page per level-up: her portrait, Lv a → b, the rows that changed (威力 +1 / 生命上限 +N / 技能 old → new), and her line
   // 「我感觉自己的训练有了效果！」. It is a blocking effect in the dialogue queue: a tap / Enter / Space = the next page; 跳过剧情
   // and 快速模式 pass it. Items: lvUpFromGain (the engine's xpGainFor of a battle) / lvUpFromEvent (a statChange with a level).
+  function advisorUpBox(au) {
+      lvUpCue(); setTimeout(function () { cue('bell', null, 0); }, 350); // 2026-11-27 用户「升级框出现的时候也要有音效」: the level-up chime + her bell
+      modal('<div class="adv-up">' + pic(A.portrait(au.id), 'au-stand', esc(au.name), '') + '<div class="au-body"><h2>' + T('ui.advisorUp.title') + '</h2>' + // 2026-11-27 用户「顾问在左侧，右侧是介绍，也不要划掉」
+        '<p class="au-skill"><b>' + esc(au.name) + '</b>「' + esc(au.skill) + '」</p>' +
+        '<div class="au-rows"><p class="au-from"><span>' + T('ui.advisorUp.from') + '</span>' + richText(au.from) + '</p><p class="au-to"><span>' + T('ui.advisorUp.to') + '</span>' + richText(au.to) + '</p></div>' +
+        '<div class="row"><button class="btn btn-primary btn-lg" data-act="modalCancel">' + T('ui.bellDoor.gotIt') + '</button></div></div></div>');
+  }
+  function blessStatsBox(ev) { // 小铃的祝福: one formal box — every girl's row, 「威力 4 → 5」
+    var lab = { atk: ['power', T('ui.lvup.atk')], maxHp: ['maxhp', T('ui.lvup.maxHp')], fullAt: ['charge', T('ui.blessStats.fullAt')], hp: ['hp', T('ui.teamHurt.hp')] };
+    var rows = (ev.rows || []).map(function (r) {
+      var lead = isLeader(r.id), l = lab[r.stat] || ['level', r.stat];
+      return '<li class="bs-row"><span class="bs-face">' + pic(A.face(lead ? 'leader' : r.id, 'happy', { variant: lead && actNo() >= 3 ? 'worn' : 'base' }), 'bs-img', '', lead ? crestHtml() : initialHtml(r.name)) + '</span><b class="bs-name">' + esc(lead ? T('ui.name.you') : r.name) + '</b>' +
+        '<span class="bs-stat">' + A.glyph(l[0], false) + esc(l[1]) + '</span><span class="bs-v"><span class="bs-from">' + esc(r.from) + '</span><span class="bs-arrow">→</span><b class="bs-to">' + esc(r.to) + '</b></span></li>';
+    }).join('');
+    if (ev.hurt) cue('bigHit', null, 0); else lvUpCue();
+    modal('<div class="bless-stats' + (ev.hurt ? ' hurt' : '') + '"><h2>' + (ev.title ? esc(ev.title) : T('ui.blessStats.title', { card: esc(ev.card || '') })) + '</h2><ul class="bs-list">' + rows + '</ul>' +
+      '<div class="row center-row"><button class="btn btn-primary btn-lg" data-act="modalCancel">' + T('ui.bellDoor.gotIt') + '</button></div></div>');
+  }
+  // ===== 2026-11-27 用户「灰羽雕像从顶上散射曲线到其他卡片，表示它在护卫其他单位」(AURA_LINES) =====
+  // An SVG layer on the stage: one arc from the top of the card marked .aura-src (the engine's v.aura: a living dodgeAura unit)
+  // to the top of every card whose data-aura-by names it, with a light dot flowing along. auraSync() follows the cards (they move,
+  // fall); the statue gone → every line fades out (.aura-gone). auraFlash(uid): her line lights up when the aura made her graze.
+  var AURA_LINES = false, auraEl = null, auraTimer = null; // 2026-11-27 用户「箭头太奇怪了，还是算了，后面再改吧，hide 掉」(true = the arcs)
+  function auraSync() {
+    if (!AURA_LINES) return;
+    var src = app.querySelector('.bcard.foe.aura-src'), tgts = src ? [].slice.call(app.querySelectorAll('.bcard.foe[data-aura-by="' + sel(src.dataset.u) + '"]')) : [];
+    if (!src || !tgts.length) { if (auraEl && !auraEl.classList.contains('aura-gone')) { var g = auraEl; g.classList.add('aura-gone'); setTimeout(function () { if (g.parentNode) g.remove(); if (auraEl === g) auraEl = null; }, 900); } return; }
+    var pt = function (c, fy) { var p = stagePt(c, 0.5, fy); return [p.x, p.y]; }; // stage coordinates (also right on a turned phone)
+    var s0 = pt(src, 0.03), paths = '', dots = '';
+    tgts.forEach(function (c, i) {
+      var t0 = pt(c, 0.05), dx = Math.abs(t0[0] - s0[0]), my = Math.min(s0[1], t0[1]) - 70 - dx * 0.03, mx = (s0[0] + t0[0]) / 2;
+      var d = 'M' + s0[0].toFixed(0) + ',' + s0[1].toFixed(0) + ' Q' + mx.toFixed(0) + ',' + my.toFixed(0) + ' ' + t0[0].toFixed(0) + ',' + t0[1].toFixed(0);
+      paths += '<path class="al-ln" data-to="' + esc(c.dataset.u) + '" d="' + d + '"/>';
+      dots += '<circle class="al-dot" r="5"><animateMotion dur="2.4s" begin="' + (i * 0.4).toFixed(1) + 's" repeatCount="indefinite" path="' + d + '"/></circle><circle class="al-end" cx="' + t0[0].toFixed(0) + '" cy="' + t0[1].toFixed(0) + '" r="5"/>';
+    });
+    var html = paths + (REDUCED ? '' : dots) + '<circle class="al-src" cx="' + s0[0].toFixed(0) + '" cy="' + s0[1].toFixed(0) + '" r="10"/>';
+    if (!auraEl || auraEl.classList.contains('aura-gone')) { auraEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); auraEl.setAttribute('class', 'aura-lines'); auraEl.setAttribute('viewBox', '0 0 ' + STAGE_W + ' 1080'); auraEl.setAttribute('aria-hidden', 'true'); stageEl.insertBefore(auraEl, fxLayer); }
+    if (auraEl._html !== html) { auraEl.innerHTML = html; auraEl._html = html; }
+  }
+  function auraFlash(uid) { if (!auraEl) return; var p = auraEl.querySelector('.al-ln[data-to="' + sel(uid) + '"]'); if (!p) return; p.classList.remove('flash'); void p.getBBox(); p.classList.add('flash'); setTimeout(function () { p.classList.remove('flash'); }, 700); }
+  function auraLoop() { if (auraTimer) return; auraTimer = setInterval(function () { if (document.body.dataset.phase !== 'battle' && document.body.dataset.phase !== 'battleResult') { if (auraEl) { auraEl.remove(); auraEl = null; } return; } auraSync(); }, 250); }
+  if (AURA_LINES) auraLoop();
   function lvUpName(id) { return isLeader(id) ? T('ui.name.you') : (member(id) || {}).name || nameOf(id); }
   function lvUpFromGain(id, g) {
     if (!g || !(g.up > 0 || g.over > 0)) return null;
@@ -1003,6 +1079,7 @@
       }
       if (ev.kind === 'sideEffect') return; // batch6 H2-3: no toast bubble over their heads after 认同 (the effect is already on the quote and on her panel).
       if (ev.kind === 'statChange' && ev.source === 'battle:xp' && XP_IN_REPORT) return;
+      if (ev.kind === 'blessStats') { var bs = ev; say([{ speaker: 'narrator', speakerId: 'narrator', name: '', text: T('ui.blessStats.line') }]); sayFx(boxFx(function () { blessStatsBox(bs); })); return; } // 2026-11-27 用户「谁的啥从 x 到 y，正式一点的提示框」
       if (ev.kind === 'statChange' && ev.source === 'blessing') { var blu = LEVELUP_PAGE ? lvUpFromEvent(ev) : null; if (blu) ups.push(blu); return; } // 2026-11-19 用户亲测 界面: a level from the blessing → its page // 2026-11-19 流程修 M5: the blessing card already says 「全队 +X」 — no 5–6 bubbles before bellBlessingAfter // 2026-11-19 战报 XP 栏: shown in the result table
       if (ev.kind === 'statChange') {
         var glu = LEVELUP_PAGE ? lvUpFromEvent(ev) : null; // 2026-11-19 用户亲测 界面: no level-up bubble — the page says it; the bubble keeps the other rows
@@ -1068,8 +1145,9 @@
     var seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0, meta = loadMeta(); vnClear(); replayed = {};
     var nameIn = $('leaderName'), nm = String((nameIn && nameIn.value) || prefs.leaderName || '').trim().slice(0, 8);
     if (!nm) nm = randName(); prefs.leaderName = nm; lsSet(PKEY, prefs); // v2.4 [4]
-    var co = { seed: seed, leaderName: nm, pickDifficulty: true }; if (meta) co.meta = meta;
-    { var asc = +(new URLSearchParams(location.search).get('asc') || 0); if (asc > 0) co.ascension = asc; } // 2026-11-24 进阶: ?asc=N (new games only) // v2.5: the fairy asks for a tier
+    var co = { seed: seed, leaderName: nm, pickDifficulty: true, meta: meta || {} }; // 2026-11-25 BELL_UNLOCK: always a meta, so a first-ever run has no bells
+    { var asc = +(new URLSearchParams(location.search).get('asc') || 0); if (asc > 0) co.ascension = asc; }
+    if (new URLSearchParams(location.search).get('defend') === '1') co.defend = true; // 2026-11-25 防御姿态 (test rule): ?defend=1, new games only // 2026-11-24 进阶: ?asc=N (new games only) // v2.5: the fairy asks for a tier
     run = E.createRun(DATA, co);
     pl('runStart', { seed: seed, keysCheat: !!(opts && opts.keys) });
     if (opts && opts.keys) { try { run = E.act(DATA, run, { type: 'cheatKeys' }); pl('event', 'cheat', { what: 'keys' }); } catch (e) { notice(T('ui.cheat.keysUnsupported')); } }
@@ -1157,7 +1235,8 @@
     var post = opts && opts.post ? opts.post(prevView, nv) : null; if (post) sayFx(post); // v2.4: an exit that plays after the action's lines
     if (RELIC_GAIN_FX) { // 2026-11-25 获得遗物 / 铃铛: its card, then the fly — but a story that tells it (「你获得了反抗之铃」) plays first:
       relicHeld = relicHeld.concat(newRelics(prevView, nv)); // while the next screen is a story, the card waits until the story is over
-      if (nv.phase !== 'story') { relicHeld.forEach(function (r) { sayFx(relicGainFx(r)); }); relicHeld = []; }
+      var bellToldDone = prevView && prevView.phase === 'story' && (prevView.lines || []).some(function (l) { return l && l.bellGot; }); // 2026-11-27 用户「公正之铃的获得和收入遗物的动画得在小铃出现之前」: the story that told it is over → its card now, before the next story (小铃)
+      if (nv.phase !== 'story' || bellToldDone) { relicHeld.forEach(function (r) { sayFx(relicGainFx(r)); }); relicHeld = []; }
     }
     if (sceneChanged(prevView, nv)) sayFx(fadeFx(nv.level === 3 && prevView.level !== 3)); // §E3 / §E15
     say([], function () { app.classList.remove('stale'); render(); });
@@ -1292,6 +1371,7 @@
       '<label class="mn-row"><span class="mn-k">' + T('ui.sound.sfx') + '</span><input type="range" min="0" max="100" value="' + Math.round(vol.sfx * 100) + '" data-snd="sfx"></label>';
     var game = '<div class="mn-row"><span class="mn-k">' + T('ui.menu.speed') + '</span>' + [1, 2, 3].map(function (n) { return '<button class="pill-btn' + (prefs.speed === n ? ' on' : '') + '" data-act="speed" data-s="' + n + '">' + spdName(n) + '</button>'; }).join('') + '</div>' +
       '<label class="mn-row"><input type="checkbox" data-pref="autoCont"' + (prefs.autoCont ? ' checked' : '') + '> ' + T('ui.menu.autoCont') + '</label><p class="mn-note">' + T('ui.menu.autoContNote') + '</p>' +
+      '<label class="mn-row"><input type="checkbox" data-pref="intent2"' + (intent2On() ? ' checked' : '') + '> ' + T('ui.menu.intent2') + '</label>' + // 2026-11-25 意图 v2 switch
       (run ? '' : '<div class="mn-row"><button class="btn btn-secondary" data-act="replayIntro">' + T('ui.title.replayIntro') + '</button></div>') +
       (window.CHOOSER_FGUIDE ? '<div class="mn-row"><button class="btn btn-secondary" data-act="fguide">' + T('ui.fguide.menu') + '</button></div>' : ''); // 布阵教学: reopen the pages
     var log = (PL ? '<div class="mn-row"><button class="btn btn-secondary" data-act="plExport">' + T('ui.playlog.export') + '</button>' +
@@ -1597,9 +1677,10 @@
     return '<div class="side-door bell-door' + (d.open ? ' sd-open' : ' sd-plain') + '" id="sideDoor" aria-label="' + esc(T('ui.door.label')) + '"><div class="sd-frame"><div class="sd-slots">' +
       (d.slots || []).map(function (s, i) {
         var tip = esc(bellSlotTip(s));
+        if (d.reveal) return '<span class="sd-slot bd-slot missing" style="--i:' + i + '" aria-hidden="true">' + pic(A.relicIcon('bell', s.key), 'bd-bell', '', A.doorGlyph('bell')) + '</span>'; // BELL_UNLOCK: the first sight, no tip
         return '<span class="sd-slot bd-slot' + (s.got ? ' got' : ' missing') + '" style="--i:' + i + '" tabindex="0" role="img" aria-label="' + tip + '" data-tip="' + tip + '" data-info="' + tip + '">' + pic(A.relicIcon('bell', s.key), 'bd-bell', '', A.doorGlyph('bell')) + '</span>';
       }).join('') + '</div><i class="sd-ring" aria-hidden="true"></i></div>' +
-      '<div class="bd-count">' + esc(T('ui.door.bell.count', { n: d.have, total: d.total })) + '</div><p class="bd-info" id="bellDoorInfo" aria-live="polite"></p>' +
+      (d.reveal ? '' : '<div class="bd-count">' + esc(T('ui.door.bell.count', { n: d.have, total: d.total })) + '</div><p class="bd-info" id="bellDoorInfo" aria-live="polite"></p>') +
       '<div class="sd-go" id="sideDoorGo" hidden><button class="btn btn-primary btn-lg" data-act="' + (d.open ? 'openDoor' : 'passDoor') + '">' + esc(T(d.open ? 'ui.door.enter' : 'ui.door.pass')) + '</button>' +
       (d.open && DOOR_SKIP ? '<button class="btn btn-secondary btn-lg" data-act="skipDoor">' + esc(T('ui.door.skip')) + '</button>' : '') + '</div></div>'; // 2026-11-21 用户「门可以进也可以不进，两个选项都提供」
   }
@@ -1651,8 +1732,9 @@
         if (l.fx === 'costume' && COSTUME_FX) { sayFx(costumeFx(v, l.text)); return; } // 2026-11-21 her true self: its own scene, the line as its caption
         if (l.fx === 'gateSlam') { sayFx(gateSlamFx(l.text)); return; } // feedback-1112 #7: its own screen, the text as its caption
         if (v.storyId === 'teamAssembled' && (l.speaker === 'leader' || l.speakerId === 'leader') && nRc) sayFx(leaderRallyFx());
+        if (DRAGGED_CG && v.storyId === 'rejectedDefeat' && l.fx === 'dragged') { sayFx(draggedFx((v.lines || []).map(function (x) { return x && (x.speakerId || x.speaker); }).filter(function (id, i, a) { return id && A.isCandidate(id) && a.indexOf(id) === i; }), l.text)); return; } // the white-glove line is the caption
         if (l.text && l.speaker !== 'narrator') lastText = l.text;
-        var o = storyLine(l, v); if (o) say([o]);
+        var o = storyLine(l, v); if (o && !o.boxOnly) say([o]); if (o && o.box) sayFx(boxFx(o.box)); // 2026-11-27 用户「把 box 也变成对话流的一部分」: the box is a step — the next line waits for 知道了
       });
       if (v.storyId === 'trueEnding') { flashWhite(900, 'cut'); cue('turncoat', null, 0); } // the cabinet shatters: hard cut to the broken chamber
       if (v.storyId === 'trueDoor' || v.storyId === 'bellFollowed' || v.storyId === 'nobleChamber') later(function () { cue('bell', { act: actNo() }, 0); }, 400);
@@ -1667,12 +1749,37 @@
   };
   function storyLine(l, v) {
     var o = normLine(l); if (!o) return null;
+    if (l && l.unlock === 'bellDoor') o.box = function () { // 2026-11-25 BELL_UNLOCK (用户「正式一点的大 info box，讲解一下」): the unlock box, closed by 【知道了】
+      cue('confirm', null, 0);
+      modal('<div class="bell-unlock">' + pic(A.relicIcon('bell', 'bell'), 'bu-bell', '', A.doorGlyph('bell')) + '<h2>' + T('ui.bellDoor.unlocked') + '</h2>' +
+        '<p>' + T('ui.bellDoor.unlockBody1') + '</p><p>' + T('ui.bellDoor.unlockBody2') + '</p><p class="bu-note">' + T('ui.bellDoor.unlockBody3') + '</p>' +
+        '<div class="row center-row"><button class="btn btn-primary btn-lg" data-act="modalCancel">' + T('ui.bellDoor.gotIt') + '</button></div></div>');
+    };
+    if (o.fx === 'advisorUp' && v && v.advisorUp) o.boxOnly = true;
+    if (o.fx === 'advisorUp' && v && v.advisorUp) o.box = function () { advisorUpBox(v.advisorUp); }; // 2026-11-27 用户「弹出一个升级专门的 box」
+    // 2026-11-25 BELL_UNLOCK (用户「铃铛亮起来，三道光飞散到墓穴各处的动画」): the three bells on the door light up, then fly off as lights
+    if (o.fx === 'bellsWake') o.onShow = function () { var d = $('sideDoor'); if (d) d.classList.add('bd-wake'); cue('bell', null, 0); };
+    if (o.fx === 'bellsFly') o.onShow = function () {
+      var d = $('sideDoor'); if (!d) return;
+      var dirs = [[-760, -300], [40, -640], [820, -240]];
+      var d0 = stagePt(d, 0, 0); // stage px
+      d.querySelectorAll('.bd-slot').forEach(function (sl, i) { // on the door (a slot clips its content), at the slot's centre
+        var c = stagePt(sl, 0.5, 0.5), orb = document.createElement('i'); orb.className = 'bell-orb'; orb.setAttribute('aria-hidden', 'true');
+        orb.style.left = (c.x - d0.x) + 'px'; orb.style.top = (c.y - d0.y) + 'px';
+        orb.style.setProperty('--dx', dirs[i % 3][0] + 'px'); orb.style.setProperty('--dy', dirs[i % 3][1] + 'px'); orb.style.setProperty('--i', i);
+        d.appendChild(orb);
+      });
+      d.classList.add('bd-fly'); cue('chargeRelease', null, 0);
+      later(function () { d.classList.remove('bd-wake'); d.classList.add('bd-empty'); }, REDUCED ? 0 : 700);
+      later(function () { d.querySelectorAll('.bell-orb').forEach(function (n) { n.remove(); }); }, REDUCED ? 0 : 3400);
+    };
     if (o.fx === 'transform') o.onShow = function (x) { cue('transform', null, 0); flashWhite(1500); if (!$('stand') || !$('stand').querySelector('.stand.fairy-demon')) standShow('fairy-demon', x); };
     if (o.fx === 'shatter') o.onShow = function () { flashWhite(900, 'cut'); cue('turncoat', null, 0); setScene('noble-chamber-broken'); }; // 2026-11-24 用户「玩偶柜被打碎、碎了一地、大家都恢复的那张图从没出现过」: the l11After line cuts to the broken chamber
     if (o.fx === 'curse') o.onShow = function () { // feedback-1112 #7: the noble's curse — a dark-red flash, the stage shakes, the leader's hp halves
       cue('bigHit', null, 0); flashWhite(1100, 'curse'); stageEl.classList.add('quake'); setTimeout(function () { stageEl.classList.remove('quake'); }, 900);
-      if (v.curse && v.curse.hpFrom != null) statToast({ id: 'leader', changes: [{ stat: 'hp', from: v.curse.hpFrom, to: v.curse.hpTo }] });
+      if (v.curse && v.curse.hpFrom != null && !(v.curse.team && v.curse.team.length)) statToast({ id: 'leader', changes: [{ stat: 'hp', from: v.curse.hpFrom, to: v.curse.hpTo }] });
     };
+    if (o.fx === 'curse' && v.curse && v.curse.team && v.curse.team.length) o.box = function () { blessStatsBox({ title: T('ui.teamHurt.title'), rows: v.curse.team, hurt: true }); }; // 2026-11-27 用户「全队挨打…给个那种 box，所有人血量的降低」
     if (o.bellGot) { o.tone = 'brave'; o.onShow = function () { cue('bell', { act: actNo() }, 0); }; } // 2026-11-20 铃之门: 「你获得了xx之铃」
     if (A.isFairy(speakerId(o) || '') && o.expr === 'special' && v.storyId === 'fairyWelcome') o.tone = 'slip'; // the slip of the tongue
     return o;
@@ -1708,9 +1815,30 @@
   }
   function dfText(arr) { var l = (arr || [])[0]; return l ? (typeof l === 'string' ? l : l.text || '') : ''; }
   function dfStatus(t) { var b = A.dfBadge(t); return '<span class="df-st' + (b.cls ? ' ' + b.cls : '') + '">' + esc(b.text) + '</span>'; } // 2026-11-13: + 真结局 (glows)
+  // 2026-11-26 难度页 B3 (样板 ui/sample-tiers-m1.html; 用户「徽标都做上去，试玩版灰色不能选中」): badges top-right (the open tiers, then
+  // view.difficulties.future grey), the info panel under them (rules + record + 【就这个难度】), 小铃 bottom-left with the bubble. false = the old cards
+  var DF_B3 = true;
+  function dfB3Html(v) {
+    var D = v.difficulties, sel = ui.diff != null ? ui.diff : Math.min(D.unlocked, D.tiers.length - 1), cur = D.tiers[sel] || D.tiers[0];
+    ui.diff = cur.id;
+    var SP = '<i class="dfb-sp" style="left:2%;top:10%;animation-delay:0s"></i><i class="dfb-sp" style="right:0;top:28%;animation-delay:.7s"></i><i class="dfb-sp" style="left:20%;bottom:0;animation-delay:1.4s"></i>'; // 真结局 sparkles (CSS shows them on .true-end only)
+    var badge = function (cls, icon, name, attrs) { return '<button class="dfb' + cls + '"' + attrs + '><span class="dfb-med">' + pic(A.tierIcon(icon), '', '', '') + (cls.indexOf('true-end') >= 0 ? SP : '') + '<span class="dfb-tick"></span></span><span class="dfb-nm">' + esc(name) + '</span></button>'; };
+    var badges = D.tiers.map(function (t) {
+      return badge((t.locked ? ' locked' : '') + (t.cleared ? ' cleared' : '') + (t.trueEnd && !t.locked ? ' true-end' : '') + (t.id === cur.id ? ' sel' : ''), t.id, t.name, ' data-act="dfPick" data-id="' + t.id + '" data-opt="difficulty:' + t.id + '"' + (t.locked ? ' aria-disabled="true"' : ''));
+    }).concat((D.future || []).map(function (f) { return badge(' locked future', f.icon, f.name, ' data-act="dfFuture" aria-disabled="true" data-tip="' + esc(T('ui.difficulty.notYet')) + '"'); })).join('');
+    var prev = D.tiers[cur.id - 1];
+    var info = '<div class="dfb-head">' + pic(A.tierIcon(cur.id), 'dfb-hic' + (cur.locked ? ' off' : ''), '', '') + '<h2>' + esc(cur.name) + '</h2></div>' +
+      (cur.locked ? '<div class="dfb-foot"><span class="dfb-chip c-lock">' + esc(T('ui.difficulty.needPrev', { name: prev ? prev.name : '' })) + '</span><button class="btn btn-primary btn-lg dfb-go" disabled>' + T('ui.difficulty.go') + '</button></div>'
+        : '<ul class="dfb-rules"><li>' + esc(cur.text) + '</li></ul><div class="dfb-foot">' + dfStatus(cur) + '<button class="btn btn-primary btn-lg dfb-go" data-act="confirmDifficulty">' + T('ui.difficulty.go') + '</button></div>');
+    return '<div class="dfb-wrap"><div class="dfb-title">' + T('ui.difficulty.heading') + '</div><div class="dfb-rank">' + T('ui.difficulty.rank', { rank: esc(D.rank.text) }) + '</div>' +
+      '<div class="dfb-grid">' + badges + '</div><div class="dfb-info" id="dfbInfo">' + info + '</div>' +
+      '<div class="df-fairy"><span class="fs-bob">' + fairyPic('fairy', 'stand-img', T('ui.name.fairy')) + '</span></div>' + // 用户「字的位置跟之前不一样，挡住她自己了」: the old page's fairy + bubble, as they were
+      '<div class="df-bubble" id="dfBubble">' + dfAskHtml(D) + '</div></div>';
+  }
   SCREENS.difficulty = {
     plate: function () { return plate(T('ui.difficulty.plate')); },
     html: function (v) {
+      if (DF_B3) return dfB3Html(v);
       var D = v.difficulties, sel = ui.diff != null ? ui.diff : D.unlocked, cur = D.tiers[sel];
       ui.diff = sel;
       return '<div class="df-fairy"><span class="fs-bob">' + fairyPic('fairy', 'stand-img', T('ui.name.fairy')) + '</span></div>' +
@@ -2157,6 +2285,7 @@
       '<div class="shop-main">' + main + '</div>' +
       '<div class="shop-foot">' + (TOPBAR_SPLIT ? bagSlots(v.items) : bagChip(v.items, null)) + /* 2026-11-25: the same 5 slots as the top bar */ goldHtml(S.gold, 'big') + '<button class="btn btn-primary btn-lg" data-act="shopLeave">' + T('ui.shop.leave') + '</button></div></div>';
   }
+  var SHOP_CONFIRM = true; // 2026-11-26: false = one click buys (old)
   var SHOP_H = {
     shopLook: function () { if (!view || !view.shop || !view.shop.open) return; fluoIntro[shopKey(view)] = 'shop'; render(); }, // 「看看货」
     shopPick: function (d, t) {
@@ -2164,7 +2293,16 @@
       if (!o || ui.acted) return;
       if (o.sold || !o.affordable) { pulse(t, 'nope', 400); return; } // greyed: a small shake, the tip says why
       if (o.needsTarget) { ui.shopPick = o.id; ui.shopWho = null; render(); return; }
+      if (SHOP_CONFIRM) { // 2026-11-26 用户「商店购买物品的时候要有一个确认，不能点一下就买了」: items with no 「给谁」 step ask first
+        modal('<h2>' + esc(T('ui.shop.confirmTitle', { name: o.name })) + '</h2><p>' + cardFaceHtml({ text: o.text }) + '</p><p>' + shopPrice(o) + '</p><div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.rethink') + '</button><button class="btn btn-primary" data-act="shopBuyNow" data-id="' + esc(o.id) + '">' + T('ui.shop.buy') + '</button></div>');
+        return;
+      }
       ui.acted = 1; cue('reward', null, 0); if (!doAct({ type: 'shopBuy', itemId: o.id }, true)) ui.acted = 0;
+    },
+    shopBuyNow: function (d) {
+      closeModal();
+      if (!d.id || ui.acted) return;
+      ui.acted = 1; cue('reward', null, 0); if (!doAct({ type: 'shopBuy', itemId: d.id }, true)) ui.acted = 0;
     },
     shopWho: function (d, t) { if (t && t.classList.contains('has')) { pulse(t, 'nope', 400); return; } ui.shopWho = d.id; render(); },
     shopBack: function () { ui.shopPick = null; ui.shopWho = null; render(); },
@@ -2172,7 +2310,8 @@
       if (!d.id || !d.who || ui.acted) return;
       var o = ((view && view.shop && view.shop.offers) || []).filter(function (x) { return x.id === d.id; })[0];
       if (ringAsk(o && o.effect, d.who, d.side, function (side) { SHOP_H.shopBuy({ id: d.id, who: d.who, side: side }); })) return; // 2026-11-21 转向指环
-      ui.acted = 1; cue('reward', null, 0); if (!doAct({ type: 'shopBuy', itemId: d.id, target: d.who, side: d.side }, true)) ui.acted = 0;
+      ringWatch(o && o.effect, d.who);
+      ui.acted = 1; cue('reward', null, 0); if (!doAct({ type: 'shopBuy', itemId: d.id, target: d.who, side: d.side }, true)) ui.acted = 0; else ringNotice();
     },
     shopLeave: function () { if (ui.acted) return; ui.acted = 1; if (!doAct({ type: 'shopLeave' }, true)) ui.acted = 0; }
   };
@@ -2519,8 +2658,8 @@
     return new Promise(function (r) { if (anim.skip || REDUCED) return r(); var w = { r: r }; w.h = setTimeout(function () { waiters.splice(waiters.indexOf(w), 1); r(); }, ms / spd()); waiters.push(w); }).then(function () { chk(tok); });
   }
   // v2.3 [28]: ×1 is ~40% slower than the old ×1; the old ×1 is now ×2, the old ×2 is ×3
-  var SPD = { 1: 0.7, 2: 1, 3: 2 };
-  function spd() { return SPD[prefs.speed] || 0.7; }
+  var SPD = { 1: 1, 2: 2, 3: 4 }; // was { 1: 0.7, 2: 1, 3: 2 }
+  function spd() { return SPD[prefs.speed] || 1; }
   function flushWaits() { var ws = waiters; waiters = []; ws.forEach(function (w) { clearTimeout(w.h); w.r(); }); if (fxLayer.getAnimations) fxLayer.getAnimations({ subtree: true }).forEach(function (a) { try { a.finish(); } catch (e) { /* */ } }); }
   function dur(ms) { return anim.skip || REDUCED ? 1 : ms / spd(); }
   function sel(v) { return window.CSS && CSS.escape ? CSS.escape(String(v)) : v; }
@@ -2571,7 +2710,7 @@
     var turned = u.side === 'ally' && isTurned(u);
     var cls = 'ucard bcard ' + (u.side === 'ally' ? 'ally' : 'foe') + (isLeader(u) ? ' is-leader' : '') + (u.boss ? ' is-boss' : '') + (u.ward && hp > 0 ? ' warded' : '') + (u.grazeOn && hp > 0 ? ' graze-on' : '') /* 2026-11-23 用户「灵体状态要带蓝边」 */ + (A.isFairy(u.id) ? ' is-fairy' : '') + (turned ? ' turned' : u.corruption ? ' corrupt-' + u.corruption : '') +
       (hp <= 0 ? ' down' : '') + (hidden ? ' pre-enter' : '') + (u.side === 'ally' && hasBad(u.statuses) ? ' cursed' : '');
-    return '<div class="' + cls + '" data-u="' + esc(u.uid) + '" data-id="' + esc(u.id) + '" data-rich="' + esc(unitTip(u, u.side)) + '">' +
+    return '<div class="' + cls + (u.aura && hp > 0 ? ' aura-src' : '') + '"' + (u.auraBy && hp > 0 ? ' data-aura-by="' + esc(u.auraBy) + '"' : '') + ' data-u="' + esc(u.uid) + '" data-id="' + esc(u.id) + '" data-rich="' + esc(unitTip(u, u.side)) + '">' +
       '<div class="uc-art">' + pic(art.list, 'uc-img', u.name, art.fb) + (u.role ? roleBadge(u.role, 'uc-role') : '') + luckBadge(u.luck) + (m ? (CARD_POWER_TOP ? '' : moodFace(m)) + bondMark(m) : '') + (CARD_POWER_TOP && !turned ? powChip(cardPow(u, m), 'top', POWER_LIVE_UI ? u.powBase : null, POWER_LIVE_UI ? u.powParts : null) /* 2026-11-24 用户「战斗中移到威力上还是旧的 tooltip」: the source lines always ride along */ : '') + (u.corruption && !turned ? '<span class="corrupt-mark"></span>' : '') + (u.side === 'ally' ? debtDots(u.id) : '') + infoBtn(u.uid, u.id) + '</div>' +
       '<div class="uc-body">' + (u.side === 'ally' && !turned && !CARD_POWER_TOP ? powChip(u.atk != null ? u.atk : (m || {}).atk) : '') + '<div class="uc-name">' + esc(u.name || T('ui.name.you')) + '</div><div class="hpn">' + Math.max(0, hp) + ' / ' + esc(u.maxHp) + '</div>' +
       '<div class="hpwrap"><div class="hpbar' + (blk > 0 ? ' has-block' : '') + '"><div class="lag" style="width:' + pct + '%"></div><div class="fill" style="width:' + pct + '%"></div></div>' + blockBadge(blk) + '</div>' + chargeBar(u, chg) +
@@ -2601,7 +2740,7 @@
   function powChip(n, top, base, parts) { if (!CARD_POWER || n == null) return ''; var rh = powRich(n, base, parts); return '<span class="uc-pow' + (top ? ' uc-pow-top' : '') + powTone(n, base) + '" data-tip="' + esc(T('ui.card.powerTip', { n: n })) + '"' + (rh ? ' data-rich="' + esc(rh) + '"' : '') + '>' + A.glyph('power', false) + '<b>' + esc(n) + '</b></span>'; }
   // ===== v2.3 battle §D1: statuses as small icons, ×N when stacked; hover = name + effect =====
   var ST_GLYPH = lazy(function () { var o = {}; ['formation', 'clause', 'luck', 'overtime', 'luckUp', 'smoke', 'drum', 'slow-start', 'mood-low', 'debuffed', 'burn', 'sear', 'bless'].forEach(function (k) { o[k] = T('ui.status.glyph.' + k); }); return o; }); // 2026-11-19 文字修: + sear (焚痕)
-  var ST_SVG = { overtime: 'charge', luckUp: 'luck', /* 2026-11-20 BOSS_NEW_SKILLS: reuse the 充能 / 幸运 glyphs */ 'swap-skip': 'daze', /* 2026-11-19 换位/暂停连做: the 发呆 glyph, no letters; the name + tip come from keywords.status */ ward: 'cover', weak: 'weak', tough: 'tough', shell: 'block', 'slow-start': 'daze', daze: 'daze', ambush: 'bonus', assist: 'bonus', charge: 'charge', store: 'store', escort: 'cover', doubleCut: 'bonus', twinShot: 'power', 'foe-lv2': 'level', 'foe-lv3': 'level', 'foe-lv4': 'level' }; // 2026-11-14: code-drawn glyphs (no art file)
+  var ST_SVG = { corrupted: 'weak', 'crit-saved': 'hp', /* 2026-11-27 魔化 / 险些 on our cards */ overtime: 'charge', luckUp: 'luck', /* 2026-11-20 BOSS_NEW_SKILLS: reuse the 充能 / 幸运 glyphs */ 'swap-skip': 'daze', /* 2026-11-19 换位/暂停连做: the 发呆 glyph, no letters; the name + tip come from keywords.status */ ward: 'cover', weak: 'weak', tough: 'tough', shell: 'block', 'slow-start': 'daze', daze: 'daze', ambush: 'bonus', assist: 'bonus', charge: 'charge', store: 'store', escort: 'cover', doubleCut: 'bonus', twinShot: 'power', 'foe-lv2': 'level', 'foe-lv3': 'level', 'foe-lv4': 'level' }; // 2026-11-14: code-drawn glyphs (no art file)
   var ST_FILE = { 'mood-low': 'mood-down', 'mood-high': 'mood-up', 'vengeful-high': 'vengeful', 'vengeful-low': 'vengeful', wound: 'wounded', sear: 'burn' }; // 2026-11-19 文字修: 焚痕 reuses the 灼烧 art
   // 2026-11-16 灼烧 / 祝福 names come from ST_LABEL() above (a second `var ST_LABEL = {…}` here once replaced that lazy
   // function for the whole file → isBadStatus threw 「ST_LABEL is not a function」 on every battle render = the L10 hang)
@@ -3091,6 +3230,7 @@
     other: '<svg viewBox="0 0 24 24"><g fill="#f1d79a" stroke="#5a3a10" stroke-width=".8"><circle cx="5" cy="12" r="2.8"/><circle cx="12" cy="12" r="2.8"/><circle cx="19" cy="12" r="2.8"/></g></svg>',
     base: '<svg viewBox="0 0 24 24"><path d="M4 12l8-8 2 2-4 4h10v4H10l4 4-2 2z" fill="#f1d79a" stroke="#5a3a10" stroke-width="1"/></svg>',
     plus: '<svg viewBox="0 0 24 24"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z" fill="#f1d79a" stroke="#5a3a10" stroke-width="1"/></svg>',
+    curse: '<svg viewBox="0 0 24 24"><path d="M14.5 2.5l2 2-9.5 9.5-2.5.5.5-2.5z" fill="#b58aa8" stroke="#3a1030" stroke-width=".9"/><path d="M11.5 6.5l1.6 1.4-1.2 1.6 1.5 1.3" fill="none" stroke="#ff6a8a" stroke-width="1.6" stroke-linecap="round"/><path d="M4 13l4 4M3 16l2.5 2.5M6 15l-3.5 3.5" stroke="#8a5a7a" stroke-width="2" stroke-linecap="round"/><path d="M15 18l3 3 3-3" fill="none" stroke="#ff6a6a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>', // 2026-11-26 CURSE_CHIP: 诅咒 −N (a cracked blade + down arrow)
     weak: '<svg viewBox="0 0 24 24" fill="none" stroke="#9aa8c8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15m-6-6l6 6 6-6"/></svg>'
   };
   BS_ICON.burn = BS_ICON.frenzy = BS_ICON.ramp;
@@ -3673,7 +3813,8 @@
       var from = el ? stagePt(el, 0.5, 0) : { x: 960, y: foe ? 300 : 700 };
       return Promise.all(bt.targets.map(function (x) {
         var t = x.t, te = tEl(t); if (!te || t.miss || t.capped) return null;
-        var tag = t.graze ? T('ui.battle.graze') /* 2026-11-22e 用户「不叫落空，叫 intangible（灵体）」 */ : t.jackpot ? T('ui.battle.jackpot') : x.splash ? T('ui.battle.splashTag') : critOverTag(t) || (t.pierce ? T('ui.battle.critPierce') : t.crit ? T('ui.battle.crit') : ''); // 2026-11-19 试玩修 界面: + 溢出
+        if (t.graze) auraFlash(t.uid);
+        var tag = t.critSaved ? T('ui.battle.critSaved') : t.graze ? T('ui.battle.graze') /* 2026-11-22e 用户「不叫落空，叫 intangible（灵体）」 */ : t.ward ? T('ui.battle.wardTag') /* 2026-11-26 契约庇护: the small tag, the line is said once */ : t.jackpot ? T('ui.battle.jackpot') : x.splash ? T('ui.battle.splashTag') : critOverTag(t) || (t.pierce ? T('ui.battle.critPierce') : t.crit ? T('ui.battle.crit') : ''); // 2026-11-19 试玩修 界面: + 溢出
         if (t.kind !== 'heal' && t.crit) cue('crit', null, 0);
         return flyNum(from, te, '', t.kind === 'heal' ? 'heal' : 'dmg' + (foe ? ' foe-hit' : '') + (t.crit ? ' crit' : '') + (x.splash ? ' splash' : '') + (a.skillKind === 'aim' ? ' shot' : ''), tag, 0, t);
       }).filter(Boolean));
@@ -3805,7 +3946,8 @@
       var tEls = live.map(function (x) { return tEl(x.t); }).filter(function (x, i, arr) { return arr.indexOf(x) === i; });
       var nums = (!together && seq.length ? [wait(260, tok).then(function () { return comboSeq(seq, el, a.skillKind, tok); })] : []).concat(live.map(function (x) {
         var t = x.t, te = tEl(t), uid = te.dataset.u; if (t.capped || t.seqDone) return null;
-        var tag = t.graze ? T('ui.battle.graze') /* 2026-11-22e 用户「不叫落空，叫 intangible（灵体）」 */ : t.jackpot ? T('ui.battle.jackpot') : x.splash ? T('ui.battle.splashTag') : critOverTag(t) || (t.pierce ? T('ui.battle.critPierce') : t.crit ? T('ui.battle.crit') : ''); // 2026-11-19 试玩修 界面: + 溢出
+        if (t.graze) auraFlash(t.uid);
+        var tag = t.critSaved ? T('ui.battle.critSaved') : t.graze ? T('ui.battle.graze') /* 2026-11-22e 用户「不叫落空，叫 intangible（灵体）」 */ : t.ward ? T('ui.battle.wardTag') /* 2026-11-26 契约庇护: the small tag, the line is said once */ : t.jackpot ? T('ui.battle.jackpot') : x.splash ? T('ui.battle.splashTag') : critOverTag(t) || (t.pierce ? T('ui.battle.critPierce') : t.crit ? T('ui.battle.crit') : ''); // 2026-11-19 试玩修 界面: + 溢出
         if (t.kind !== 'heal' && t.crit) cue('crit', null, 0);
         return flyNum(src0, te, '', t.kind === 'heal' ? 'heal' : 'dmg' + (foe ? ' foe-hit' : '') + (t.crit ? ' crit' : hitTier(uid, t) !== 'normal' ? ' huge' : '') + (x.splash ? ' splash' : '') + (a.skillKind === 'aim' ? ' shot' : ''), tag, 0, t); // 先飞后结算, per target
       })).filter(Boolean);
@@ -3896,6 +4038,7 @@
   var QUICK_NO_RIVAL_ART = true;
   var QUICK_SHOW_DEBTS = true; // see playDebts
   // 2026-11-20 用户「不管是快速模式还是跳过剧情——就跳过那一段直接开始战斗」「快速招募不代表快速模式」: 快速模式 (?quick=1) or 跳过剧情 pressed in this level's battle — NOT the one-page recruit
+  var SOFT_KEEP = { softLine: 1, softHeart: 1 }; // lines a skipped rival intro still keeps (the moment she spares you)
   function quickNoArt() { return QUICK_NO_RIVAL_ART && (QUICK || !!(vn && vn.skipping) || (ui.rivalSkip != null && view && ui.rivalSkip === view.level)); }
   async function playRevenge(e, tok) {
     if (quickNoArt()) return;
@@ -4105,7 +4248,7 @@
       }
       case 'summon': { // 2026-11-16 露西安召唤: her roll call — the new cards pop in (fade + scale) on her left
         el = cardEl(e.uid); if (el) pulse(el, 'acting', 600);
-        if (e.text) banner(e.text, e.short ? 'summon-note' : 'clause'); // 2026-11-18 #5: the short roll-call line, small
+        if (e.bannerText || e.text) banner(e.bannerText || e.text, e.short ? 'summon-note' : 'clause'); // 2026-11-18 #5: the short roll-call line, small · 2026-11-26: bannerText = the short big text
         if (el && !e.split && (e.units || []).length && !el.classList.contains('down')) el.classList.add('warded');
         if ((e.split || e.brood) && e.parent) { var pf = ui.field && ui.field[e.parent.uid]; if (pf) pf.maxHp = e.parent.maxHp; setHp(e.parent.uid, e.parent.hp); } // 2026-11-20 L7 分裂史莱姆: the parent keeps half // 2026-11-18 #2: 契约庇护 back on
         if ((e.split || e.brood) && !ui.lineup) splitSlide(e.units || [], (e.slots || []).filter(function (x) { return x.wasUnit; }).map(function (x) { return x.was; })); // 阵容同步开着时不用（lineupApply 已插好卡、让好位） // 2026-11-20 用户「分裂史莱姆的位置提前变了，要等分裂动画时再挪过去」
@@ -4121,6 +4264,7 @@
       case 'daze': el = cardEl(e.actor || e.uid) || cardById(e.actorId || e.id); if (el) { pulse(el, 'dazed', 900); floatAt(el, T(e.reason === 'regret' ? 'ui.battle.regret' : 'ui.battle.dazed'), 'miss'); } await wait(e.reason === 'regret' ? 1100 : 700, tok); break; // 2026-11-14 L8: the leader freezes
       case 'mood': el = cardById(e.id); if (el) moodDrop(el, e); await wait(500, tok); break;
       case 'copyDebuff': if (BELL_FX && e.stat) { el = cardEl(e.to); if (el) { pulse(cardEl(e.actor), 'acting', 600); bellFx([{ el: el, text: fxStatText(e.stat, e.delta), bad: e.delta < 0 }]); await wait(700, tok); } } break; // 2026-11-20 her bell copies a debuff onto one of us
+      case 'corruptHit': el = cardEl(e.uid); if (el && !anim.skip) { floatAt(el, T('ui.battle.corruptFloat', { n: e.n }), 'pow-float down'); await wait(300, tok); } break; // 2026-11-27 魔化: 威力 −1 on the one she hit
       case 'xlMark': if (BELL_FX) { el = cardEl(e.uid || e.target); if (el) { bellFx([{ el: el, text: T('ui.battle.fx.marked'), bad: true }]); await wait(500, tok); } } break; // 2026-11-20 her bell settles on one of us
       case 'line': case 'advisor': {
         if (QUICK) break; /* 快速模式: no barks, taunts or talk in battle */
@@ -4128,6 +4272,7 @@
         var key = e.key || '';
         if (key === 'bark') { await playBubble(e, tok, e.soft || e.bark === 'softHeart' ? 'soft' : null); break; }
         if (key === 'softHeart') { await playBubble(e, tok, 'soft'); break; }
+        if (key === 'softLine') { await playBubble(e, tok, 'soft'); break; } // 2026-11-26 用户「是发呆发生的时候说」: her bubble right on her card, just before the 发呆 float (was the dialogue box)
         if (key === 'revenge') { await playRevenge(e, tok); break; }
         if (key === 'reveal' && e.advBossReveal) { await playBossReveal(e, tok); break; }
         if (key === 'enemyBark') { if (!anim.skip) await playBubble(e, tok, 'enemy'); break; }
@@ -4306,7 +4451,7 @@
   async function playRound(evs, tok) {
     tauntsThisRound = 0; evs = orderAdvisorWave(evs);
     evs = evs.filter(function (e) { return !e.replay; });
-    if (quickNoArt()) evs = evs.filter(function (e) { var sp = e.kind === 'line' || e.kind === 'revenge' || e.kind === 'reckoning' ? (e.speakerId || e.id || lineSpeaker(e)) : null; return !(sp && A.isCandidate(sp) && !member(sp)); }); // 2026-11-20 快速模式「直接跳过到战斗」: the rejected girls' lines don't play // 2026-11-20: pause actions (加班条款 充能, items, swaps) were shown at the pause — don't play them twice
+    if (quickNoArt()) evs = evs.filter(function (e) { var sp = e.kind === 'line' || e.kind === 'revenge' || e.kind === 'reckoning' ? (e.speakerId || e.id || lineSpeaker(e)) : null; return !(sp && A.isCandidate(sp) && !member(sp) && !SOFT_KEEP[e.key]); }); /* 2026-11-27 用户「对手发呆的一瞬间还是没有台词」: her soft line survives a skipped intro */ // 2026-11-20 快速模式「直接跳过到战斗」: the rejected girls' lines don't play // 2026-11-20: pause actions (加班条款 充能, items, swaps) were shown at the pause — don't play them twice
     var steps = RoundPlan.planRound(evs); // 修复 2026-11-13: the cutting is pure (ui/round-plan.js, tests/round-plan.test.cjs)
     if (GROUP_FX) steps = RoundPlan.groupFx(steps); // 2026-11-20: a run of one group effect → one 'fx' step
     var lnDone = 0; // 2026-11-20 阵容同步: evs[0..lnDone) 的阵容变化已推到画面上（连击 / 群体效果里夹着的，到下一个单拍前补上）
@@ -4432,7 +4577,7 @@
       return '<div class="battle' + (v.level === 11 ? ' noble' : '') + (!FOE_CARD_SHRINK ? '' : foes.length >= 8 ? ' foes-crowd' : foes.length >= 6 ? ' foes-many' : '') + '"><div class="frenzy-edge' + (fz > 1 ? ' on' : '') + '" id="frenzyEdge" style="--fz:' + Math.min(lv, 5) + '"></div>' +
         '<div class="b-top"><span class="b-pill" id="roundNo"><span class="bp-k">' + T('ui.battle.round', { n: esc(round) }) + '</span>' + (b.waveCount > 1 ? '<span class="bp-sep"></span><span>' + T('ui.battle.waveOf', { n: esc(b.wave || 1), total: esc(b.waveCount) }) + '</span>' : '') +
         (fz > 1 ? '<span class="bp-sep"></span><span class="bp-fz">' + T('ui.battle.frenzy', { n: fz }) + '</span>' : '') + '</span></div>' +
-        '<span class="b-ctl vn-pass"><button class="pill-btn speed-cycle" data-act="speedCycle" data-tip="' + T('ui.battle.speedTip') + '">' + spdName(prefs.speed || 2) + '</button>' + // UI-CLEAN §2.7: one button cycles ×1 → ×2 → ×3
+        '<span class="b-ctl vn-pass"><button class="pill-btn speed-cycle" data-act="speedCycle" data-tip="' + T('ui.battle.speedTip') + '">' + spdName(prefs.speed || 1) + '</button>' + // UI-CLEAN §2.7: one button cycles ×1 → ×2 → ×3
         '<button class="pill-btn" data-act="skip" id="skipBtn">' + T('ui.battle.skip') + '</button></span>' +
         '<div class="b-foe"><div class="lane lane-foe" id="laneFoe">' + foes.map(function (u) { var w = wasOf[u.uid], h = battleCard(u, ui.field[u.uid].hp, !!entering[u.uid], ui.field[u.uid].block, ui.field[u.uid].charge); h = SPLIT_NO_ROOM && splitIn[u.uid] ? h.replace(' pre-enter', ' pre-enter pre-split') : h; return (w ? battleCard(w, ui.field[w.uid].hp, false, ui.field[w.uid].block, ui.field[w.uid].charge) : '') + h; }).join('') + '</div></div>' +
         '<div class="b-ally"><div class="lane lane-ally" id="laneAlly">' + allies.map(function (u) { return battleCard(mx0[u.uid] != null ? A.withMaxHp(u, mx0[u.uid]) : u, ui.field[u.uid].hp, false, ui.field[u.uid].block, ui.field[u.uid].charge); }).join('') + '</div></div>' +
@@ -4519,8 +4664,9 @@
   function intentRows(it) { return '<div class="rows intent-rows"><div class="r intent"><span class="rk">' + T('ui.intent.row') + '</span><span class="rv">' + esc(intentTip(it)) + '</span></div></div>'; }
   // the battle pause: put the marks on the cards in place (the next render — the round playing — rebuilds the cards without them)
   function intentDecorate(v) {
-    app.querySelectorAll('.intent-row, .aimed-mark').forEach(function (n) { n.remove(); });
+    app.querySelectorAll('.intent-row, .aimed-mark, .it2').forEach(function (n) { n.remove(); });
     if (!INTENT_UI || !v || !v.battle) return;
+    if (intent2On() && intent2Decorate(v)) return;
     var I = RoundPlan.intentOf(v); if (I.src !== 'battle') return;
     I.list.forEach(function (it) {
       var card = cardEl(it.key) || cardById(it.id), art = card && card.querySelector('.uc-art'); if (!art || card.classList.contains('down')) return;
@@ -4528,6 +4674,51 @@
       if (card.dataset.rich && card.dataset.rich.indexOf('intent-rows') < 0) card.dataset.rich += intentRows(it);
     });
     Object.keys(I.aimed).forEach(function (k) { var card = cardEl(k) || cardById(k); if (card && !card.classList.contains('down')) card.insertAdjacentHTML('beforeend', aimedHtml(I.aimed[k])); });
+  }
+  var I2 = { // drawn icons (no text); the words are in the tips
+    atk: '<svg viewBox="0 0 24 24"><path d="M19.5 2.5l2 2-11 11-2.5.5.5-2.5z" fill="currentColor" stroke="#3a1a10" stroke-width=".8"/><path d="M5 14l5 5M3.5 17.5l3 3M6.5 15.5l-4 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+    burst: '<svg viewBox="0 0 24 24"><path d="M12 1l2.4 6.2L21 5l-3.6 5.6L23 13l-6 1.6L19 21l-5.6-3.6L12 23l-1.4-5.6L5 21l2-6.4L1 13l5.6-2.4L3 5l6.6 2.2z" fill="currentColor" stroke="#4a0a00" stroke-width=".8"/><circle cx="12" cy="12" r="3" fill="#fff3c0"/></svg>',
+    heal: '<svg viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor" stroke="rgba(0,0,0,.45)" stroke-width="1"/></svg>',
+    block: '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5.5-3.5 9.5-8 11-4.5-1.5-8-5.5-8-11V5z" fill="currentColor" stroke="rgba(0,0,0,.5)" stroke-width="1"/><path d="M12 5v14" stroke="rgba(255,255,255,.55)" stroke-width="1.4"/></svg>',
+    daze: '<svg viewBox="0 0 24 24"><path d="M12 12m-2 0a2 2 0 1 0 4 0a4 4 0 1 0-8 0a6 6 0 1 0 12 0a8 8 0 1 0-16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    all: '<svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.2" fill="currentColor"/><circle cx="5" cy="10" r="2.6" fill="currentColor" opacity=".85"/><circle cx="19" cy="10" r="2.6" fill="currentColor" opacity=".85"/><path d="M6.5 21c0-4 2.5-7 5.5-7s5.5 3 5.5 7z" fill="currentColor"/><path d="M0.5 20c0-3 2-5.5 4.5-5.5 1 0 1.8.3 2.5.9-1 1.4-1.6 3-1.7 4.6z M23.5 20c0-3-2-5.5-4.5-5.5-1 0-1.8.3-2.5.9 1 1.4 1.6 3 1.7 4.6z" fill="currentColor" opacity=".85"/><rect x="0" y="22" width="24" height="1.6" rx=".8" fill="currentColor"/></svg>',
+    bolt: '<svg viewBox="0 0 24 24"><path d="M13 1L4 14h6l-2 9 10-14h-6z" fill="currentColor"/></svg>'
+  };
+  // one plate: lines [{ kind, dmg, x, targets, all }]; foeSide = the plate belongs to an enemy (numbers shown, targets are ours)
+  function intent2Html(i2, foeSide) {
+    var ks = { atk: 'atk', burst: 'burst', heal: 'heal', block: 'block', defend: 'block', daze: 'daze' }, tips = [];
+    // 2026-11-25 用户「敌人的意图就显示一行，加甲的可以显示一个甲 + 其他意图；箭头不要了」: one line = [盾] + the first other line
+    var all = i2.lines || [], blk = all.filter(function (l) { return l.kind === 'block' || l.kind === 'defend'; })[0], main = all.filter(function (l) { return l.kind !== 'block' && l.kind !== 'defend'; })[0];
+    var pick = [blk, main].filter(Boolean);
+    var rows = pick.map(function (l) {
+      var ic = ks[l.kind]; if (!ic) return '';
+      var onFoes = l.kind === 'heal' ? foeSide : !foeSide; // whose faces: a heal names its own side
+      var who = l.all ? '<span class="i2-all">' + I2.all + '</span>' : '<span class="i2-faces">' + (l.targets || []).slice(0, 3).map(function (k) { return intentFace(k, onFoes); }).join('') + '</span>';
+      var names = l.all ? T('ui.intent2.all') : (l.targets || []).map(intentName).join(T('ui.intent.sep'));
+      tips.push(l.kind === 'burst' ? T('ui.intent2.burst', { n: l.dmg }) : l.kind === 'heal' ? T('ui.intent2.heal', { who: names }) : l.kind === 'block' ? T('ui.intent2.block') : l.kind === 'defend' ? T('ui.intent2.defend') : l.kind === 'daze' ? T('ui.intent2.daze')
+        : !foeSide ? T('ui.intent2.atkOurs', { who: names }) : l.x > 1 ? T('ui.intent2.atkX', { who: names, n: l.dmg, x: l.x }) : T('ui.intent2.atk', { who: names, n: l.dmg }));
+      var num = foeSide && l.dmg != null && (l.kind === 'atk' || l.kind === 'burst' || l.kind === 'heal') ? '<b class="i2-n">' + esc(l.dmg) + (l.low != null ? '<small class="i2-lo">/' + esc(l.low) + '</small>' : '') + '</b>' + (l.x > 1 ? '<i class="i2-x">×' + esc(l.x) + '</i>' : '') : ''; // 2026-11-26: 「10/5」 = the biggest / the smallest hit
+      var tgt = (l.targets || []).length || l.all ? who : '';
+      if (l.orHeal) tips.push(T('ui.intent2.orHeal'));
+      return '<span class="i2-line k-' + l.kind + '">' + (l.orHeal ? '<span class="i2-ic i2-orheal">' + I2.heal + '</span>' : '') + '<span class="i2-ic">' + I2[ic] + '</span>' + num + tgt + '</span>'; // orHeal: a small green cross first — she heals instead if a friend is hurt
+    }).join('');
+    if (!rows) return '';
+    if (i2.extra) tips.push(T('ui.intent2.extra'));
+    return '<div class="it2 it2-one ' + (foeSide ? 'it2-foe' : 'it2-mine') + '" data-tip="' + esc(tips.join(T('ui.intent.sep'))) + '">' + rows + '</div>' + (i2.extra ? '<span class="it2 i2-bolt" data-tip="' + esc(T('ui.intent2.extra')) + '">' + I2.bolt + '</span>' : '');
+  }
+  // true = drawn (the engine gave intent2); false = fall back to the old marks
+  function intent2Decorate(v) {
+    var B = v.battle, any = false;
+    (B.enemies || []).concat(B.allies || []).forEach(function (u) { if (u.intent2) any = true; });
+    if (!any) return false;
+    [['enemies', true], ['allies', false]].forEach(function (p) {
+      (B[p[0]] || []).forEach(function (u) {
+        if (!u.intent2 || !(u.hp > 0)) return;
+        var card = cardEl(u.uid) || cardById(u.id); if (!card || card.classList.contains('down')) return;
+        var h = intent2Html(u.intent2, p[1]); if (h) card.insertAdjacentHTML('beforeend', h);
+      });
+    });
+    return true;
   }
   // the formation (出发前布阵): round 1, re-picked by the local order as the player moves her girls (render() on every move)
   function withAimed(o, PI, id) { o.aimed = PI ? PI.aimed[id] || 0 : 0; return o; } // the formation card's opts + its 准星 count
@@ -4545,7 +4736,7 @@
       '<button class="pbtn" data-act="pMove"' + (p.move === false ? ' disabled' : '') + ' data-tip="' + T(p.swapCost ? 'ui.pause.moveTipSwap' : 'ui.pause.moveTip') + '">' + '<span class="pb-ic">⇄</span><b>' + T('ui.pause.move') + '</b></button>' +
       (sk ? '<button class="pbtn' + (sk.used ? ' used' : '') + '" data-act="pSkill"' + (sk.available ? '' : ' disabled') + ' data-tip="' + esc((sk.name ? T('ui.battle.skillTitle', { name: sk.name }) : '') + (sk.text || '') + T(sk.used ? 'ui.pause.skillUsed' : 'ui.pause.skillOnce')) + '"><span class="pb-ic face">' + pic(A.face(v.advisor && v.advisor.id, 'calm'), '', '', '') + '</span><b>' + T('ui.pause.advisor') + '</b><small>' + esc(sk.name || '') + '</small></button>'
         : '<button class="pbtn" disabled data-tip="' + T('ui.pause.advisorGoneTip') + '"><span class="pb-ic">✦</span><b>' + T('ui.pause.advisor') + '</b><small>' + T('ui.common.none') + '</small></button>') +
-      '<button class="pbtn" data-act="pItem"' + (items.length ? '' : ' disabled') + ' data-tip="' + T('ui.pause.itemTip') + '"><span class="pb-ic">✚</span><b>' + T('ui.pause.item') + '</b><small>' + items.length + ' / 3</small></button>' +
+      '<button class="pbtn" data-act="pItem"' + (items.length ? '' : ' disabled') + ' data-tip="' + T('ui.pause.itemTip') + '"><span class="pb-ic">✚</span><b>' + T('ui.pause.item') + '</b><small>' + items.length + ' / ' + ((RE.FLAGS && RE.FLAGS.BAG_MAX) || 5) + '</small></button>' +
       // 2026-11-15 user: 战报 removed (「太奇怪了」) — the per-number hover tip and the panel's 「怎么算」 stay
       '<button class="pbtn go" data-act="pContinue"><span class="pb-ic">▶</span><b>' + T('ui.common.continue') + '</b></button>' +
       '</div><div class="pause-sub" id="pauseSub"></div>' + (v.battle.opening ? '<div class="pause-open">' + T('ui.pause.opening') + '</div>' : '') +
@@ -4555,7 +4746,9 @@
     // 继续 ignores input that started before the bar was up (see pauseReady).
     try { aimButtons(v); syncAim(RoundPlan.aimMarks(v.battle.allies)); } catch (err) { console.error('aim buttons failed', err); } // never blocks the pause
     try { healButtons(v); syncHealMarks(v); } catch (err) { console.error('heal buttons failed', err); } // 2026-11-20 牧师治疗: never blocks the pause
+    try { stanceButtons(v); } catch (err) { console.error('stance buttons failed', err); } // 2026-11-25 防御姿态: never blocks the pause
     try { intentDecorate(v); } catch (err) { console.error('intent marks failed', err); } // 2026-11-19 意图预告: never blocks the pause
+    try { if (TOPBAR_SPLIT) { var tbBag = app.querySelector('.topbar .bag-slots'); if (tbBag && v.items && tbBag.insertAdjacentHTML) { tbBag.insertAdjacentHTML('afterend', bagSlots(v.items)); tbBag.remove(); } } } catch (err) { console.error('bag sync failed', err); } // 2026-11-26 用户「道具用完了，下方少了，上方还在」: the top bar's bag follows each pause
     var ae = document.activeElement; if (ae && ae !== document.body && ae.blur) ae.blur();
     if (again) return;
     ui.pauseAt = nowMs(); ui.keysDown = {};
@@ -4741,6 +4934,29 @@
     if (cur.length >= n && i < 0) pauseMode(null);
     return true;
   }
+  // ===== 2026-11-25 防御姿态 (setStance, run.defendOn only): a 行动 / 防御 pill under each ally card at a pause (not warriors).
+  // Tap = switch. Free, like setAim: run / view update in place. The choice stays for the battle until changed.
+  function stanceButtons(v) {
+    app.querySelectorAll('.stance-btn').forEach(function (b) { b.remove(); });
+    var c = (v && v.battle && v.battle.pause && v.battle.pause.canStance) || []; if (!c.length) return;
+    (v.battle.allies || []).forEach(function (u) {
+      if (!u || (c.indexOf(u.uid) < 0 && c.indexOf(u.id) < 0)) return;
+      var card = cardEl(healKey(u)) || cardById(u.id); if (!card || card.classList.contains('down')) return;
+      var d = u.stance === 'defend', b = document.createElement('button'); b.type = 'button'; b.className = 'stance-btn' + (d ? ' defend' : '');
+      b.dataset.act = 'stanceToggle'; b.dataset.key = healKey(u); b.dataset.tip = T('ui.pause.stanceTip');
+      b.innerHTML = '<span class="st-a">' + T('ui.pause.stanceAct') + '</span><span class="st-d">' + T('ui.pause.stanceDefend') + '</span>'; card.appendChild(b);
+    });
+  }
+  function doStance(key, stance) {
+    var prevView = view, action = { type: 'setStance', id: key, stance: stance };
+    try { run = E.act(DATA, run, action); } catch (e) { pl('actFail', action, prevView, e && e.message, e && e.stack, null); notice(T('ui.notice.actRejected', { error: e && e.message })); return false; }
+    save(); replayed[(run.history || []).length] = true; // the same round: never replayed by a later render
+    try { view = E.view(DATA, run); } catch (e) { /* keep the old view */ }
+    pl('act', action, prevView, view);
+    cue('pick', null, 0);
+    if (view && view.battle) stanceButtons(view);
+    return true;
+  }
   // v2.4 [16]: result music once per battle, when the panel appears; never again on a re-render or a regained focus
   var resultPlayed = {};
   function battleId(v) { return (run && run.seed) + ':L' + (v && v.level) + ':h' + ((run && run.history) || []).length; } // stable for one result screen
@@ -4771,7 +4987,7 @@
     var mvpKey = s.mvp && typeof s.mvp === 'object' ? (s.mvp.uid || s.mvp.id) : s.mvp;
     if (mvpKey == null && !('mvp' in s) && rows.length) mvpKey = rows.slice().sort(function (x, y) { return ((y.damage || 0) + (y.healed || 0)) - ((x.damage || 0) + (x.healed || 0)); })[0].uid;
     var rounds = s.rounds || b.rounds || b.round, best = rows.reduce(function (m, r) { return Math.max(m, r.extra || 0); }, 0);
-    var COLS = ['damage', 'healed', 'taken', 'kills', 'extra'].map(function (k) { return [k, T('ui.result.col.' + k)]; });
+    var COLS = ['damage', 'healed', 'taken', 'kills', 'charged', 'extra'].map(function (k) { return [k, T('ui.result.col.' + k)]; });
     var xpCol = XP_IN_REPORT && b.xp && typeof b.xp === 'object'; // 2026-11-19 战报 XP 栏 (older saves: no b.xp, no column)
     var body = rows.map(function (r) {
       var id = r.id, lead = isLeader(id), mvp = mvpKey != null && (r.uid === mvpKey || r.id === mvpKey), m = member(id) || {}, nm = lead ? T('ui.name.you') : (r.name || m.name || nameOf(id));
@@ -4789,7 +5005,7 @@
   // ===== 2026-11-19 用户亲测 界面: 战报 (「改成一行一行，每人一行，显示经验、升级；升级的人旁边有一个按钮」) =====
   // One row per member: face + name (+ MVP crown) · 伤害 / 治疗 / 承伤 / 击倒 under one header line (horizontal words, tips) ·
   // 经验 +N and a small bar (A.xpSpan) · 「升级」 when she leveled, opening her 升级页. The old table: resultStats (RESULT_ROWS false).
-  var RR_COLS = ['damage', 'healed', 'taken', 'kills'];
+  var RR_COLS = ['damage', 'healed', 'taken', 'kills', 'charged']; // 2026-11-27 + 充能 (given to teammates)
   function resultMvpKey(s, rows) {
     var k = s.mvp && typeof s.mvp === 'object' ? (s.mvp.uid || s.mvp.id) : s.mvp;
     if (k == null && !('mvp' in s) && rows.length) k = rows.slice().sort(function (x, y) { return ((y.damage || 0) + (y.healed || 0)) - ((x.damage || 0) + (x.healed || 0)); })[0].uid;
@@ -4883,7 +5099,7 @@
   // 2026-11-20b WIN_GOLD_LINE: coin + 「+N」 (this battle) + the label, then the purse chip (total)
   function winGoldHtml(v, heavy) {
     if (!WIN_GOLD_LINE || heavy || v.blessing || !(v.winGold > 0)) return '';
-    return '<div class="win-gold"><span class="wg-won">' + A.glyph('coin', false) + '<b class="wg-n">+' + esc(v.winGold) + '</b><span class="wg-l">' + esc(T('ui.reward.goldWon')) + '</span></span>' + goldHtml(v.gold) + '</div>';
+    return '<div class="win-gold"><span class="wg-won">' + A.glyph('coin', false) + '<b class="wg-n">+' + esc(v.winGold) + '</b><span class="wg-l">' + esc(T('ui.reward.goldWon')) + (v.winGoldFrom ? ' ' + esc(T('ui.reward.goldFromWrap', { list: v.winGoldFrom })) : '') + '</span></span>' + goldHtml(v.gold) + '</div>';
   }
   // 2026-11-20c GOLD_CLAIM: the reward block (absolute, under the cards) and its claim. gcDone = keys already claimed (this page load);
   // gcOpen = the block on screen now. Pure presentation: run.gold is never touched here.
@@ -4895,7 +5111,7 @@
     if (!gcShows(v, heavy) || gcDone[gcKey(v)]) return '';
     gcOpen = { key: gcKey(v), seed: run && run.seed, n: v.winGold, total: v.gold };
     var parts = String(T('ui.reward.goldGain', { n: '#N#' })).split('#N#');
-    return '<div class="gold-claim"><span class="gcl-coin">' + A.glyph('coin', false) + '</span><span class="gcl-t">' + esc(parts[0] || '') + '<b class="gcl-n">' + esc(v.winGold) + '</b>' + esc(parts[1] || '') + '</span>' +
+    return '<div class="gold-claim"><span class="gcl-coin">' + A.glyph('coin', false) + '</span><span class="gcl-t">' + esc(parts[0] || '') + '<b class="gcl-n">' + esc(v.winGold) + '</b>' + esc(parts[1] || '') + (v.winGoldFrom ? '<small class="gcl-from">' + esc(T('ui.reward.goldFromWrap', { list: v.winGoldFrom })) + '</small>' : '') + '</span>' + /* 2026-11-26 「+2 来自夜鸦」 */
       '<button class="btn btn-primary gcl-btn" data-act="goldClaim">' + T('ui.reward.goldClaim') + '</button></div>';
   }
   // after each render: a block that was up and is gone now (picked a card, left the screen) → claim it quickly
@@ -4960,7 +5176,10 @@
   // 2026-11-14: a 生命上限 effect carries the heart-container icon ({i:maxhp}) — A.effLine only knows {i:hp}
   function maxIcon(s, e) { return e && e.stat === 'maxHp' ? String(s || '').replace('{i:hp}', '{i:maxhp}') : s; }
   function effIcon(e) { return maxIcon(A.effLine(e), e); }
-  function cardFaceHtml(o) { var f = A.cardFace(o); if (o && o.effect && o.effect.stat === 'maxHp' && f.eff) f.eff = String(f.eff).replace('{i:hp}', '{i:maxhp}'); return (f.flavor ? '<span class="ch-text">' + richText(f.flavor) + '</span>' : '') + (f.eff ? '<span class="ch-eff">' + richText(f.eff) + '</span>' : ''); }
+  // 2026-11-26 用户「锻炼的选项里禁止出现一个完全比另一个好」: 早点睡 (回血 +5) and 长跑 (生命上限 +3) both read 「♥+N」 and looked like one
+  // beats the other — the extra's hp line now says which: 回血 / 生命上限 (TRAIN_HP_WORDS; false = the bare heart)
+  var TRAIN_HP_WORDS = true;
+  function cardFaceHtml(o) { var f = A.cardFace(o), xe = o && o.extra; if (typeof TRAIN_HP_WORDS !== 'undefined' && TRAIN_HP_WORDS && typeof T === 'function' && f.eff && xe && xe.type === 'stat' && (xe.stat === 'hp' || xe.stat === 'maxHp')) f.eff = String(f.eff).replace('{i:hp}+', T(xe.stat === 'maxHp' ? 'ui.train.maxHpPlus' : 'ui.train.healPlus')); if (o && o.effect && o.effect.stat === 'maxHp' && f.eff) f.eff = String(f.eff).replace('{i:hp}', '{i:maxhp}'); return (f.flavor ? '<span class="ch-text">' + richText(f.flavor) + '</span>' : '') + (f.eff ? '<span class="ch-eff">' + richText(f.eff) + '</span>' : ''); }
   // 2026-11-20 用户「所有物品道具都加边框——白 / 蓝 / 紫 / 橙代表不同等级」(RARITY_FRAME): common / rare / epic / legendary → class
   // rar-<id> (style.css). The rarity is the card's own, else looked up by id in the reward / debuff cards and the shop; bag items = common
   var RARITY_FRAME = true, RAR_IDS = { common: 1, rare: 1, epic: 1, legendary: 1 }, RAR_OLD = { uncommon: 'rare', core: 'legendary' };
@@ -5174,7 +5393,7 @@
     sayFx(stages([
       [function () { cue('whiteout', null, 0); cine('whiteout', '<div class="wo-room" style=\'background-image:' + A.scene('white-room').map(function (c) { return 'url("' + esc(splitCand(c).src) + '")'; }).join(', ') + '\'></div><div class="wo-flood"></div><div class="wo-cap" id="woCap"></div>'); requestAnimationFrame(function () { cineEl.classList.add('on'); }); }, 2600],
       [function () { var c = $('woCap'); if (c) { c.innerHTML = '<span class="wo-1">' + caps[0] + '</span>'; c.classList.add('on'); } }, 2800],
-      [function () { var c = $('woCap'); if (c && caps[1]) c.insertAdjacentHTML('beforeend', '<span class="wo-2">' + caps[1] + '</span>'); }, 3400],
+      [function () { var c = $('woCap'); if (c && caps[1]) c.insertAdjacentHTML('beforeend', '<span class="wo-2">' + caps[1] + '</span>'); }, 3400, 'noskip'], // 2026-11-26 用户「……吗 没有出现就过去了」: it always stays
       [function () { cineEl.classList.add('fade'); }, 1800],
       [function () { cineEl.className = 'cine'; cineEl.innerHTML = ''; cineDone(); if (done) done(); }, 10]
     ]));
@@ -5298,13 +5517,19 @@
     nm.className = 'ep-name'; nm.innerHTML = name ? esc(name) + (sub ? '<small>' + esc(sub) + '</small>' : '') + (faceList ? '<span class="ep-face">' + pic(faceList, '', '', '') + '</span>' : '') : '';
     requestAnimationFrame(function () { if (list) st.classList.add('on'); if (name) nm.classList.add('on'); });
   }
+  function epiDrag(ids, cap, t) { // 2026-11-26 the dragged picture inside the epilogue (its own layer: the epilogue owns the cine)
+    var d = $('epDrag'); if (!d) return Promise.resolve();
+    d.className = 'ep-drag'; d.innerHTML = draggedHtml(ids, cap);
+    requestAnimationFrame(function () { d.classList.add('on'); });
+    return epiWait(5200, t).then(function () { d.classList.add('sink'); return epiWait(1200, t); }).then(function () { d.classList.remove('on'); return epiWait(900, t); }).then(function () { d.innerHTML = ''; d.className = 'ep-drag'; });
+  }
   function epiHide() { var st = $('epStand'), nm = $('epName'); if (st) st.classList.remove('on'); if (nm) nm.classList.remove('on'); }
   var FATE_SUB = { member: 'ui.epilogue.sub.member', sacrificed: 'ui.epilogue.sub.sacrificed', rejected: 'ui.epilogue.sub.rejected', enemy: 'ui.epilogue.sub.enemy', restored: 'ui.epilogue.sub.restored' }; // text keys
   async function playEpilogue(ep, vopt) {
     var t = ++epi.tok, V = vopt && vopt.victory; epi.vdone = V ? vopt.done : null;
     vnClear(); document.body.classList.add('epi-on');
     var bgs = A.scene(V === 'true' ? 'guild-dawn-full' : V ? 'dawn-exit' : 'game-over').map(function (c) { return 'url("' + esc(splitCand(c).src) + '")'; }).join(', ');
-    cine('epi' + (V ? ' epi-win' + (V === 'true' ? ' epi-true' : '') : ''), '<div class="ep-bg" style=\'background-image:' + bgs + '\'></div><div class="ep-stand" id="epStand"></div><div class="ep-name" id="epName"></div><div class="ep-black"></div>');
+    cine('epi' + (V ? ' epi-win' + (V === 'true' ? ' epi-true' : '') : ''), '<div class="ep-bg" style=\'background-image:' + bgs + '\'></div><div class="ep-stand" id="epStand"></div><div class="ep-name" id="epName"></div><div class="ep-drag" id="epDrag"></div><div class="ep-black"></div>');
     storyHook = { kind: 'epilogue', on: function () { return t === epi.tok; }, skip: function () { if (epi.vdone) epiWinEnd(epi.tok); else epiBlack(epi.tok); } }; syncSkip();
     try {
       if (!V) cue('gallery', null, 0);
@@ -5312,6 +5537,7 @@
       await epiSay(epiLines(ep.intro), t);
       for (var i = 0; i < (ep.fates || []).length; i++) {
         var f = ep.fates[i], cv = f.status === 'restored' || f.status === 'member' ? null : f.corruption || (f.status === 'sacrificed' || f.status === 'enemy' ? 'possessed' : f.status === 'rejected' ? 'vengeful' : null);
+        if (!V && DRAGGED_CG && f.status === 'member' && f.dragged) { await epiDrag([f.id], (f.lastWords ? '「' + f.lastWords + '」\n' : '') + f.dragged, t); continue; } // 2026-11-26 用户「每个人走一遍，说一句遗言」
         epiShow(A.portrait(f.id, cv ? { variant: cv } : {}), f.name || nameOf(f.id), FATE_SUB[f.status] ? T(FATE_SUB[f.status]) : '');
         await epiWait(900, t);
         await epiSay(epiLines(f.lines, function (o) { if (cv && o.speakerId === f.id && !/^(vengeful|possessed)/.test(o.expr || '')) o.expr = cv === 'vengeful' ? 'vengeful-tears' : 'possessed-blank'; }), t);
@@ -5319,6 +5545,13 @@
       }
       epiShow(V ? A.portrait('leader') : A.portrait('leader', { variant: 'worn' }), V ? nameOf('leader') : T('ui.name.leader'), V ? T('ui.name.leader') : '', V ? null : A.face('leader', 'hollow', { variant: 'worn' }));
       await epiWait(900, t);
+      if (!V && DRAGGED_CG && ep.leaderSorry && ep.leaderDragged) { // 2026-11-26: 「大家，对不起……」 then the gloves take her too
+        await epiSay(epiLines(ep.leaderSorry), t);
+        epiHide(); await epiWait(700, t);
+        await epiDrag(['leader'], ep.leaderDragged, t);
+        epiShow(A.portrait('leader', { variant: 'worn' }), T('ui.name.leader'), '', A.face('leader', 'hollow', { variant: 'worn' }));
+        await epiWait(900, t);
+      }
       await epiSay(epiLines(ep.leader, function (o) { if (o.speakerId === 'leader' && !V) o.expr = 'hollow'; }), t);
       epiHide(); await epiWait(1100, t);
       if (ep.advisor) {
@@ -5383,7 +5616,11 @@
 
   // ---------- modal ----------
   function modal(html) { modalEl.innerHTML = '<div class="panel">' + html + '</div>'; modalEl.hidden = false; var b = modalEl.querySelector('[data-act="modalCancel"]'); if (b) b.focus(); }
-  function closeModal() { modalEl.hidden = true; modalEl.innerHTML = ''; modalEl.classList.remove('vn-pass', 'menu-open', 'unit-open', 'route-open'); }
+  function closeModal() { var bd = boxDone; boxDone = null; if (bd) setTimeout(bd, 0); /* boxFx: the queue goes on once the box is gone */ modalEl.hidden = true; modalEl.innerHTML = ''; modalEl.classList.remove('vn-pass', 'menu-open', 'unit-open', 'route-open'); }
+  // 2026-11-27 用户「box 必须结束后才能下一个对话」: boxFx(open) = a blocking step in the dialogue queue — open() shows the box
+  // (modal); closing it (知道了 / a tap on the dim) ends the step. A click elsewhere never skips it.
+  var boxDone = null;
+  function boxFx(open) { return function (done, it) { it.skip = function () {}; boxDone = done; open(); if (modalEl.hidden) { boxDone = null; done(); } }; }
   // batch6 H2-1: the game never uses alert/confirm/prompt — overwriting a save asks in a game-styled panel
   function askOverwrite(act) {
     modal('<h2>' + T('ui.newRun.confirmTitle') + '</h2><p>' + bold(T(run ? 'ui.newRun.confirmCurrent' : 'ui.newRun.confirmExisting')) + '</p><p class="small dim">' + T('ui.newRun.noUndo') + '</p>' +
@@ -5403,6 +5640,15 @@
       '<div class="row center-row"><button class="btn btn-secondary" data-act="modalCancel">' + T('ui.common.rethink') + '</button></div>');
     var p = modalEl.querySelector('.panel'); if (p) p.classList.add('ask-modal');
     return true;
+  }
+  // 2026-11-26 用户「选择后要出现一个效果提示 box，不是 pop 的，要确认的、带立绘的：xxx，充能从 x 转向了 y，请注意调整队形」
+  function ringWatch(eff, who) { ui.ringWas = null; var m = member(who); if (eff && eff.tokenId === 'turnRing' && m && m.chargeDir) ui.ringWas = { who: who, dir: m.chargeDir, k: m.k }; }
+  function ringDir(dir, k) { return T(dir === 'prev' ? 'ui.ring.dir.prev' : dir === 'both' ? 'ui.ring.dir.both' : 'ui.ring.dir.next', { k: k }); }
+  function ringNotice() {
+    var w = ui.ringWas; ui.ringWas = null; if (!w) return;
+    var m = member(w.who); if (!m || !m.chargeDir || (m.chargeDir === w.dir && m.k === w.k)) return;
+    modal('<div class="ring-done">' + pic(A.portrait(w.who), 'rd-face', m.name, initialHtml(m.name)) + '<div class="rd-body"><h2>' + T('ui.ring.doneTitle') + '</h2><p>' +
+      T('ui.ring.done', { name: esc(m.name), from: esc(ringDir(w.dir, w.k)), to: esc(ringDir(m.chargeDir, m.k)) }) + '</p><div class="row center-row"><button class="btn btn-primary btn-lg" data-act="modalCancel">' + T('ui.bellDoor.gotIt') + '</button></div></div></div>');
   }
   function ringAskCard(d) { // the reward screen's 「确定」
     if (view.phase !== 'reward') return false;
@@ -5508,9 +5754,14 @@
       var D = view.difficulties, t = D.tiers[+d.id]; if (!t) return;
       if (t.locked) { dfSay(dfText(D.locked) || T('ui.difficulty.lockedFallback'), 'warn'); el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); cue('giggle', null, 0); return; }
       ui.diff = t.id;
+      if (DF_B3) { render(); return; } // 难度页 B3: the info panel follows the pick
       app.querySelectorAll('.df-tier').forEach(function (b) { b.classList.toggle('sel', +b.dataset.id === t.id); });
       var cb = $('confirmBar'), btn = cb && cb.querySelector('button'); if (btn) btn.textContent = T('ui.difficulty.confirm', { name: t.name });
       var bb = $('dfBubble'); if (bb && bb.classList.contains('warn')) dfSay((D.ask || []).map(function (l) { return l.text; }).join('')); // feedback-1113 #1: the tier's blurb is already on its card — the bubble doesn't repeat it
+    },
+    dfFuture: function (d, el) { // 难度页 B3: a tier to come — grey, never picked; 小铃 says the playtest has only these two
+      if (ui.acted || !view || !view.difficulties) return;
+      dfSay(view.difficulties.futureSay || T('ui.difficulty.notYet'), 'warn'); el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); cue('giggle', null, 0);
     },
     confirmDifficulty: function () {
       if (ui.acted || !view || !view.difficulties) return; ui.acted = 1;
@@ -5594,6 +5845,11 @@
       pauseMode('heal', '<b>' + T('ui.pause.healTitle') + '</b>' + '<button class="btn-ghost' + ((u.healPick || []).length ? '' : ' on') + '" data-act="healAuto" data-tip="' + esc(u.healRule || '') + '">' + T('ui.pause.healAuto') + '</button>');
       ui.healBy = d.key; t.classList.add('on');
     },
+    stanceToggle: function (d) { // 2026-11-25 防御姿态: 行动 ⇄ 防御
+      if (ui.acted || !app.querySelector('.pausebar') || !view || !view.battle) return;
+      var u = (view.battle.allies || []).filter(function (x) { return x && healKey(x) === d.key; })[0]; if (!u) return;
+      doStance(d.key, u.stance === 'defend' ? 'act' : 'defend');
+    },
     healAuto: function () { var u = healPriestNow(); if (u && !ui.acted) { doHealPick(u.uid != null ? u.uid : u.id, []); pauseMode(null); } },
     aimClear: function () { var h = RoundPlan.canAimKeys(view.battle.allies, (view.battle.pause || {}).canAim).filter(function (x) { return x.key === ui.aimBy; })[0]; if (h && !ui.acted) doAim(h.id, null); },
     pLog: function () { openBattleLog(); }, // v39 战报
@@ -5616,7 +5872,7 @@
       app.querySelectorAll('.who-head').forEach(function (h) { var on = h.dataset.id === d.id; h.classList.toggle('on', on); h.setAttribute('aria-pressed', String(on)); });
       var t = document.createElement('template'); t.innerHTML = whoDetailHtml(c, d.id, view.phase === 'debuff'); box.replaceWith(t.content.firstChild);
     },
-    pickTarget: function (d) { if (!d.id || ui.acted) return; ui.acted = 1; if (ringAskCard(d)) { ui.acted = 0; return; } cue(view.phase === 'reward' ? 'reward' : 'debuff', null, 0); if (!doAct({ type: view.phase === 'reward' ? 'pickReward' : 'pickDebuff', card: ui.card, target: d.id, side: d.side }, true)) ui.acted = 0; },
+    pickTarget: function (d) { if (!d.id || ui.acted) return; ui.acted = 1; if (ringAskCard(d)) { ui.acted = 0; return; } if (view.phase === 'reward') { var ro = (view.options || []).filter(function (x) { return x.id === ui.card; })[0]; ringWatch(ro && ro.effect, d.id); } cue(view.phase === 'reward' ? 'reward' : 'debuff', null, 0); if (!doAct({ type: view.phase === 'reward' ? 'pickReward' : 'pickDebuff', card: ui.card, target: d.id, side: d.side }, true)) ui.acted = 0; else ringNotice(); },
     ringSide: function (d) { var f = ui.ringSend; ui.ringSend = null; closeModal(); if (f && (d.side === 'prev' || d.side === 'next')) f(d.side); }, // 2026-11-21 转向指环
     nameTarget: function (d) { // batch6 H2-10 ①: portrait + floating words only
       if (d.id === 'leader' || ui.pending === d.id) return; var nx = A.sacFlow(ui.sac, 'pick', d.id); if (nx.step !== 'picked') return;
@@ -5674,7 +5930,7 @@
     plCopy: function () { plExport(true); }
   };
   Object.keys(SHOP_H).forEach(function (k) { H[k] = SHOP_H[k]; }); // 2026-11-14 芙洛的店
-  var CLICK_CUE = { goldClaim: 'none', shopPick: 'none', shopBuy: 'none', shopLeave: 'cancel', shopWho: 'click', shopBack: 'cancel', shopLook: 'confirm', fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
+  var CLICK_CUE = { goldClaim: 'none', shopPick: 'none', shopBuy: 'none', shopBuyNow: 'none', shopLeave: 'cancel', shopWho: 'click', shopBack: 'cancel', shopLook: 'confirm', fairyPoke: 'none', setupGo: 'confirm', setupBack: 'cancel', menu: 'click', confirmSelf: 'confirm', followBell: 'confirm', stayFire: 'confirm', modeSelf: 'pick', cheatKeys: 'click', newKeys: 'confirm', confirmAdvisor: 'confirm', confirmDifficulty: 'confirm', dfPick: 'none', confirmIdentity: 'confirm', confirmClass: 'confirm', fight: 'confirm', battleContinue: 'confirm', pContinue: 'confirm', confirmName: 'confirm',
     pCancel: 'cancel', fwBack: 'cancel', unpickCard: 'cancel', modalCancel: 'cancel', cheatNo: 'cancel', home: 'cancel',
     campChoose: 'none', unitInfo: 'click', campExplore: 'pick', campTrainPick: 'pick', campTrainBonus: 'confirm', viewHer: 'click', viewHerClose: 'cancel',
     pickAdvisor: 'pick', pick: 'pick', pickCard: 'pick', pickTarget: 'pick', whoSel: 'click', nameTarget: 'pick', pickItem: 'pick', side: 'side', hire: 'hire', pMove: 'click' };
@@ -5721,7 +5977,8 @@
     var id = card.dataset.u || card.dataset.id, uName = (bUnits().filter(function (u) { return u.uid === id; })[0] || {}).name || nameOf(card.dataset.id);
     if (ui.mode === 'itemTarget' && ui.item && ui.item.target === 'enemy') return true; /* 2026-11-22 烟雾弹 wants a foe (itemFoeClick) */
     if (ui.mode === 'itemTarget' && ui.item && ui.item.target === 'fallen') { if ((bUnits().filter(function (u) { return u.uid === id; })[0] || {}).hp > 0) return true; /* 2026-11-22 复活药: only a fallen girl */ if (pauseMulti()) { doPauseAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, { title: ui.item.name, sub: uName }); return true; } ui.acted = 1; pendingAnnounce = { title: ui.item.name, sub: uName }; doAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, true); return true; }
-    if (ui.mode === 'itemTarget') { if (card.classList.contains('down') || (bUnits().filter(function (u) { return u.uid === id; })[0] || {}).hp <= 0) return true; /* 2026-11-16: a fallen girl is not a target (it used to throw and lock the pause) */ if (pauseMulti()) { doPauseAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, { title: ui.item.name, sub: uName }); return true; } /* 2026-11-19 换位/暂停连做 */ ui.acted = 1; pendingAnnounce = { title: ui.item.name, sub: uName }; doAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, true); return true; }
+    if (ui.mode === 'itemTarget') { if (card.classList.contains('down') || (bUnits().filter(function (u) { return u.uid === id; })[0] || {}).hp <= 0) return true;
+      { var tu = bUnits().filter(function (u) { return u.uid === id; })[0]; if (ui.item && ui.item.kind === 'healFull' && tu && tu.hp >= tu.maxHp) { notice(T('ui.pause.itemFullHp', { name: tu.name || '' })); return true; } } /* 2026-11-27 试玩「第二瓶药没效果也没提示」: a full-hp girl would waste the potion — say so, keep it */ /* 2026-11-16: a fallen girl is not a target (it used to throw and lock the pause) */ if (pauseMulti()) { doPauseAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, { title: ui.item.name, sub: uName }); return true; } /* 2026-11-19 换位/暂停连做 */ ui.acted = 1; pendingAnnounce = { title: ui.item.name, sub: uName }; doAct({ type: 'useItem', itemId: ui.item.itemId, target: id }, true); return true; }
     if (ui.mode === 'move') {
       if (!ui.moveSel) { ui.moveSel = id; card.classList.add('sel'); moveArrows(true); return true; }
       if (ui.moveSel === id) { ui.moveSel = null; card.classList.remove('sel'); moveArrows(false); return true; }
@@ -5733,6 +5990,7 @@
   // sound popover: toggle, sliders, mute
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'leaderName') { prefs.leaderName = String(e.target.value || '').trim().slice(0, 8); lsSet(PKEY, prefs); return; } // v2.4 [4]
+    if (e.target && e.target.dataset && e.target.dataset.pref === 'intent2') { prefs.intent2 = !!e.target.checked; lsSet(PKEY, prefs); try { if (view && view.phase === 'battle') intentDecorate(view); } catch (err) { /* */ } return; } // 2026-11-25 意图 v2 switch
     if (e.target && e.target.dataset && e.target.dataset.pref === 'autoCont') { // ☰ 游戏组: battle auto-continue (prefs.autoCont, default off)
       prefs.autoCont = !!e.target.checked; lsSet(PKEY, prefs);
       if (prefs.autoCont && !ui.mode) later(function () { if (!vnActive() && view && view.phase === 'battle' && app.querySelector('.pausebar') && !ui.pauseDid) autoContinue(); }, 500); // 2026-11-19 换位/暂停连做: not mid-sequence
@@ -5753,11 +6011,11 @@
     e.preventDefault(); if (openUnitPanel(uc.dataset.u != null ? uc.dataset.u : null, uc.dataset.id)) cue('click', null, 0);
   });
   document.addEventListener('click', function (e) {
-    var card = e.target.closest && !e.target.closest('.uc-info') && !e.target.closest('.aim-btn') && !e.target.closest('.heal-btn') && !e.target.closest('.mv-here') && e.target.closest('.bcard'); if (card && (aimFoeClick(card) || itemFoeClick(card) || healAllyClick(card) || battleCardClick(card))) return; // v36: the ⓘ never targets an item
+    var card = e.target.closest && !e.target.closest('.uc-info') && !e.target.closest('.aim-btn') && !e.target.closest('.heal-btn') && !e.target.closest('.stance-btn') && !e.target.closest('.mv-here') && e.target.closest('.bcard'); if (card && (aimFoeClick(card) || itemFoeClick(card) || healAllyClick(card) || battleCardClick(card))) return; // v36: the ⓘ never targets an item
     var t = e.target.closest && e.target.closest('[data-act]');
     if (!t && !vnActive() && modalEl.hidden && !app.classList.contains('stale')) { var uc = e.target.closest && e.target.closest('.ucard'); if (uc && app.contains(uc)) { if (cardOpensPanel(uc)) { cue('click', null, 0); openUnitPanel(uc.dataset.u != null ? uc.dataset.u : null, uc.dataset.id); } return; } } // v36 角色面板: a plain click on a card
     if (!t || t.disabled || !H[t.dataset.act]) return;
-    if (app.classList.contains('stale') && !t.closest('.topbar')) return;
+    if (app.classList.contains('stale') && !t.closest('.topbar') && !modalEl.contains(t)) return; // 2026-11-27 用户「知道了点了没有用，卡死了」: a box opened by the action's events (祝福统计) must close while the old screen is stale
     if (stageEl.querySelector('.nj-white:not(.out)')) return; // v2.4 [2] nothing fires under the new-journey whiteout
     if (t.dataset.opt) tracker.touch(t.dataset.opt);
     if (CLICK_CUE[t.dataset.act] !== 'none') cue(CLICK_CUE[t.dataset.act] || 'click', null, 0);
@@ -5864,6 +6122,7 @@
       keys: view && view.keys || null, bell: !!(view && view.bell), camp: view && view.phase === 'prep' ? campStep(view) : null, outcome: view && view.summary ? view.summary.outcome : null, story: view && view.storyId || null, real: !STUB, metaKey: MKEY, runKey: KEY }; },
     cheatable: function () { return !!app.querySelector('[data-act="cheat"]'); },
     skip: function () { H.skip(); }, prefs: prefs, intro: function () { return !!$('intro'); },
+    box: function (kind, d) { sayFx(boxFx(function () { if (kind === 'advisor') advisorUpBox(d); else blessStatsBox(d); })); }, // 2026-11-27 dev: preview the two boxes
     queue: function (evs) { eventsToQueue(evs, view); } // feedback-1112 checker (ui/dev/fb1112c.cjs): replay result events (mood / training)
   };
   // 2026-11-19 预加载: start warming the art (tier 2 = the saved run's level on a resume, else level 1 + the opening)
